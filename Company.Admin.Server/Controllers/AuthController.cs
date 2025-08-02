@@ -1,12 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
+using Microsoft.AspNetCore.Authorization;
+using Company.Admin.Server.Services;
+using Shared.Models.DTOs.Auth;
+using Shared.Services.Security;
+using Shared.Services.Database;
+using Shared.Models.Enums;
 using System.Security.Claims;
-using System.Text;
-using Company.Admin.Server.Data;
-using Shared.Models.DTOs;
-using Shared.Models.Core;
 
 namespace Company.Admin.Server.Controllers
 {
@@ -14,169 +13,289 @@ namespace Company.Admin.Server.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly CompanyDbContext _context;
-        private readonly IConfiguration _configuration;
+        private readonly IEmployeeService _employeeService;
+        private readonly IJwtService _jwtService;
+        private readonly ITenantResolver _tenantResolver;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(CompanyDbContext context, IConfiguration configuration)
+        public AuthController(
+            IEmployeeService employeeService,
+            IJwtService jwtService,
+            ITenantResolver tenantResolver,
+            ILogger<AuthController> logger)
         {
-            _context = context;
-            _configuration = configuration;
+            _employeeService = employeeService;
+            _jwtService = jwtService;
+            _tenantResolver = tenantResolver;
+            _logger = logger;
         }
 
+        /// <summary>
+        /// Login para administradores y supervisores de empresa
+        /// </summary>
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
         {
             try
             {
-                // Buscar usuario (admin de empresa o supervisor)
-                var user = await _context.Users
-                    .Include(u => u.Employee)
-                        .ThenInclude(e => e!.Company)
-                    .FirstOrDefaultAsync(u => u.Email == request.Email && u.Active);
-
-                if (user == null)
+                if (!ModelState.IsValid)
                 {
-                    return Unauthorized(new LoginResponse 
-                    { 
-                        Success = false, 
-                        Message = "Credenciales inválidas" 
+                    return BadRequest(new LoginResponse
+                    {
+                        Success = false,
+                        Message = "Datos de entrada no válidos"
                     });
                 }
 
-                // Verificar contraseña
-                if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+                var employee = await _employeeService.AuthenticateEmployeeAsync(request.Email, request.Password);
+                
+                if (employee == null)
                 {
-                    return Unauthorized(new LoginResponse 
-                    { 
-                        Success = false, 
-                        Message = "Credenciales inválidas" 
+                    _logger.LogWarning("Intento de login fallido para {Email}", request.Email);
+                    return Unauthorized(new LoginResponse
+                    {
+                        Success = false,
+                        Message = "Credenciales inválidas"
                     });
                 }
 
-                // Verificar que sea admin o supervisor
-                if (user.Role != "COMPANY_ADMIN" && user.Role != "SUPERVISOR")
+                // Verificar que el usuario tenga permisos de administración
+                if (employee.Role != UserRole.CompanyAdmin && employee.Role != UserRole.Supervisor)
                 {
-                    return Unauthorized(new LoginResponse 
-                    { 
-                        Success = false, 
-                        Message = "No tienes permisos para acceder al panel de administración" 
+                    _logger.LogWarning("Usuario {Email} intentó acceso sin permisos de administración", request.Email);
+                    return Forbidden(new LoginResponse
+                    {
+                        Success = false,
+                        Message = "No tienes permisos para acceder al panel de administración"
                     });
                 }
 
-                // Actualizar último login
-                user.LastLogin = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
+                var tenantId = _tenantResolver.GetTenantId();
+                var additionalClaims = new Dictionary<string, string>
+                {
+                    ["employee_id"] = employee.Id.ToString(),
+                    ["company_id"] = employee.CompanyId.ToString(),
+                    ["department_id"] = employee.DepartmentId?.ToString() ?? "",
+                    ["full_name"] = employee.FullName
+                };
 
-                // Generar JWT
-                var token = GenerateJwtToken(user);
+                var tokenInfo = _jwtService.CreateTokenInfo(
+                    employee.Id,
+                    employee.Email,
+                    employee.Role.ToString(),
+                    tenantId,
+                    additionalClaims
+                );
+
+                _logger.LogInformation("Login exitoso para {Email} con rol {Role}", employee.Email, employee.Role);
 
                 return Ok(new LoginResponse
                 {
                     Success = true,
-                    Token = token,
                     Message = "Login exitoso",
-                    User = new UserDto
+                    Token = tokenInfo.Token,
+                    RefreshToken = tokenInfo.RefreshToken,
+                    ExpiresAt = tokenInfo.ExpiresAt,
+                    User = new UserInfo
                     {
-                        Id = user.Id,
-                        Name = user.Name,
-                        Email = user.Email,
-                        Role = user.Role,
-                        Active = user.Active,
-                        LastLogin = user.LastLogin,
-                        Employee = user.Employee != null ? new EmployeeDto
-                        {
-                            Id = user.Employee.Id,
-                            EmployeeCode = user.Employee.EmployeeCode,
-                            Department = user.Employee.Department,
-                            Position = user.Employee.Position,
-                            HireDate = user.Employee.HireDate,
-                            Company = new CompanyDto
-                            {
-                                Id = user.Employee.Company.Id,
-                                Name = user.Employee.Company.Name
-                            }
-                        } : null
+                        Id = employee.Id,
+                        FullName = employee.FullName,
+                        Email = employee.Email,
+                        Role = employee.Role,
+                        DepartmentName = employee.Department?.Name,
+                        CompanyName = employee.Company?.Name
                     }
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new LoginResponse 
-                { 
-                    Success = false, 
-                    Message = "Error interno del servidor" 
+                _logger.LogError(ex, "Error durante el login para {Email}", request.Email);
+                return StatusCode(500, new LoginResponse
+                {
+                    Success = false,
+                    Message = "Error interno del servidor"
                 });
             }
         }
 
-        [HttpGet("profile")]
-        [Microsoft.AspNetCore.Authorization.Authorize]
-        public async Task<ActionResult<UserDto>> GetProfile()
+        /// <summary>
+        /// Renovar token de acceso
+        /// </summary>
+        [HttpPost("refresh")]
+        public async Task<ActionResult<LoginResponse>> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             try
             {
-                var userEmail = User.FindFirst(ClaimTypes.Email)?.Value;
-                if (string.IsNullOrEmpty(userEmail))
-                    return Unauthorized();
+                // Aquí deberías implementar la lógica de validación del refresh token
+                // Por simplicidad, este ejemplo asume que el refresh token es válido
+                
+                // En una implementación real, deberías:
+                // 1. Validar el refresh token en base de datos
+                // 2. Verificar que no haya expirado
+                // 3. Obtener los datos del usuario asociado
 
-                var user = await _context.Users
-                    .Include(u => u.Employee)
-                        .ThenInclude(e => e!.Company)
-                    .FirstOrDefaultAsync(u => u.Email == userEmail);
-
-                if (user == null)
-                    return NotFound();
-
-                return Ok(new UserDto
+                return BadRequest(new LoginResponse
                 {
-                    Id = user.Id,
-                    Name = user.Name,
-                    Email = user.Email,
-                    Role = user.Role,
-                    Active = user.Active,
-                    LastLogin = user.LastLogin,
-                    Employee = user.Employee != null ? new EmployeeDto
-                    {
-                        Id = user.Employee.Id,
-                        EmployeeCode = user.Employee.EmployeeCode,
-                        Department = user.Employee.Department,
-                        Position = user.Employee.Position,
-                        HireDate = user.Employee.HireDate,
-                        Company = new CompanyDto
-                        {
-                            Id = user.Employee.Company.Id,
-                            Name = user.Employee.Company.Name
-                        }
-                    } : null
+                    Success = false,
+                    Message = "Refresh token no implementado aún"
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = "Error obteniendo perfil" });
+                _logger.LogError(ex, "Error al renovar token");
+                return StatusCode(500, new LoginResponse
+                {
+                    Success = false,
+                    Message = "Error interno del servidor"
+                });
             }
         }
 
-        private string GenerateJwtToken(User user)
+        /// <summary>
+        /// Obtener información del usuario actual
+        /// </summary>
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<ActionResult<UserInfo>> GetCurrentUser()
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
-            var key = Encoding.UTF8.GetBytes(jwtSettings["Secret"]!);
-
-            var tokenDescriptor = new SecurityTokenDescriptor
+            try
             {
-                Subject = new ClaimsIdentity(new[]
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
                 {
-                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                    new Claim(ClaimTypes.Email, user.Email),
-                    new Claim(ClaimTypes.Name, user.Name),
-                    new Claim(ClaimTypes.Role, user.Role)
-                }),
-                Expires = DateTime.UtcNow.AddMinutes(double.Parse(jwtSettings["ExpiryMinutes"]!)),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-            };
+                    return Unauthorized();
+                }
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
+                var employee = await _employeeService.GetEmployeeByIdAsync(userId);
+                if (employee == null)
+                {
+                    return NotFound("Usuario no encontrado");
+                }
+
+                return Ok(new UserInfo
+                {
+                    Id = employee.Id,
+                    FullName = employee.FullName,
+                    Email = employee.Email,
+                    Role = employee.Role,
+                    DepartmentName = employee.Department?.Name,
+                    CompanyName = employee.Company?.Name
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener información del usuario actual");
+                return StatusCode(500, "Error interno del servidor");
+            }
         }
+
+        /// <summary>
+        /// Logout (invalidar token)
+        /// </summary>
+        [HttpPost("logout")]
+        [Authorize]
+        public async Task<ActionResult> Logout()
+        {
+            try
+            {
+                // En una implementación real, aquí deberías:
+                // 1. Invalidar el token en una blacklist
+                // 2. Eliminar el refresh token de la base de datos
+                // 3. Limpiar cualquier sesión del lado del servidor
+
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                _logger.LogInformation("Usuario {UserId} ha cerrado sesión", userIdClaim);
+
+                return Ok(new { message = "Logout exitoso" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error durante el logout");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Cambiar contraseña del usuario actual
+        /// </summary>
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest("Datos de entrada no válidos");
+                }
+
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+                {
+                    return Unauthorized();
+                }
+
+                // Verificar contraseña actual
+                var employee = await _employeeService.GetEmployeeByIdAsync(userId);
+                if (employee == null)
+                {
+                    return NotFound("Usuario no encontrado");
+                }
+
+                if (!await _employeeService.ValidateEmployeeCredentialsAsync(employee.Email, request.CurrentPassword))
+                {
+                    return BadRequest("La contraseña actual no es correcta");
+                }
+
+                // Cambiar contraseña
+                var success = await _employeeService.ChangePasswordAsync(userId, request.NewPassword);
+                if (!success)
+                {
+                    return BadRequest("No se pudo cambiar la contraseña");
+                }
+
+                _logger.LogInformation("Contraseña cambiada para usuario {UserId}", userId);
+                return Ok(new { message = "Contraseña cambiada exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al cambiar contraseña");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Verificar si el token es válido
+        /// </summary>
+        [HttpPost("verify-token")]
+        public ActionResult VerifyToken([FromBody] VerifyTokenRequest request)
+        {
+            try
+            {
+                var principal = _jwtService.ValidateToken(request.Token);
+                
+                return Ok(new
+                {
+                    valid = principal != null,
+                    expired = _jwtService.IsTokenExpired(request.Token)
+                });
+            }
+            catch
+            {
+                return Ok(new { valid = false, expired = true });
+            }
+        }
+    }
+
+    // DTOs adicionales para el controlador
+    public class ChangePasswordRequest
+    {
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class VerifyTokenRequest
+    {
+        public string Token { get; set; } = string.Empty;
     }
 }

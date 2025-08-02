@@ -28,6 +28,9 @@ namespace Shared.Models.Core
         public TimeSpan WorkEndTime { get; set; } = new TimeSpan(17, 0, 0);   // 17:00
         public int ToleranceMinutes { get; set; } = 15; // Tolerancia llegadas tarde
         
+        // Configuración de vacaciones
+        public int VacationDaysPerYear { get; set; } = 22;
+        
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

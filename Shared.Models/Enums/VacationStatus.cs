@@ -2,9 +2,9 @@ namespace Shared.Models.Enums
 {
     public enum VacationStatus
     {
-        Pending,    // Pendiente
-        Approved,   // Aprobada
-        Rejected,   // Rechazada
-        Cancelled   // Cancelada
+        Pending = 0,    // Pendiente de aprobación
+        Approved = 1,   // Aprobada
+        Rejected = 2,   // Rechazada
+        Cancelled = 3   // Cancelada
     }
 }

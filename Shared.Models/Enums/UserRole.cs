@@ -2,9 +2,9 @@ namespace Shared.Models.Enums
 {
     public enum UserRole
     {
-        SPHERE_ADMIN,    // Super administrador
-        COMPANY_ADMIN,   // Administrador de empresa
-        SUPERVISOR,      // Supervisor de departamento
-        EMPLOYEE         // Empleado regular
+        SphereAdmin = 0,    // Super administrador del sistema
+        CompanyAdmin = 1,   // Administrador de empresa
+        Supervisor = 2,     // Supervisor de departamento
+        Employee = 3        // Empleado regular
     }
 }

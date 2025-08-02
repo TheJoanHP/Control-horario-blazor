@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.EntityFrameworkCore;
+using Company.Admin.Server.Services;
 using Company.Admin.Server.Data;
-using Shared.Models.Enums;
+using Microsoft.EntityFrameworkCore;
+using Shared.Services.Utils;
 
 namespace Company.Admin.Server.Controllers
 {
@@ -12,339 +13,343 @@ namespace Company.Admin.Server.Controllers
     public class DashboardController : ControllerBase
     {
         private readonly CompanyDbContext _context;
+        private readonly IEmployeeService _employeeService;
+        private readonly IDepartmentService _departmentService;
+        private readonly ITimeTrackingService _timeTrackingService;
+        private readonly IReportService _reportService;
+        private readonly ILogger<DashboardController> _logger;
 
-        public DashboardController(CompanyDbContext context)
+        public DashboardController(
+            CompanyDbContext context,
+            IEmployeeService employeeService,
+            IDepartmentService departmentService,
+            ITimeTrackingService timeTrackingService,
+            IReportService reportService,
+            ILogger<DashboardController> logger)
         {
             _context = context;
+            _employeeService = employeeService;
+            _departmentService = departmentService;
+            _timeTrackingService = timeTrackingService;
+            _reportService = reportService;
+            _logger = logger;
         }
 
+        /// <summary>
+        /// Obtener estadísticas generales del dashboard
+        /// </summary>
         [HttpGet("stats")]
         public async Task<ActionResult> GetDashboardStats()
         {
             try
             {
-                var today = DateTime.UtcNow.Date;
-                var thisWeekStart = today.AddDays(-(int)today.DayOfWeek + 1);
-                var thisMonthStart = new DateTime(today.Year, today.Month, 1);
+                var today = DateTime.Today;
+                var thisWeek = DateTimeService.GetStartOfWeek(today);
+                var thisMonth = DateTimeService.GetStartOfMonth(today);
 
-                // Estadísticas generales
-                var totalEmployees = await _context.Employees
-                    .Where(e => e.Active)
-                    .CountAsync();
+                // Estadísticas básicas
+                var totalEmployees = await _employeeService.GetTotalEmployeesAsync();
+                var activeEmployees = await _employeeService.GetActiveEmployeesAsync();
+                var totalDepartments = (await _departmentService.GetActiveDepartmentsAsync()).Count();
 
-                var activeEmployees = await _context.Users
-                    .Where(u => u.Active && u.Role == "EMPLOYEE")
-                    .CountAsync();
+                // Empleados presentes hoy
+                var employeesCheckedInToday = await GetEmployeesCheckedInTodayAsync();
+                var employeesOnBreak = await GetEmployeesOnBreakAsync();
 
-                // Asistencia de hoy
-                var todayCheckIns = await _context.TimeRecords
-                    .Where(tr => tr.Timestamp >= today && tr.Type == RecordType.CheckIn)
-                    .Select(tr => tr.EmployeeId)
-                    .Distinct()
-                    .CountAsync();
-
-                var todayCheckOuts = await _context.TimeRecords
-                    .Where(tr => tr.Timestamp >= today && tr.Type == RecordType.CheckOut)
-                    .Select(tr => tr.EmployeeId)
-                    .Distinct()
-                    .CountAsync();
-
-                var currentlyWorking = todayCheckIns - todayCheckOuts;
-
-                // Horas trabajadas este mes
-                var monthlyRecords = await _context.TimeRecords
-                    .Where(tr => tr.Timestamp >= thisMonthStart)
-                    .ToListAsync();
-
-                var monthlyHours = CalculateTotalHours(monthlyRecords);
-
-                // Llegadas tarde (más de 15 minutos después de las 9:00)
-                var lateArrivals = await _context.TimeRecords
-                    .Where(tr => tr.Timestamp >= thisMonthStart && 
-                                tr.Type == RecordType.CheckIn &&
-                                tr.Timestamp.TimeOfDay > new TimeSpan(9, 15, 0))
-                    .CountAsync();
-
-                // Solicitudes de vacaciones pendientes
-                var pendingVacations = await _context.VacationRequests
-                    .Where(vr => vr.Status == VacationStatus.Pending)
-                    .CountAsync();
-
-                // Departamentos con más empleados
-                var departmentStats = await _context.Employees
-                    .Where(e => e.Active)
-                    .GroupBy(e => e.Department)
-                    .Select(g => new
-                    {
-                        department = g.Key,
-                        employeeCount = g.Count(),
-                        todayAttendance = g.Count(e => _context.TimeRecords
-                            .Any(tr => tr.EmployeeId == e.Id && 
-                                      tr.Timestamp >= today && 
-                                      tr.Type == RecordType.CheckIn))
-                    })
-                    .OrderByDescending(d => d.employeeCount)
-                    .ToListAsync();
-
-                // Empleados que aún no han fichado hoy
-                var employeesNotCheckedIn = await _context.Employees
-                    .Include(e => e.User)
-                    .Where(e => e.Active && !_context.TimeRecords
-                        .Any(tr => tr.EmployeeId == e.Id && 
-                                  tr.Timestamp >= today && 
-                                  tr.Type == RecordType.CheckIn))
-                    .Select(e => new
-                    {
-                        e.Id,
-                        e.User.Name,
-                        e.EmployeeCode,
-                        e.Department
-                    })
-                    .ToListAsync();
-
-                // Horas promedio por empleado esta semana
-                var weeklyRecords = await _context.TimeRecords
-                    .Where(tr => tr.Timestamp >= thisWeekStart)
-                    .ToListAsync();
-
-                var weeklyHours = CalculateTotalHours(weeklyRecords);
-                var avgHoursPerEmployee = activeEmployees > 0 ? weeklyHours / activeEmployees : 0;
+                // Estadísticas de asistencia
+                var attendanceStats = await GetAttendanceStatsAsync(today);
+                var weeklyStats = await GetWeeklyStatsAsync(thisWeek, today);
+                var monthlyStats = await GetMonthlyStatsAsync(thisMonth, today);
 
                 return Ok(new
                 {
-                    success = true,
                     overview = new
                     {
                         totalEmployees,
                         activeEmployees,
-                        currentlyWorking,
-                        attendanceRate = totalEmployees > 0 ? Math.Round((double)todayCheckIns / totalEmployees * 100, 1) : 0
+                        totalDepartments,
+                        employeesPresent = employeesCheckedInToday,
+                        employeesOnBreak
                     },
-                    today = new
-                    {
-                        date = today.ToString("dd/MM/yyyy"),
-                        checkIns = todayCheckIns,
-                        checkOuts = todayCheckOuts,
-                        currentlyWorking,
-                        notCheckedIn = employeesNotCheckedIn.Count
-                    },
-                    thisMonth = new
-                    {
-                        totalHours = Math.Round(monthlyHours, 2),
-                        lateArrivals,
-                        pendingVacations,
-                        avgHoursPerEmployee = Math.Round(avgHoursPerEmployee, 2)
-                    },
-                    departments = departmentStats,
-                    alerts = new
-                    {
-                        employeesNotCheckedIn = employeesNotCheckedIn.Take(5),
-                        pendingVacations,
-                        lateArrivals
-                    }
+                    today = attendanceStats,
+                    thisWeek = weeklyStats,
+                    thisMonth = monthlyStats,
+                    lastUpdated = DateTime.UtcNow
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = "Error obteniendo estadísticas del dashboard" });
+                _logger.LogError(ex, "Error al obtener estadísticas del dashboard");
+                return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        [HttpGet("attendance-chart")]
-        public async Task<ActionResult> GetAttendanceChart([FromQuery] int days = 7)
+        /// <summary>
+        /// Obtener empleados actualmente en la oficina
+        /// </summary>
+        [HttpGet("employees-present")]
+        public async Task<ActionResult> GetEmployeesPresent()
         {
             try
             {
-                var startDate = DateTime.UtcNow.Date.AddDays(-days);
-                var chartData = new List<object>();
+                var employees = await _context.Employees
+                    .Include(e => e.Department)
+                    .Where(e => e.Active)
+                    .ToListAsync();
 
-                for (int i = days; i >= 0; i--)
+                var employeesPresent = new List<object>();
+
+                foreach (var employee in employees)
                 {
-                    var date = DateTime.UtcNow.Date.AddDays(-i);
-                    
-                    var checkIns = await _context.TimeRecords
-                        .Where(tr => tr.Timestamp.Date == date && tr.Type == RecordType.CheckIn)
-                        .CountAsync();
-
-                    var checkOuts = await _context.TimeRecords
-                        .Where(tr => tr.Timestamp.Date == date && tr.Type == RecordType.CheckOut)
-                        .CountAsync();
-
-                    var lateArrivals = await _context.TimeRecords
-                        .Where(tr => tr.Timestamp.Date == date && 
-                                    tr.Type == RecordType.CheckIn &&
-                                    tr.Timestamp.TimeOfDay > new TimeSpan(9, 15, 0))
-                        .CountAsync();
-
-                    chartData.Add(new
+                    var isCheckedIn = await _timeTrackingService.IsEmployeeCheckedInAsync(employee.Id);
+                    if (isCheckedIn)
                     {
-                        date = date.ToString("dd/MM"),
-                        dayName = date.ToString("ddd", new System.Globalization.CultureInfo("es-ES")),
-                        checkIns,
-                        checkOuts,
-                        lateArrivals,
-                        isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday
-                    });
+                        var status = await _timeTrackingService.GetEmployeeStatusAsync(employee.Id);
+                        var lastRecord = await _timeTrackingService.GetLastRecordAsync(employee.Id);
+
+                        employeesPresent.Add(new
+                        {
+                            id = employee.Id,
+                            name = employee.FullName,
+                            department = employee.Department?.Name,
+                            status,
+                            checkedInAt = lastRecord?.Timestamp,
+                            email = employee.Email
+                        });
+                    }
                 }
 
-                return Ok(new
-                {
-                    success = true,
-                    chartData,
-                    period = $"Últimos {days} días"
-                });
+                return Ok(employeesPresent);
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = "Error obteniendo datos del gráfico" });
+                _logger.LogError(ex, "Error al obtener empleados presentes");
+                return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        [HttpGet("live-attendance")]
-        public async Task<ActionResult> GetLiveAttendance()
+        /// <summary>
+        /// Obtener actividad reciente
+        /// </summary>
+        [HttpGet("recent-activity")]
+        public async Task<ActionResult> GetRecentActivity([FromQuery] int limit = 20)
         {
             try
             {
-                var today = DateTime.UtcNow.Date;
-
-                var liveData = await _context.Employees
-                    .Include(e => e.User)
-                    .Where(e => e.Active)
-                    .Select(e => new
+                var today = DateTime.Today;
+                var recentRecords = await _context.TimeRecords
+                    .Include(tr => tr.Employee)
+                    .ThenInclude(e => e.Department)
+                    .Where(tr => tr.Timestamp >= today)
+                    .OrderByDescending(tr => tr.Timestamp)
+                    .Take(limit)
+                    .Select(tr => new
                     {
-                        e.Id,
-                        e.User.Name,
-                        e.EmployeeCode,
-                        e.Department,
-                        e.Position,
-                        lastRecord = _context.TimeRecords
-                            .Where(tr => tr.EmployeeId == e.Id && tr.Timestamp >= today)
-                            .OrderByDescending(tr => tr.Timestamp)
-                            .Select(tr => new
-                            {
-                                tr.Type,
-                                tr.Timestamp,
-                                FormattedTime = tr.Timestamp.ToString("HH:mm")
-                            })
-                            .FirstOrDefault(),
-                        todayHours = CalculateEmployeeDayHours(e.Id, today)
+                        id = tr.Id,
+                        employeeName = tr.Employee.FullName,
+                        employeeDepartment = tr.Employee.Department != null ? tr.Employee.Department.Name : "Sin departamento",
+                        type = tr.Type.ToString(),
+                        timestamp = tr.Timestamp,
+                        notes = tr.Notes
                     })
                     .ToListAsync();
 
-                var processedData = liveData.Select(e => new
-                {
-                    e.Id,
-                    e.Name,
-                    e.EmployeeCode,
-                    e.Department,
-                    e.Position,
-                    status = GetEmployeeStatus(e.lastRecord?.Type),
-                    lastActivity = e.lastRecord?.FormattedTime ?? "Sin actividad",
-                    hoursToday = e.todayHours,
-                    statusColor = GetStatusColor(e.lastRecord?.Type)
-                }).ToList();
-
-                return Ok(new
-                {
-                    success = true,
-                    employees = processedData,
-                    summary = new
-                    {
-                        total = processedData.Count,
-                        working = processedData.Count(e => e.status == "Trabajando"),
-                        onBreak = processedData.Count(e => e.status == "En descanso" || e.status == "En comida"),
-                        absent = processedData.Count(e => e.status == "Sin actividad" || e.status == "Fuera del trabajo")
-                    }
-                });
+                return Ok(recentRecords);
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = "Error obteniendo asistencia en vivo" });
+                _logger.LogError(ex, "Error al obtener actividad reciente");
+                return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        private double CalculateTotalHours(List<Shared.Models.TimeTracking.TimeRecord> records)
+        /// <summary>
+        /// Obtener estadísticas por departamento
+        /// </summary>
+        [HttpGet("departments-stats")]
+        public async Task<ActionResult> GetDepartmentsStats()
         {
-            var groupedByEmployee = records.GroupBy(r => r.EmployeeId);
-            double totalHours = 0;
-
-            foreach (var employeeGroup in groupedByEmployee)
+            try
             {
-                var employeeRecords = employeeGroup.GroupBy(r => r.Timestamp.Date);
-                
-                foreach (var dayGroup in employeeRecords)
-                {
-                    var dayRecords = dayGroup.OrderBy(r => r.Timestamp).ToList();
-                    Shared.Models.TimeTracking.TimeRecord? lastCheckIn = null;
+                var departments = await _context.Departments
+                    .Include(d => d.Employees.Where(e => e.Active))
+                    .Where(d => d.Active)
+                    .ToListAsync();
 
-                    foreach (var record in dayRecords)
+                var departmentStats = new List<object>();
+
+                foreach (var department in departments)
+                {
+                    var totalEmployees = department.Employees.Count;
+                    var presentEmployees = 0;
+
+                    foreach (var employee in department.Employees)
                     {
-                        if (record.Type == RecordType.CheckIn)
-                            lastCheckIn = record;
-                        else if (record.Type == RecordType.CheckOut && lastCheckIn != null)
+                        if (await _timeTrackingService.IsEmployeeCheckedInAsync(employee.Id))
                         {
-                            totalHours += (record.Timestamp - lastCheckIn.Timestamp).TotalHours;
-                            lastCheckIn = null;
+                            presentEmployees++;
                         }
                     }
-                }
-            }
 
-            return totalHours;
+                    var attendanceRate = totalEmployees > 0 ? (double)presentEmployees / totalEmployees * 100 : 0;
+
+                    departmentStats.Add(new
+                    {
+                        id = department.Id,
+                        name = department.Name,
+                        totalEmployees,
+                        presentEmployees,
+                        attendanceRate = Math.Round(attendanceRate, 2)
+                    });
+                }
+
+                return Ok(departmentStats);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener estadísticas por departamento");
+                return StatusCode(500, "Error interno del servidor");
+            }
         }
 
-        private double CalculateEmployeeDayHours(int employeeId, DateTime date)
+        /// <summary>
+        /// Obtener gráfico de asistencia semanal
+        /// </summary>
+        [HttpGet("weekly-attendance-chart")]
+        public async Task<ActionResult> GetWeeklyAttendanceChart()
         {
-            var records = _context.TimeRecords
-                .Where(tr => tr.EmployeeId == employeeId && tr.Timestamp.Date == date)
-                .OrderBy(tr => tr.Timestamp)
-                .ToList();
-
-            double hours = 0;
-            Shared.Models.TimeTracking.TimeRecord? lastCheckIn = null;
-
-            foreach (var record in records)
+            try
             {
-                if (record.Type == RecordType.CheckIn)
-                    lastCheckIn = record;
-                else if (record.Type == RecordType.CheckOut && lastCheckIn != null)
+                var startOfWeek = DateTimeService.GetStartOfWeek(DateTime.Today);
+                var chartData = new List<object>();
+
+                for (int i = 0; i < 7; i++)
                 {
-                    hours += (record.Timestamp - lastCheckIn.Timestamp).TotalHours;
-                    lastCheckIn = null;
+                    var date = startOfWeek.AddDays(i);
+                    var dayName = date.ToString("dddd");
+                    
+                    if (date <= DateTime.Today)
+                    {
+                        var attendanceCount = await GetDayAttendanceCountAsync(date);
+                        chartData.Add(new
+                        {
+                            day = dayName,
+                            date = date.ToString("yyyy-MM-dd"),
+                            attendance = attendanceCount
+                        });
+                    }
+                    else
+                    {
+                        chartData.Add(new
+                        {
+                            day = dayName,
+                            date = date.ToString("yyyy-MM-dd"),
+                            attendance = 0
+                        });
+                    }
+                }
+
+                return Ok(chartData);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener gráfico de asistencia semanal");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        // Métodos auxiliares privados
+        private async Task<int> GetEmployeesCheckedInTodayAsync()
+        {
+            var employees = await _context.Employees.Where(e => e.Active).ToListAsync();
+            int count = 0;
+
+            foreach (var employee in employees)
+            {
+                if (await _timeTrackingService.IsEmployeeCheckedInAsync(employee.Id))
+                {
+                    count++;
                 }
             }
 
-            return Math.Round(hours, 2);
+            return count;
         }
 
-        private string GetEmployeeStatus(RecordType? lastRecordType)
+        private async Task<int> GetEmployeesOnBreakAsync()
         {
-            return lastRecordType switch
+            var employees = await _context.Employees.Where(e => e.Active).ToListAsync();
+            int count = 0;
+
+            foreach (var employee in employees)
             {
-                RecordType.CheckIn => "Trabajando",
-                RecordType.CheckOut => "Fuera del trabajo",
-                RecordType.BreakStart => "En descanso",
-                RecordType.BreakEnd => "Trabajando",
-                RecordType.LunchStart => "En comida",
-                RecordType.LunchEnd => "Trabajando",
-                null => "Sin actividad",
-                _ => "Estado desconocido"
+                if (await _timeTrackingService.IsEmployeeOnBreakAsync(employee.Id))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private async Task<object> GetAttendanceStatsAsync(DateTime date)
+        {
+            var totalEmployees = await _employeeService.GetActiveEmployeesAsync();
+            var presentEmployees = await GetEmployeesCheckedInTodayAsync();
+            var attendanceRate = totalEmployees > 0 ? (double)presentEmployees / totalEmployees * 100 : 0;
+
+            return new
+            {
+                date = date.ToString("yyyy-MM-dd"),
+                totalEmployees,
+                presentEmployees,
+                attendanceRate = Math.Round(attendanceRate, 2)
             };
         }
 
-        private string GetStatusColor(RecordType? lastRecordType)
+        private async Task<object> GetWeeklyStatsAsync(DateTime startOfWeek, DateTime endDate)
         {
-            return lastRecordType switch
+            var totalDays = (endDate - startOfWeek).Days + 1;
+            var totalEmployees = await _employeeService.GetActiveEmployeesAsync();
+            
+            // Aquí podrías calcular estadísticas más detalladas de la semana
+            // Por simplicidad, usamos estadísticas básicas
+            
+            return new
             {
-                RecordType.CheckIn => "success",
-                RecordType.CheckOut => "secondary",
-                RecordType.BreakStart => "warning",
-                RecordType.BreakEnd => "success",
-                RecordType.LunchStart => "info",
-                RecordType.LunchEnd => "success",
-                null => "danger",
-                _ => "secondary"
+                startDate = startOfWeek.ToString("yyyy-MM-dd"),
+                endDate = endDate.ToString("yyyy-MM-dd"),
+                totalWorkingDays = DateTimeService.GetWorkingDays(startOfWeek, endDate),
+                averageAttendance = 0 // Implementar cálculo real
             };
+        }
+
+        private async Task<object> GetMonthlyStatsAsync(DateTime startOfMonth, DateTime endDate)
+        {
+            var totalEmployees = await _employeeService.GetActiveEmployeesAsync();
+            
+            return new
+            {
+                startDate = startOfMonth.ToString("yyyy-MM-dd"),
+                endDate = endDate.ToString("yyyy-MM-dd"),
+                totalWorkingDays = DateTimeService.GetWorkingDays(startOfMonth, endDate),
+                averageAttendance = 0 // Implementar cálculo real
+            };
+        }
+
+        private async Task<int> GetDayAttendanceCountAsync(DateTime date)
+        {
+            var startOfDay = date.Date;
+            var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
+
+            var attendanceCount = await _context.TimeRecords
+                .Where(tr => tr.Type == Shared.Models.Enums.RecordType.CheckIn &&
+                           tr.Timestamp >= startOfDay &&
+                           tr.Timestamp <= endOfDay)
+                .Select(tr => tr.EmployeeId)
+                .Distinct()
+                .CountAsync();
+
+            return attendanceCount;
         }
     }
 }

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using Shared.Models.Enums;
 using Shared.Models.Core;
+using Shared.Models.Enums;
 
 namespace Shared.Models.TimeTracking
 {
@@ -10,11 +10,11 @@ namespace Shared.Models.TimeTracking
         
         public int EmployeeId { get; set; }
         
-        public RecordType Type { get; set; } = RecordType.CheckIn;
+        public RecordType Type { get; set; }
         
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        public DateTime Timestamp { get; set; }
         
-        [MaxLength(255)]
+        [MaxLength(500)]
         public string? Notes { get; set; }
         
         // Geolocalización (opcional)
@@ -24,12 +24,12 @@ namespace Shared.Models.TimeTracking
         [MaxLength(255)]
         public string? Location { get; set; }
         
-        // Metadatos
+        // Información del dispositivo
         [MaxLength(100)]
-        public string? IpAddress { get; set; }
+        public string? DeviceInfo { get; set; }
         
-        [MaxLength(255)]
-        public string? UserAgent { get; set; }
+        [MaxLength(45)]
+        public string? IpAddress { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         

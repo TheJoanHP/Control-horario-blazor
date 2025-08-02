@@ -1,228 +1,246 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.EntityFrameworkCore;
+using Employee.App.Server.Services;
 using System.Security.Claims;
-using EmployeeApp.Server.Data;
-using Shared.Models.Vacations;
-using Shared.Models.Enums;
 
-namespace EmployeeApp.Server.Controllers
+namespace Employee.App.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
     public class VacationsController : ControllerBase
     {
-        private readonly EmployeeDbContext _context;
+        private readonly IEmployeeAppService _employeeAppService;
+        private readonly ILogger<VacationsController> _logger;
 
-        public VacationsController(EmployeeDbContext context)
+        public VacationsController(
+            IEmployeeAppService employeeAppService,
+            ILogger<VacationsController> logger)
         {
-            _context = context;
+            _employeeAppService = employeeAppService;
+            _logger = logger;
         }
 
-        [HttpGet("my-requests")]
-        public async Task<ActionResult> GetMyVacationRequests()
+        /// <summary>
+        /// Obtener todas las solicitudes de vacaciones del empleado
+        /// </summary>
+        [HttpGet("requests")]
+        public async Task<ActionResult> GetVacationRequests()
         {
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                var employeeId = GetCurrentEmployeeId();
+                if (employeeId == null) return Unauthorized();
+
+                var requests = await _employeeAppService.GetEmployeeVacationRequestsAsync(employeeId.Value);
                 
-                var employee = await _context.Employees
-                    .FirstOrDefaultAsync(e => e.UserId == userId);
+                var requestData = requests.Select(vr => new
+                {
+                    Id = vr.Id,
+                    StartDate = vr.StartDate.ToString("yyyy-MM-dd"),
+                    EndDate = vr.EndDate.ToString("yyyy-MM-dd"),
+                    DaysRequested = vr.DaysRequested,
+                    Status = vr.Status.ToString(),
+                    Comments = vr.Comments,
+                    ResponseComments = vr.ResponseComments,
+                    ReviewedBy = vr.ReviewedBy?.FullName,
+                    ReviewedAt = vr.ReviewedAt,
+                    CreatedAt = vr.CreatedAt,
+                    CanCancel = vr.Status == Shared.Models.Enums.VacationStatus.Pending
+                });
 
-                if (employee == null)
-                    return BadRequest(new { message = "Empleado no encontrado" });
+                return Ok(requestData);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener solicitudes de vacaciones");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
 
-                var requests = await _context.VacationRequests
-                    .Where(vr => vr.EmployeeId == employee.Id)
-                    .OrderByDescending(vr => vr.CreatedAt)
-                    .Select(vr => new
+        /// <summary>
+        /// Crear nueva solicitud de vacaciones
+        /// </summary>
+        [HttpPost("requests")]
+        public async Task<ActionResult> CreateVacationRequest([FromBody] CreateVacationRequestDto dto)
+        {
+            try
+            {
+                var employeeId = GetCurrentEmployeeId();
+                if (employeeId == null) return Unauthorized();
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                var request = await _employeeAppService.CreateVacationRequestAsync(
+                    employeeId.Value, 
+                    dto.StartDate, 
+                    dto.EndDate, 
+                    dto.Comments);
+
+                return CreatedAtAction(
+                    nameof(GetVacationRequest),
+                    new { id = request.Id },
+                    new
                     {
-                        vr.Id,
-                        vr.StartDate,
-                        vr.EndDate,
-                        vr.DaysRequested,
-                        vr.Reason,
-                        vr.Status,
-                        vr.AdminNotes,
-                        vr.ApprovedAt,
-                        vr.CreatedAt,
-                        StatusName = vr.Status.ToString(),
-                        FormattedStartDate = vr.StartDate.ToString("dd/MM/yyyy"),
-                        FormattedEndDate = vr.EndDate.ToString("dd/MM/yyyy")
-                    })
-                    .ToListAsync();
+                        Id = request.Id,
+                        StartDate = request.StartDate.ToString("yyyy-MM-dd"),
+                        EndDate = request.EndDate.ToString("yyyy-MM-dd"),
+                        DaysRequested = request.DaysRequested,
+                        Status = request.Status.ToString(),
+                        CreatedAt = request.CreatedAt
+                    });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al crear solicitud de vacaciones");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Obtener solicitud específica de vacaciones
+        /// </summary>
+        [HttpGet("requests/{id}")]
+        public async Task<ActionResult> GetVacationRequest(int id)
+        {
+            try
+            {
+                var employeeId = GetCurrentEmployeeId();
+                if (employeeId == null) return Unauthorized();
+
+                var requests = await _employeeAppService.GetEmployeeVacationRequestsAsync(employeeId.Value);
+                var request = requests.FirstOrDefault(vr => vr.Id == id);
+
+                if (request == null)
+                {
+                    return NotFound("Solicitud de vacaciones no encontrada");
+                }
 
                 return Ok(new
                 {
-                    success = true,
-                    requests = requests,
-                    total = requests.Count
+                    Id = request.Id,
+                    StartDate = request.StartDate.ToString("yyyy-MM-dd"),
+                    EndDate = request.EndDate.ToString("yyyy-MM-dd"),
+                    DaysRequested = request.DaysRequested,
+                    Status = request.Status.ToString(),
+                    Comments = request.Comments,
+                    ResponseComments = request.ResponseComments,
+                    ReviewedBy = request.ReviewedBy?.FullName,
+                    ReviewedAt = request.ReviewedAt,
+                    CreatedAt = request.CreatedAt,
+                    UpdatedAt = request.UpdatedAt
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = "Error obteniendo solicitudes de vacaciones" });
+                _logger.LogError(ex, "Error al obtener solicitud de vacaciones {RequestId}", id);
+                return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        [HttpPost("request")]
-        public async Task<ActionResult> RequestVacation([FromBody] VacationRequestDto request)
-        {
-            try
-            {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-                
-                var employee = await _context.Employees
-                    .Include(e => e.User)
-                    .FirstOrDefaultAsync(e => e.UserId == userId);
-
-                if (employee == null)
-                    return BadRequest(new { message = "Empleado no encontrado" });
-
-                // Validaciones
-                if (request.StartDate < DateTime.UtcNow.Date)
-                {
-                    return BadRequest(new { message = "La fecha de inicio no puede ser anterior a hoy" });
-                }
-
-                if (request.EndDate <= request.StartDate)
-                {
-                    return BadRequest(new { message = "La fecha de fin debe ser posterior a la fecha de inicio" });
-                }
-
-                // Calcular días solicitados (excluyendo fines de semana)
-                var daysRequested = CalculateWorkDays(request.StartDate, request.EndDate);
-
-                // Verificar que no haya solapamiento con otras solicitudes aprobadas
-                var overlapping = await _context.VacationRequests
-                    .Where(vr => vr.EmployeeId == employee.Id &&
-                                vr.Status == VacationStatus.Approved &&
-                                ((vr.StartDate <= request.EndDate && vr.EndDate >= request.StartDate)))
-                    .AnyAsync();
-
-                if (overlapping)
-                {
-                    return BadRequest(new { message = "Ya tienes vacaciones aprobadas que se solapan con estas fechas" });
-                }
-
-                var vacationRequest = new VacationRequest
-                {
-                    EmployeeId = employee.Id,
-                    StartDate = request.StartDate,
-                    EndDate = request.EndDate,
-                    DaysRequested = daysRequested,
-                    Reason = request.Reason,
-                    Status = VacationStatus.Pending,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-
-                _context.VacationRequests.Add(vacationRequest);
-                await _context.SaveChangesAsync();
-
-                return Ok(new
-                {
-                    success = true,
-                    message = "Solicitud de vacaciones enviada correctamente",
-                    request = new
-                    {
-                        vacationRequest.Id,
-                        vacationRequest.StartDate,
-                        vacationRequest.EndDate,
-                        vacationRequest.DaysRequested,
-                        vacationRequest.Reason,
-                        vacationRequest.Status,
-                        StatusName = vacationRequest.Status.ToString(),
-                        FormattedStartDate = vacationRequest.StartDate.ToString("dd/MM/yyyy"),
-                        FormattedEndDate = vacationRequest.EndDate.ToString("dd/MM/yyyy")
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Error enviando solicitud de vacaciones" });
-            }
-        }
-
+        /// <summary>
+        /// Obtener balance de vacaciones del empleado
+        /// </summary>
         [HttpGet("balance")]
         public async Task<ActionResult> GetVacationBalance()
         {
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-                
-                var employee = await _context.Employees
-                    .Include(e => e.User)
-                    .FirstOrDefaultAsync(e => e.UserId == userId);
+                var employeeId = GetCurrentEmployeeId();
+                if (employeeId == null) return Unauthorized();
 
-                if (employee == null)
-                    return BadRequest(new { message = "Empleado no encontrado" });
+                var balance = await _employeeAppService.GetVacationBalanceAsync(employeeId.Value);
+                return Ok(balance);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener balance de vacaciones");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
 
-                // Calcular días de vacaciones según antigüedad (simplificado)
-                var yearsWorked = (DateTime.UtcNow - employee.HireDate).TotalDays / 365.25;
-                var totalVacationDays = Math.Min(30, Math.Max(21, (int)(21 + yearsWorked))); // Min 21, Max 30
+        /// <summary>
+        /// Verificar si se pueden solicitar vacaciones en determinadas fechas
+        /// </summary>
+        [HttpPost("check-availability")]
+        public async Task<ActionResult> CheckVacationAvailability([FromBody] CheckAvailabilityDto dto)
+        {
+            try
+            {
+                var employeeId = GetCurrentEmployeeId();
+                if (employeeId == null) return Unauthorized();
 
-                // Calcular días usados este año
-                var currentYear = DateTime.UtcNow.Year;
-                var usedDays = await _context.VacationRequests
-                    .Where(vr => vr.EmployeeId == employee.Id &&
-                                vr.Status == VacationStatus.Approved &&
-                                vr.StartDate.Year == currentYear)
-                    .SumAsync(vr => vr.DaysRequested);
+                var canRequest = await _employeeAppService.CanRequestVacationAsync(
+                    employeeId.Value, 
+                    dto.StartDate, 
+                    dto.EndDate);
 
-                // Días pendientes de aprobación
-                var pendingDays = await _context.VacationRequests
-                    .Where(vr => vr.EmployeeId == employee.Id &&
-                                vr.Status == VacationStatus.Pending &&
-                                vr.StartDate.Year == currentYear)
-                    .SumAsync(vr => vr.DaysRequested);
-
-                var availableDays = totalVacationDays - usedDays;
+                var daysRequested = CalculateWorkingDays(dto.StartDate, dto.EndDate);
 
                 return Ok(new
                 {
-                    success = true,
-                    balance = new
-                    {
-                        totalDays = totalVacationDays,
-                        usedDays = usedDays,
-                        pendingDays = pendingDays,
-                        availableDays = availableDays,
-                        year = currentYear,
-                        yearsWorked = Math.Round(yearsWorked, 1)
-                    }
+                    CanRequest = canRequest,
+                    StartDate = dto.StartDate.ToString("yyyy-MM-dd"),
+                    EndDate = dto.EndDate.ToString("yyyy-MM-dd"),
+                    DaysRequested = daysRequested,
+                    Message = canRequest ? "Las fechas están disponibles" : "Las fechas no están disponibles"
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = "Error obteniendo balance de vacaciones" });
+                _logger.LogError(ex, "Error al verificar disponibilidad de vacaciones");
+                return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        private int CalculateWorkDays(DateTime startDate, DateTime endDate)
+        // Método auxiliar para obtener el ID del empleado actual
+        private int? GetCurrentEmployeeId()
         {
-            int workDays = 0;
-            var currentDate = startDate;
-
-            while (currentDate <= endDate)
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             {
-                if (currentDate.DayOfWeek != DayOfWeek.Saturday && 
-                    currentDate.DayOfWeek != DayOfWeek.Sunday)
+                return null;
+            }
+            return userId;
+        }
+
+        // Método auxiliar para calcular días laborables
+        private static int CalculateWorkingDays(DateTime startDate, DateTime endDate)
+        {
+            int workingDays = 0;
+            var current = startDate.Date;
+
+            while (current <= endDate.Date)
+            {
+                if (current.DayOfWeek != DayOfWeek.Saturday && current.DayOfWeek != DayOfWeek.Sunday)
                 {
-                    workDays++;
+                    workingDays++;
                 }
-                currentDate = currentDate.AddDays(1);
+                current = current.AddDays(1);
             }
 
-            return workDays;
+            return workingDays;
         }
     }
 
-    public class VacationRequestDto
+    // DTOs para vacaciones
+    public class CreateVacationRequestDto
     {
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public string? Reason { get; set; }
+        public string? Comments { get; set; }
+    }
+
+    public class CheckAvailabilityDto
+    {
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
     }
 }

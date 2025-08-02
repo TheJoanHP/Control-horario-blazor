@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Shared.Models.Enums;
 using Shared.Models.TimeTracking;
 using Shared.Models.Vacations;
 
@@ -8,32 +9,53 @@ namespace Shared.Models.Core
     {
         public int Id { get; set; }
         
-        public int UserId { get; set; }
-        
         public int CompanyId { get; set; }
         
+        public int? DepartmentId { get; set; }
+        
+        [Required, MaxLength(50)]
+        public string FirstName { get; set; } = string.Empty;
+        
+        [Required, MaxLength(50)]
+        public string LastName { get; set; } = string.Empty;
+        
+        [Required, EmailAddress, MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+        
         [MaxLength(20)]
+        public string? Phone { get; set; }
+        
+        [MaxLength(50)]
         public string EmployeeCode { get; set; } = string.Empty;
         
-        [MaxLength(100)]
-        public string Department { get; set; } = string.Empty;
+        public UserRole Role { get; set; } = UserRole.Employee;
         
-        [MaxLength(100)]
-        public string Position { get; set; } = string.Empty;
-        
-        public DateTime HireDate { get; set; } = DateTime.UtcNow;
+        [Required]
+        public string PasswordHash { get; set; } = string.Empty;
         
         public bool Active { get; set; } = true;
         
-        public string? Pin { get; set; } // PIN para fichaje rápido
+        public DateTime? LastLoginAt { get; set; }
+        
+        // Configuración personal de horarios
+        public TimeSpan? CustomWorkStartTime { get; set; }
+        public TimeSpan? CustomWorkEndTime { get; set; }
+        
+        public DateTime HiredAt { get; set; } = DateTime.UtcNow;
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         
+        // Propiedades calculadas
+        public string FullName => $"{FirstName} {LastName}";
+        
+        public TimeSpan WorkStartTime => CustomWorkStartTime ?? Company?.WorkStartTime ?? new TimeSpan(9, 0, 0);
+        public TimeSpan WorkEndTime => CustomWorkEndTime ?? Company?.WorkEndTime ?? new TimeSpan(17, 0, 0);
+        
         // Navegación
-        public User User { get; set; } = null!;
         public Company Company { get; set; } = null!;
+        public Department? Department { get; set; }
         public ICollection<TimeRecord> TimeRecords { get; set; } = new List<TimeRecord>();
         public ICollection<VacationRequest> VacationRequests { get; set; } = new List<VacationRequest>();
     }

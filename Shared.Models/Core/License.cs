@@ -9,23 +9,17 @@ namespace Shared.Models.Core
         
         public int TenantId { get; set; }
         
-        public LicenseType Type { get; set; } = LicenseType.Basic;
+        public LicenseType Type { get; set; }
         
-        public int MaxEmployees { get; set; } = 10;
+        public int MaxEmployees { get; set; }
         
-        public bool HasReports { get; set; } = false;
-        
-        public bool HasAPI { get; set; } = false;
-        
-        public bool HasMobileApp { get; set; } = true;
-        
-        public decimal MonthlyPrice { get; set; } = 0;
-        
-        public DateTime StartDate { get; set; } = DateTime.UtcNow;
-        
-        public DateTime? EndDate { get; set; }
+        public decimal MonthlyPrice { get; set; }
         
         public bool Active { get; set; } = true;
+        
+        public DateTime StartsAt { get; set; }
+        
+        public DateTime ExpiresAt { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         

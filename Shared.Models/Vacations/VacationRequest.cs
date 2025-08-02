@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using Shared.Models.Enums;
 using Shared.Models.Core;
+using Shared.Models.Enums;
 
 namespace Shared.Models.Vacations
 {
@@ -16,17 +16,17 @@ namespace Shared.Models.Vacations
         
         public int DaysRequested { get; set; }
         
-        [MaxLength(500)]
-        public string? Reason { get; set; }
+        [MaxLength(1000)]
+        public string? Comments { get; set; }
         
         public VacationStatus Status { get; set; } = VacationStatus.Pending;
         
-        [MaxLength(500)]
-        public string? AdminNotes { get; set; }
+        [MaxLength(1000)]
+        public string? ResponseComments { get; set; }
         
-        public int? ApprovedBy { get; set; }
+        public int? ReviewedById { get; set; }
         
-        public DateTime? ApprovedAt { get; set; }
+        public DateTime? ReviewedAt { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
@@ -34,6 +34,6 @@ namespace Shared.Models.Vacations
         
         // Navegación
         public Employee Employee { get; set; } = null!;
-        public User? ApprovedByUser { get; set; }
+        public Employee? ReviewedBy { get; set; }
     }
 }

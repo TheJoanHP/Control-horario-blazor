@@ -242,11 +242,7 @@
             },
             "MailKit": {
               "target": "Package",
-              "version": "[4.13.0, )"
-            },
-            "Microsoft.EntityFrameworkCore": {
-              "target": "Package",
-              "version": "[9.0.7, )"
+              "version": "[4.8.0, )"
             },
             "Microsoft.Extensions.Configuration.Abstractions": {
               "target": "Package",
@@ -256,9 +252,17 @@
               "target": "Package",
               "version": "[9.0.7, )"
             },
+            "Microsoft.IdentityModel.Tokens": {
+              "target": "Package",
+              "version": "[8.3.0, )"
+            },
+            "MimeKit": {
+              "target": "Package",
+              "version": "[4.8.0, )"
+            },
             "System.IdentityModel.Tokens.Jwt": {
               "target": "Package",
-              "version": "[8.13.0, )"
+              "version": "[8.3.0, )"
             }
           },
           "imports": [
