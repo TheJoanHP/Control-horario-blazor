@@ -1,0 +1,11 @@
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\bin\Debug\net9.0\Sphere.Admin.Shared.deps.json
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\bin\Debug\net9.0\Sphere.Admin.Shared.dll
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\bin\Debug\net9.0\Sphere.Admin.Shared.pdb
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\obj\Debug\net9.0\Sphere.Admin.Shared.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\obj\Debug\net9.0\Sphere.Admin.Shared.AssemblyInfoInputs.cache
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\obj\Debug\net9.0\Sphere.Admin.Shared.AssemblyInfo.cs
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\obj\Debug\net9.0\Sphere.Admin.Shared.csproj.CoreCompileInputs.cache
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\obj\Debug\net9.0\Sphere.Admin.Shared.dll
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\obj\Debug\net9.0\refint\Sphere.Admin.Shared.dll
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\obj\Debug\net9.0\Sphere.Admin.Shared.pdb
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Sphere.Admin.Shared\obj\Debug\net9.0\ref\Sphere.Admin.Shared.dll

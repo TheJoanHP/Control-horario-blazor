@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\Joan-PC\\Desktop\\Programacion\\control-horario-app\\control-horario-blazor\\SphereTimeControl\\Sphere.Admin.Shared\\Sphere.Admin.Shared.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\Joan-PC\\Desktop\\Programacion\\control-horario-app\\control-horario-blazor\\SphereTimeControl\\Sphere.Admin.Shared\\Sphere.Admin.Shared.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\Joan-PC\\Desktop\\Programacion\\control-horario-app\\control-horario-blazor\\SphereTimeControl\\Sphere.Admin.Shared\\Sphere.Admin.Shared.csproj",
+        "projectName": "Sphere.Admin.Shared",
+        "projectPath": "C:\\Users\\Joan-PC\\Desktop\\Programacion\\control-horario-app\\control-horario-blazor\\SphereTimeControl\\Sphere.Admin.Shared\\Sphere.Admin.Shared.csproj",
+        "packagesPath": "C:\\Users\\Joan-PC\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Joan-PC\\Desktop\\Programacion\\control-horario-app\\control-horario-blazor\\SphereTimeControl\\Sphere.Admin.Shared\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\Joan-PC\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net9.0": {
+            "targetAlias": "net9.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.303/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
