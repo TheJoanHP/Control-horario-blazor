@@ -1,4 +1,3 @@
-// ===== Shared/Models/DTOs/Department/DepartmentDto.cs =====
 using System.ComponentModel.DataAnnotations;
 
 namespace Shared.Models.DTOs.Department
@@ -43,6 +42,8 @@ namespace Shared.Models.DTOs.Department
         public bool Active { get; set; }
         public int TotalEmployees { get; set; }
         public int ActiveEmployees { get; set; }
+        public double TotalHoursThisMonth { get; set; }
+        public double AverageHoursPerEmployee { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

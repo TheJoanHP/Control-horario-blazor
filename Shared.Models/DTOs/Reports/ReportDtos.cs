@@ -1,15 +1,8 @@
 // ===== Shared/Models/DTOs/Reports/ReportDtos.cs =====
+using System.ComponentModel.DataAnnotations;
+
 namespace Shared.Models.DTOs.Reports
 {
-    public class AttendanceReportDto
-    {
-        public DateTime StartDate { get; set; }
-        public DateTime EndDate { get; set; }
-        public DateTime GeneratedAt { get; set; }
-        public int TotalEmployees { get; set; }
-        public double AverageAttendance { get; set; }
-        public List<AttendanceRecordDto> AttendanceRecords { get; set; } = new();
-    }
 
     public class AttendanceRecordDto
     {
@@ -23,19 +16,6 @@ namespace Shared.Models.DTOs.Reports
         public double AttendancePercentage { get; set; }
         public TimeSpan AverageArrivalTime { get; set; }
         public double TotalHours { get; set; }
-    }
-
-    public class HoursReportDto
-    {
-        public DateTime StartDate { get; set; }
-        public DateTime EndDate { get; set; }
-        public DateTime GeneratedAt { get; set; }
-        public int TotalEmployees { get; set; }
-        public double TotalHours { get; set; }
-        public double TotalRegularHours { get; set; }
-        public double TotalOvertimeHours { get; set; }
-        public double AverageHoursPerEmployee { get; set; }
-        public List<HoursRecordDto> HoursRecords { get; set; } = new();
     }
 
     public class HoursRecordDto
@@ -73,19 +53,6 @@ namespace Shared.Models.DTOs.Reports
         public double OvertimeHours { get; set; }
         public int DaysWithOvertime { get; set; }
         public double MaxDailyOvertime { get; set; }
-    }
-
-    public class SummaryReportDto
-    {
-        public DateTime StartDate { get; set; }
-        public DateTime EndDate { get; set; }
-        public DateTime GeneratedAt { get; set; }
-        public int TotalEmployees { get; set; }
-        public int TotalWorkingDays { get; set; }
-        public double TotalHours { get; set; }
-        public double AverageHoursPerDay { get; set; }
-        public double OverallAttendanceRate { get; set; }
-        public List<DepartmentSummaryDto> DepartmentSummaries { get; set; } = new();
     }
 
     public class DepartmentSummaryDto

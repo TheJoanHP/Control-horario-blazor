@@ -1,4 +1,4 @@
-// ===== Shared/Models/DTOs/TimeTracking/TimeRecordDto.cs =====
+using System.ComponentModel.DataAnnotations;
 using Shared.Models.Enums;
 
 namespace Shared.Models.DTOs.TimeTracking
@@ -12,38 +12,58 @@ namespace Shared.Models.DTOs.TimeTracking
         public DateTime Date { get; set; }
         public DateTime? CheckIn { get; set; }
         public DateTime? CheckOut { get; set; }
-        public double? TotalHours { get; set; }
         public RecordType RecordType { get; set; }
+        public double? TotalHours { get; set; }
         public string? Location { get; set; }
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+        
+        // Información adicional
         public bool IsComplete { get; set; }
-        public bool IsActive { get; set; }
+        public bool IsOnBreak { get; set; }
+        public DateTime? CurrentBreakStart { get; set; }
+        public double BreakHours { get; set; }
     }
 
     public class CheckInDto
     {
+        [Required(ErrorMessage = "La hora de entrada es requerida")]
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        
+        [StringLength(200, ErrorMessage = "La ubicación no puede exceder 200 caracteres")]
         public string? Location { get; set; }
+        
+        [StringLength(500, ErrorMessage = "Las notas no pueden exceder 500 caracteres")]
         public string? Notes { get; set; }
+        
+        // Coordenadas GPS (opcionales)
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 
     public class CheckOutDto
     {
+        [Required(ErrorMessage = "La hora de salida es requerida")]
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        
+        [StringLength(500, ErrorMessage = "Las notas no pueden exceder 500 caracteres")]
         public string? Notes { get; set; }
+        
+        // Coordenadas GPS (opcionales)
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 
     public class EmployeeStatusDto
     {
         public int EmployeeId { get; set; }
-        public bool IsCheckedIn { get; set; }
-        public bool IsOnBreak { get; set; }
+        public string EmployeeName { get; set; } = string.Empty;
+        public RecordType Status { get; set; }
         public DateTime? CheckInTime { get; set; }
         public DateTime? CurrentBreakStart { get; set; }
         public double WorkedHoursToday { get; set; }
         public DateTime LastUpdate { get; set; }
-        public EmployeeStatus Status { get; set; }
     }
 
     public class DailyHoursSummaryDto
@@ -81,56 +101,5 @@ namespace Shared.Models.DTOs.TimeTracking
         public double AverageHoursPerDay { get; set; }
         public double ExpectedHours { get; set; }
         public double OvertimeHours { get; set; }
-    }
-
-    public class WorkScheduleDto
-    {
-        public int Id { get; set; }
-        public int? EmployeeId { get; set; }
-        public int? DepartmentId { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public DayOfWeek DayOfWeek { get; set; }
-        public TimeSpan StartTime { get; set; }
-        public TimeSpan EndTime { get; set; }
-        public TimeSpan? BreakStart { get; set; }
-        public TimeSpan? BreakEnd { get; set; }
-        public bool IsActive { get; set; }
-        public TimeSpan WorkingHours { get; set; }
-    }
-
-    public class CreateWorkScheduleDto
-    {
-        public int? EmployeeId { get; set; }
-        public int? DepartmentId { get; set; }
-        
-        [Required(ErrorMessage = "El nombre es requerido")]
-        [StringLength(100, ErrorMessage = "El nombre no puede exceder 100 caracteres")]
-        public string Name { get; set; } = string.Empty;
-        
-        [Required(ErrorMessage = "El día de la semana es requerido")]
-        public DayOfWeek DayOfWeek { get; set; }
-        
-        [Required(ErrorMessage = "La hora de inicio es requerida")]
-        public TimeSpan StartTime { get; set; }
-        
-        [Required(ErrorMessage = "La hora de fin es requerida")]
-        public TimeSpan EndTime { get; set; }
-        
-        public TimeSpan? BreakStart { get; set; }
-        public TimeSpan? BreakEnd { get; set; }
-        public bool IsActive { get; set; } = true;
-    }
-
-    public class UpdateWorkScheduleDto
-    {
-        [StringLength(100, ErrorMessage = "El nombre no puede exceder 100 caracteres")]
-        public string? Name { get; set; }
-        
-        public DayOfWeek? DayOfWeek { get; set; }
-        public TimeSpan? StartTime { get; set; }
-        public TimeSpan? EndTime { get; set; }
-        public TimeSpan? BreakStart { get; set; }
-        public TimeSpan? BreakEnd { get; set; }
-        public bool? IsActive { get; set; }
     }
 }

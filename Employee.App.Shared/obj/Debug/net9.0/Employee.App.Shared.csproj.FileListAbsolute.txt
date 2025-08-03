@@ -5,6 +5,7 @@ C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Shared\obj\Debug\net9.0\Employee.App.Shared.AssemblyInfoInputs.cache
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Shared\obj\Debug\net9.0\Employee.App.Shared.AssemblyInfo.cs
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Shared\obj\Debug\net9.0\Employee.App.Shared.csproj.CoreCompileInputs.cache
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Shared\obj\Debug\net9.0\Employee.App.Shared.sourcelink.json
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Shared\obj\Debug\net9.0\Employee.App.Shared.dll
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Shared\obj\Debug\net9.0\refint\Employee.App.Shared.dll
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Shared\obj\Debug\net9.0\Employee.App.Shared.pdb

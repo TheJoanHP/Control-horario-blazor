@@ -7,8 +7,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Entity Framework Core -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Abstractions" Version="9.0.7" />
+    
+    <!-- Data Annotations -->
     <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
+    
+    <!-- JSON serialization -->
+    <PackageReference Include="System.Text.Json" Version="9.0.7" />
   </ItemGroup>
 
 </Project>
