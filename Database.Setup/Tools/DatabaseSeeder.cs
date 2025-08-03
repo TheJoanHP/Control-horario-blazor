@@ -1,368 +1,348 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using Npgsql;
+// Métodos adicionales para DatabaseSeeder.cs (agregar al archivo existente)
 
-namespace Database.Setup.Tools
+/// <summary>
+/// Crea la estructura de tablas del tenant
+/// </summary>
+private async Task CreateTenantStructureAsync(string databaseName)
 {
-    public class DatabaseSeeder
+    Console.WriteLine($"🏗️  Creando estructura de tablas para {databaseName}...");
+    
+    var tenantConnectionString = GetTenantConnectionString(_connectionString, databaseName);
+    
+    var scriptPath = Path.Combine(_scriptsPath, "02-CreateTenantTemplate.sql");
+    if (!File.Exists(scriptPath))
     {
-        private readonly string _connectionString;
-        private readonly string _scriptsPath;
+        throw new FileNotFoundException($"Script no encontrado: {scriptPath}");
+    }
 
-        public DatabaseSeeder(string connectionString, string scriptsPath = "Scripts")
-        {
-            _connectionString = connectionString;
-            _scriptsPath = scriptsPath;
-        }
+    var script = await File.ReadAllTextAsync(scriptPath);
+    
+    using var connection = new NpgsqlConnection(tenantConnectionString);
+    await connection.OpenAsync();
+    
+    using var command = new NpgsqlCommand(script, connection);
+    command.CommandTimeout = 300;
+    
+    await command.ExecuteNonQueryAsync();
+    
+    Console.WriteLine($"✅ Estructura creada para {databaseName}");
+}
 
-        /// <summary>
-        /// Ejecuta todos los scripts de configuración inicial
-        /// </summary>
-        public async Task SeedAllAsync()
+/// <summary>
+/// Inserta datos iniciales del tenant
+/// </summary>
+private async Task SeedTenantDataAsync(string databaseName)
+{
+    Console.WriteLine($"🌱 Insertando datos iniciales para {databaseName}...");
+    
+    var tenantConnectionString = GetTenantConnectionString(_connectionString, databaseName);
+    
+    var scriptPath = Path.Combine(_scriptsPath, "03-SeedTenantData.sql");
+    if (!File.Exists(scriptPath))
+    {
+        throw new FileNotFoundException($"Script no encontrado: {scriptPath}");
+    }
+
+    var script = await File.ReadAllTextAsync(scriptPath);
+    
+    using var connection = new NpgsqlConnection(tenantConnectionString);
+    await connection.OpenAsync();
+    
+    using var command = new NpgsqlCommand(script, connection);
+    command.CommandTimeout = 300;
+    
+    await command.ExecuteNonQueryAsync();
+    
+    Console.WriteLine($"✅ Datos iniciales insertados para {databaseName}");
+}
+
+/// <summary>
+/// Obtiene la cadena de conexión master (postgres)
+/// </summary>
+private string GetMasterConnectionString(string connectionString)
+{
+    var builder = new NpgsqlConnectionStringBuilder(connectionString)
+    {
+        Database = "postgres"
+    };
+    return builder.ToString();
+}
+
+/// <summary>
+/// Obtiene la cadena de conexión para un tenant específico
+/// </summary>
+private string GetTenantConnectionString(string connectionString, string databaseName)
+{
+    var builder = new NpgsqlConnectionStringBuilder(connectionString)
+    {
+        Database = databaseName
+    };
+    return builder.ToString();
+}
+
+/// <summary>
+/// Limpia todas las bases de datos del sistema
+/// </summary>
+public async Task CleanupAllDatabasesAsync()
+{
+    Console.WriteLine("🧹 Limpiando todas las bases de datos...");
+    
+    var masterConnectionString = GetMasterConnectionString(_connectionString);
+    
+    using var connection = new NpgsqlConnection(masterConnectionString);
+    await connection.OpenAsync();
+    
+    // Obtener todas las bases de datos del sistema
+    var getDatabasesCommand = new NpgsqlCommand(@"
+        SELECT datname 
+        FROM pg_database 
+        WHERE datname LIKE 'SphereTimeControl%'
+        OR datname = 'SphereTimeControl'", connection);
+    
+    var databases = new List<string>();
+    using var reader = await getDatabasesCommand.ExecuteReaderAsync();
+    while (await reader.ReadAsync())
+    {
+        databases.Add(reader.GetString("datname"));
+    }
+    reader.Close();
+    
+    // Eliminar cada base de datos
+    foreach (var dbName in databases)
+    {
+        Console.WriteLine($"🗑️  Eliminando base de datos: {dbName}");
+        
+        // Terminar conexiones activas
+        var killConnectionsCommand = new NpgsqlCommand($@"
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = '{dbName}'
+            AND pid <> pg_backend_pid()", connection);
+        
+        await killConnectionsCommand.ExecuteNonQueryAsync();
+        
+        // Eliminar la base de datos
+        var dropCommand = new NpgsqlCommand($@"DROP DATABASE IF EXISTS ""{dbName}""", connection);
+        await dropCommand.ExecuteNonQueryAsync();
+        
+        Console.WriteLine($"✅ {dbName} eliminada");
+    }
+    
+    Console.WriteLine("✅ Limpieza completada");
+}
+
+/// <summary>
+/// Muestra el estado actual de las bases de datos
+/// </summary>
+public async Task ShowDatabaseStatusAsync()
+{
+    var masterConnectionString = GetMasterConnectionString(_connectionString);
+    
+    using var connection = new NpgsqlConnection(masterConnectionString);
+    await connection.OpenAsync();
+    
+    // Verificar base de datos central
+    Console.WriteLine("📊 Estado de la Base de Datos Central:");
+    Console.WriteLine("=====================================");
+    
+    var centralExists = await CheckDatabaseExistsAsync(connection, "SphereTimeControl");
+    Console.WriteLine($"SphereTimeControl (Central): {(centralExists ? "✅ Existe" : "❌ No existe")}");
+    
+    if (centralExists)
+    {
+        var centralStats = await GetDatabaseStatsAsync("SphereTimeControl");
+        Console.WriteLine($"  - Tenants registrados: {centralStats.TenantsCount}");
+        Console.WriteLine($"  - Admins del sistema: {centralStats.AdminsCount}");
+    }
+    
+    Console.WriteLine();
+    
+    // Verificar tenants
+    Console.WriteLine("🏢 Estado de los Tenants:");
+    Console.WriteLine("========================");
+    
+    var getTenantDbsCommand = new NpgsqlCommand(@"
+        SELECT datname 
+        FROM pg_database 
+        WHERE datname LIKE 'SphereTimeControl_%'
+        ORDER BY datname", connection);
+    
+    var tenantDatabases = new List<string>();
+    using var reader = await getTenantDbsCommand.ExecuteReaderAsync();
+    while (await reader.ReadAsync())
+    {
+        tenantDatabases.Add(reader.GetString("datname"));
+    }
+    reader.Close();
+    
+    if (tenantDatabases.Count == 0)
+    {
+        Console.WriteLine("❌ No hay tenants configurados");
+    }
+    else
+    {
+        foreach (var dbName in tenantDatabases)
         {
-            Console.WriteLine("🚀 Iniciando configuración completa de la base de datos...");
+            var tenantId = dbName.Replace("SphereTimeControl_", "");
+            Console.WriteLine($"  {tenantId}: ✅ Configurado");
             
             try
             {
-                await CreateCentralDatabaseAsync();
-                await CreateDemoTenantAsync();
-                
-                Console.WriteLine("✅ ¡Configuración completada exitosamente!");
-                Console.WriteLine("==============================================");
-                Console.WriteLine("📊 Resumen:");
-                Console.WriteLine("- Base de datos central creada");
-                Console.WriteLine("- Tenant demo configurado");
-                Console.WriteLine("- Datos de prueba insertados");
-                Console.WriteLine("==============================================");
-                Console.WriteLine("🔑 Credenciales por defecto:");
-                Console.WriteLine("Super Admin: admin@spheretimecontrol.com / admin123");
-                Console.WriteLine("Company Admin: admin@empresademo.com / admin123");
-                Console.WriteLine("Empleados: [nombre].[apellido]@empresademo.com / admin123");
-                Console.WriteLine("==============================================");
+                var tenantStats = await GetTenantStatsAsync(dbName);
+                Console.WriteLine($"    - Empleados: {tenantStats.EmployeesCount}");
+                Console.WriteLine($"    - Departamentos: {tenantStats.DepartmentsCount}");
+                Console.WriteLine($"    - Registros hoy: {tenantStats.TodayRecordsCount}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error durante la configuración: {ex.Message}");
-                throw;
+                Console.WriteLine($"    - ⚠️  Error al obtener estadísticas: {ex.Message}");
             }
-        }
-
-        /// <summary>
-        /// Crea la base de datos central
-        /// </summary>
-        public async Task CreateCentralDatabaseAsync()
-        {
-            Console.WriteLine("📦 Creando base de datos central...");
-            
-            var scriptPath = Path.Combine(_scriptsPath, "01-CreateCentralDB.sql");
-            if (!File.Exists(scriptPath))
-            {
-                throw new FileNotFoundException($"Script no encontrado: {scriptPath}");
-            }
-
-            var script = await File.ReadAllTextAsync(scriptPath);
-            
-            // Ejecutar con conexión a postgres (para crear la BD)
-            var masterConnectionString = GetMasterConnectionString(_connectionString);
-            
-            using var connection = new NpgsqlConnection(masterConnectionString);
-            await connection.OpenAsync();
-            
-            using var command = new NpgsqlCommand(script, connection);
-            command.CommandTimeout = 300; // 5 minutos
-            
-            await command.ExecuteNonQueryAsync();
-            
-            Console.WriteLine("✅ Base de datos central creada");
-        }
-
-        /// <summary>
-        /// Crea un tenant específico
-        /// </summary>
-        public async Task CreateTenantAsync(string tenantId)
-        {
-            Console.WriteLine($"🏢 Creando tenant: {tenantId}...");
-            
-            var tenantDbName = $"SphereTimeControl_{tenantId}";
-            
-            // 1. Crear la base de datos del tenant
-            await CreateTenantDatabaseAsync(tenantDbName);
-            
-            // 2. Crear la estructura de tablas
-            await CreateTenantStructureAsync(tenantDbName);
-            
-            // 3. Insertar datos iniciales
-            await SeedTenantDataAsync(tenantDbName);
-            
-            Console.WriteLine($"✅ Tenant {tenantId} creado exitosamente");
-        }
-
-        /// <summary>
-        /// Crea el tenant demo por defecto
-        /// </summary>
-        public async Task CreateDemoTenantAsync()
-        {
-            await CreateTenantAsync("demo");
-        }
-
-        /// <summary>
-        /// Crea la base de datos física del tenant
-        /// </summary>
-        private async Task CreateTenantDatabaseAsync(string databaseName)
-        {
-            var masterConnectionString = GetMasterConnectionString(_connectionString);
-            
-            using var connection = new NpgsqlConnection(masterConnectionString);
-            await connection.OpenAsync();
-            
-            // Verificar si la BD ya existe
-            var checkCommand = new NpgsqlCommand(
-                "SELECT 1 FROM pg_database WHERE datname = @dbname", 
-                connection);
-            checkCommand.Parameters.AddWithValue("dbname", databaseName);
-            
-            var exists = await checkCommand.ExecuteScalarAsync();
-            
-            if (exists == null)
-            {
-                Console.WriteLine($"📦 Creando base de datos: {databaseName}");
-                
-                var createCommand = new NpgsqlCommand(
-                    $@"CREATE DATABASE ""{databaseName}""
-                       WITH OWNER = postgres
-                       ENCODING = 'UTF8'
-                       LC_COLLATE = 'en_US.utf8'
-                       LC_CTYPE = 'en_US.utf8'
-                       TABLESPACE = pg_default
-                       CONNECTION LIMIT = -1", 
-                    connection);
-                
-                await createCommand.ExecuteNonQueryAsync();
-                Console.WriteLine($"✅ Base de datos {databaseName} creada");
-            }
-            else
-            {
-                Console.WriteLine($"ℹ️  Base de datos {databaseName} ya existe");
-            }
-        }
-
-        /// <summary>
-        /// Crea la estructura de tablas del tenant
-        /// </summary>
-        private async Task CreateTenantStructureAsync(string databaseName)
-        {
-            Console.WriteLine($"🏗️  Creando estructura de tablas en {databaseName}...");
-            
-            var scriptPath = Path.Combine(_scriptsPath, "02-CreateTenantTemplate.sql");
-            if (!File.Exists(scriptPath))
-            {
-                throw new FileNotFoundException($"Script no encontrado: {scriptPath}");
-            }
-
-            var script = await File.ReadAllTextAsync(scriptPath);
-            
-            var tenantConnectionString = _connectionString.Replace("SphereTimeControl_Central", databaseName);
-            
-            using var connection = new NpgsqlConnection(tenantConnectionString);
-            await connection.OpenAsync();
-            
-            using var command = new NpgsqlCommand(script, connection);
-            command.CommandTimeout = 300;
-            
-            await command.ExecuteNonQueryAsync();
-            
-            Console.WriteLine("✅ Estructura de tablas creada");
-        }
-
-        /// <summary>
-        /// Inserta datos iniciales en el tenant
-        /// </summary>
-        private async Task SeedTenantDataAsync(string databaseName)
-        {
-            Console.WriteLine($"🌱 Insertando datos iniciales en {databaseName}...");
-            
-            var scriptPath = Path.Combine(_scriptsPath, "03-SeedTenantData.sql");
-            if (!File.Exists(scriptPath))
-            {
-                Console.WriteLine("⚠️  Script de datos iniciales no encontrado, omitiendo...");
-                return;
-            }
-
-            var script = await File.ReadAllTextAsync(scriptPath);
-            
-            var tenantConnectionString = _connectionString.Replace("SphereTimeControl_Central", databaseName);
-            
-            using var connection = new NpgsqlConnection(tenantConnectionString);
-            await connection.OpenAsync();
-            
-            using var command = new NpgsqlCommand(script, connection);
-            command.CommandTimeout = 300;
-            
-            await command.ExecuteNonQueryAsync();
-            
-            Console.WriteLine("✅ Datos iniciales insertados");
-        }
-
-        /// <summary>
-        /// Elimina un tenant completamente
-        /// </summary>
-        public async Task DropTenantAsync(string tenantId)
-        {
-            Console.WriteLine($"🗑️  Eliminando tenant: {tenantId}...");
-            
-            var tenantDbName = $"SphereTimeControl_{tenantId}";
-            var masterConnectionString = GetMasterConnectionString(_connectionString);
-            
-            using var connection = new NpgsqlConnection(masterConnectionString);
-            await connection.OpenAsync();
-            
-            // Terminar conexiones activas
-            var killConnectionsCommand = new NpgsqlCommand(
-                $@"SELECT pg_terminate_backend(pid)
-                   FROM pg_stat_activity 
-                   WHERE datname = '{tenantDbName}' AND pid <> pg_backend_pid()", 
-                connection);
-            
-            await killConnectionsCommand.ExecuteNonQueryAsync();
-            
-            // Eliminar base de datos
-            var dropCommand = new NpgsqlCommand($@"DROP DATABASE IF EXISTS ""{tenantDbName}""", connection);
-            await dropCommand.ExecuteNonQueryAsync();
-            
-            Console.WriteLine($"✅ Tenant {tenantId} eliminado");
-        }
-
-        /// <summary>
-        /// Verifica el estado de un tenant
-        /// </summary>
-        public async Task<bool> VerifyTenantAsync(string tenantId)
-        {
-            try
-            {
-                var tenantDbName = $"SphereTimeControl_{tenantId}";
-                var tenantConnectionString = _connectionString.Replace("SphereTimeControl_Central", tenantDbName);
-                
-                using var connection = new NpgsqlConnection(tenantConnectionString);
-                await connection.OpenAsync();
-                
-                // Verificar que las tablas principales existan
-                var checkCommand = new NpgsqlCommand(
-                    @"SELECT COUNT(*) FROM information_schema.tables 
-                      WHERE table_schema = 'public' 
-                      AND table_name IN ('Companies', 'Employees', 'TimeRecords')",
-                    connection);
-                
-                var tableCount = Convert.ToInt32(await checkCommand.ExecuteScalarAsync());
-                
-                return tableCount >= 3;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Obtiene estadísticas de un tenant
-        /// </summary>
-        public async Task<TenantStats> GetTenantStatsAsync(string tenantId)
-        {
-            var tenantDbName = $"SphereTimeControl_{tenantId}";
-            var tenantConnectionString = _connectionString.Replace("SphereTimeControl_Central", tenantDbName);
-            
-            using var connection = new NpgsqlConnection(tenantConnectionString);
-            await connection.OpenAsync();
-            
-            var stats = new TenantStats { TenantId = tenantId };
-            
-            // Contar empleados
-            var employeeCommand = new NpgsqlCommand("SELECT COUNT(*) FROM \"Employees\"", connection);
-            stats.TotalEmployees = Convert.ToInt32(await employeeCommand.ExecuteScalarAsync());
-            
-            // Contar departamentos
-            var deptCommand = new NpgsqlCommand("SELECT COUNT(*) FROM \"Departments\"", connection);
-            stats.TotalDepartments = Convert.ToInt32(await deptCommand.ExecuteScalarAsync());
-            
-            // Contar registros de tiempo
-            var recordsCommand = new NpgsqlCommand("SELECT COUNT(*) FROM \"TimeRecords\"", connection);
-            stats.TotalTimeRecords = Convert.ToInt32(await recordsCommand.ExecuteScalarAsync());
-            
-            return stats;
-        }
-
-        /// <summary>
-        /// Obtiene la cadena de conexión para operaciones de BD master
-        /// </summary>
-        private static string GetMasterConnectionString(string connectionString)
-        {
-            var builder = new NpgsqlConnectionStringBuilder(connectionString)
-            {
-                Database = "postgres"
-            };
-            return builder.ToString();
-        }
-
-        /// <summary>
-        /// Reset completo del sistema (¡CUIDADO!)
-        /// </summary>
-        public async Task ResetAllAsync()
-        {
-            Console.WriteLine("⚠️  ATENCIÓN: Reseteando todo el sistema...");
-            Console.WriteLine("Esta operación eliminará TODOS los datos.");
-            
-            // Eliminar BD central
-            var masterConnectionString = GetMasterConnectionString(_connectionString);
-            
-            using var connection = new NpgsqlConnection(masterConnectionString);
-            await connection.OpenAsync();
-            
-            // Eliminar todas las BDs de tenants
-            var getTenantsCommand = new NpgsqlCommand(
-                @"SELECT datname FROM pg_database 
-                  WHERE datname LIKE 'SphereTimeControl_%'", 
-                connection);
-            
-            using var reader = await getTenantsCommand.ExecuteReaderAsync();
-            var tenantDbs = new List<string>();
-            
-            while (await reader.ReadAsync())
-            {
-                tenantDbs.Add(reader.GetString(0));
-            }
-            
-            reader.Close();
-            
-            foreach (var dbName in tenantDbs)
-            {
-                Console.WriteLine($"🗑️  Eliminando {dbName}...");
-                
-                // Terminar conexiones
-                var killCommand = new NpgsqlCommand(
-                    $@"SELECT pg_terminate_backend(pid)
-                       FROM pg_stat_activity 
-                       WHERE datname = '{dbName}' AND pid <> pg_backend_pid()", 
-                    connection);
-                await killCommand.ExecuteNonQueryAsync();
-                
-                // Eliminar BD
-                var dropCommand = new NpgsqlCommand($@"DROP DATABASE IF EXISTS ""{dbName}""", connection);
-                await dropCommand.ExecuteNonQueryAsync();
-            }
-            
-            Console.WriteLine("🔄 Sistema reseteado. Ejecuta SeedAllAsync() para reconfigurar.");
         }
     }
+    
+    Console.WriteLine();
+    Console.WriteLine("🔗 Información de Conexión:");
+    Console.WriteLine("==========================");
+    
+    var builder = new NpgsqlConnectionStringBuilder(_connectionString);
+    Console.WriteLine($"Servidor: {builder.Host}:{builder.Port}");
+    Console.WriteLine($"Usuario: {builder.Username}");
+    Console.WriteLine($"Base de datos por defecto: {builder.Database}");
+}
 
-    /// <summary>
-    /// Estadísticas de un tenant
-    /// </summary>
-    public class TenantStats
+/// <summary>
+/// Verifica si una base de datos existe
+/// </summary>
+private async Task<bool> CheckDatabaseExistsAsync(NpgsqlConnection connection, string databaseName)
+{
+    var command = new NpgsqlCommand(
+        "SELECT 1 FROM pg_database WHERE datname = @dbname", 
+        connection);
+    command.Parameters.AddWithValue("dbname", databaseName);
+    
+    var result = await command.ExecuteScalarAsync();
+    return result != null;
+}
+
+/// <summary>
+/// Obtiene estadísticas de la base de datos central
+/// </summary>
+private async Task<CentralDatabaseStats> GetDatabaseStatsAsync(string databaseName)
+{
+    var centralConnectionString = GetTenantConnectionString(_connectionString, databaseName);
+    
+    using var connection = new NpgsqlConnection(centralConnectionString);
+    await connection.OpenAsync();
+    
+    var stats = new CentralDatabaseStats();
+    
+    // Contar tenants
+    try
     {
-        public string TenantId { get; set; } = string.Empty;
-        public int TotalEmployees { get; set; }
-        public int TotalDepartments { get; set; }
-        public int TotalTimeRecords { get; set; }
-        public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+        var tenantsCommand = new NpgsqlCommand("SELECT COUNT(*) FROM Tenants", connection);
+        stats.TenantsCount = Convert.ToInt32(await tenantsCommand.ExecuteScalarAsync());
     }
+    catch
+    {
+        stats.TenantsCount = 0;
+    }
+    
+    // Contar admins
+    try
+    {
+        var adminsCommand = new NpgsqlCommand("SELECT COUNT(*) FROM SphereAdmins", connection);
+        stats.AdminsCount = Convert.ToInt32(await adminsCommand.ExecuteScalarAsync());
+    }
+    catch
+    {
+        stats.AdminsCount = 0;
+    }
+    
+    return stats;
+}
+
+/// <summary>
+/// Obtiene estadísticas de un tenant
+/// </summary>
+private async Task<TenantDatabaseStats> GetTenantStatsAsync(string databaseName)
+{
+    var tenantConnectionString = GetTenantConnectionString(_connectionString, databaseName);
+    
+    using var connection = new NpgsqlConnection(tenantConnectionString);
+    await connection.OpenAsync();
+    
+    var stats = new TenantDatabaseStats();
+    
+    // Contar empleados
+    try
+    {
+        var employeesCommand = new NpgsqlCommand("SELECT COUNT(*) FROM Employees", connection);
+        stats.EmployeesCount = Convert.ToInt32(await employeesCommand.ExecuteScalarAsync());
+    }
+    catch
+    {
+        stats.EmployeesCount = 0;
+    }
+    
+    // Contar departamentos
+    try
+    {
+        var departmentsCommand = new NpgsqlCommand("SELECT COUNT(*) FROM Departments", connection);
+        stats.DepartmentsCount = Convert.ToInt32(await departmentsCommand.ExecuteScalarAsync());
+    }
+    catch
+    {
+        stats.DepartmentsCount = 0;
+    }
+    
+    // Contar registros de hoy
+    try
+    {
+        var todayCommand = new NpgsqlCommand(@"
+            SELECT COUNT(*) 
+            FROM TimeRecords 
+            WHERE DATE(CreatedAt) = CURRENT_DATE", connection);
+        stats.TodayRecordsCount = Convert.ToInt32(await todayCommand.ExecuteScalarAsync());
+    }
+    catch
+    {
+        stats.TodayRecordsCount = 0;
+    }
+    
+    return stats;
+}
+
+/// <summary>
+/// Verifica la conectividad con la base de datos
+/// </summary>
+public async Task<bool> TestConnectionAsync()
+{
+    try
+    {
+        using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync();
+        
+        var command = new NpgsqlCommand("SELECT 1", connection);
+        await command.ExecuteScalarAsync();
+        
+        return true;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+// Clases auxiliares para estadísticas
+private class CentralDatabaseStats
+{
+    public int TenantsCount { get; set; }
+    public int AdminsCount { get; set; }
+}
+
+private class TenantDatabaseStats
+{
+    public int EmployeesCount { get; set; }
+    public int DepartmentsCount { get; set; }
+    public int TodayRecordsCount { get; set; }
 }
