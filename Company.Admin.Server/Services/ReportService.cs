@@ -1,472 +1,379 @@
 using Microsoft.EntityFrameworkCore;
 using Company.Admin.Server.Data;
 using Shared.Models.DTOs.Reports;
-using Shared.Services.Utils;
-using System.Text;
-using ClosedXML.Excel;
+using Shared.Models.Enums;
 
 namespace Company.Admin.Server.Services
 {
+    public interface IReportService
+    {
+        Task<AttendanceReportDto> GenerateAttendanceReportAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null);
+        Task<HoursReportDto> GenerateHoursReportAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null);
+        Task<OvertimeReportDto> GenerateOvertimeReportAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null);
+        Task<SummaryReportDto> GenerateSummaryReportAsync(DateTime startDate, DateTime endDate, int? departmentId = null);
+        Task<byte[]> ExportAttendanceReportToCsvAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null);
+        Task<byte[]> ExportHoursReportToCsvAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null);
+        Task<DashboardStatsDto> GetDashboardStatsAsync(DateTime? startDate = null, DateTime? endDate = null);
+    }
+
     public class ReportService : IReportService
     {
         private readonly CompanyDbContext _context;
-        private readonly ITimeTrackingService _timeTrackingService;
         private readonly ILogger<ReportService> _logger;
+        private const double StandardWorkingHours = 8.0; // Horas estándar por día
 
-        public ReportService(
-            CompanyDbContext context,
-            ITimeTrackingService timeTrackingService,
-            ILogger<ReportService> logger)
+        public ReportService(CompanyDbContext context, ILogger<ReportService> logger)
         {
             _context = context;
-            _timeTrackingService = timeTrackingService;
             _logger = logger;
         }
 
-        public async Task<IEnumerable<AttendanceReportDto>> GenerateAttendanceReportAsync(AttendanceReportRequest request)
+        public async Task<AttendanceReportDto> GenerateAttendanceReportAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null)
         {
-            var employees = await _context.Employees
-                .Include(e => e.Department)
-                .Include(e => e.Company)
-                .Where(e => e.Active)
-                .Where(e => request.EmployeeId == null || e.Id == request.EmployeeId)
-                .Where(e => request.DepartmentId == null || e.DepartmentId == request.DepartmentId)
-                .ToListAsync();
-
-            var attendanceReport = new List<AttendanceReportDto>();
-
-            foreach (var employee in employees)
+            try
             {
-                var current = request.FromDate.Date;
-                while (current <= request.ToDate.Date)
-                {
-                    if (!request.IncludeWeekends && (current.DayOfWeek == DayOfWeek.Saturday || current.DayOfWeek == DayOfWeek.Sunday))
+                var query = _context.TimeRecords
+                    .Include(tr => tr.Employee)
+                    .ThenInclude(e => e.Department)
+                    .Where(tr => tr.Date >= startDate.Date && 
+                               tr.Date <= endDate.Date &&
+                               tr.RecordType == RecordType.CheckIn)
+                    .AsQueryable();
+
+                if (employeeId.HasValue)
+                    query = query.Where(tr => tr.EmployeeId == employeeId);
+
+                if (departmentId.HasValue)
+                    query = query.Where(tr => tr.Employee.DepartmentId == departmentId);
+
+                var records = await query.ToListAsync();
+
+                var attendanceData = records
+                    .GroupBy(r => new { r.EmployeeId, r.Employee.FirstName, r.Employee.LastName, r.Employee.EmployeeCode, DepartmentName = r.Employee.Department?.Name })
+                    .Select(g => new AttendanceRecordDto
                     {
-                        current = current.AddDays(1);
-                        continue;
-                    }
+                        EmployeeId = g.Key.EmployeeId,
+                        EmployeeName = $"{g.Key.FirstName} {g.Key.LastName}",
+                        EmployeeCode = g.Key.EmployeeCode,
+                        DepartmentName = g.Key.DepartmentName ?? "Sin Departamento",
+                        TotalDays = g.Select(r => r.Date).Distinct().Count(),
+                        DaysPresent = g.Count(r => r.CheckIn != null),
+                        DaysAbsent = GetWorkingDaysInPeriod(startDate, endDate) - g.Select(r => r.Date).Distinct().Count(),
+                        AttendancePercentage = CalculateAttendancePercentage(g.Select(r => r.Date).Distinct().Count(), startDate, endDate),
+                        AverageArrivalTime = CalculateAverageArrivalTime(g.Where(r => r.CheckIn != null).Select(r => r.CheckIn!.Value)),
+                        TotalHours = g.Sum(r => r.TotalHours ?? 0)
+                    })
+                    .OrderBy(a => a.EmployeeName)
+                    .ToList();
 
-                    var dailyRecords = await _timeTrackingService.GetDailyRecordsAsync(employee.Id, current);
-                    var checkIn = dailyRecords.FirstOrDefault(r => r.Type == Shared.Models.Enums.RecordType.CheckIn);
-                    var checkOut = dailyRecords.FirstOrDefault(r => r.Type == Shared.Models.Enums.RecordType.CheckOut);
-
-                    var workedHours = await _timeTrackingService.CalculateWorkedHoursAsync(employee.Id, current);
-                    var breakTime = await _timeTrackingService.CalculateBreakTimeAsync(employee.Id, current);
-
-                    var isAbsent = checkIn == null;
-                    var isLate = checkIn != null && checkIn.Timestamp.TimeOfDay > employee.WorkStartTime.Add(TimeSpan.FromMinutes(employee.Company?.ToleranceMinutes ?? 15));
-
-                    var status = isAbsent ? "Ausente" : isLate ? "Tardanza" : "Presente";
-
-                    if (!request.IncludeAbsent && isAbsent)
-                    {
-                        current = current.AddDays(1);
-                        continue;
-                    }
-
-                    attendanceReport.Add(new AttendanceReportDto
-                    {
-                        EmployeeId = employee.Id,
-                        EmployeeName = employee.FullName,
-                        EmployeeCode = employee.EmployeeCode,
-                        DepartmentName = employee.Department?.Name,
-                        Date = current,
-                        CheckInTime = checkIn?.Timestamp,
-                        CheckOutTime = checkOut?.Timestamp,
-                        WorkedHours = workedHours,
-                        BreakTime = breakTime,
-                        OvertimeHours = workedHours > TimeSpan.FromHours(8) ? workedHours - TimeSpan.FromHours(8) : TimeSpan.Zero,
-                        IsLate = isLate,
-                        IsAbsent = isAbsent,
-                        Status = status,
-                        Notes = checkIn?.Notes
-                    });
-
-                    current = current.AddDays(1);
-                }
-            }
-
-            return attendanceReport.OrderBy(r => r.Date).ThenBy(r => r.EmployeeName);
-        }
-
-        public async Task<IEnumerable<HoursReportDto>> GenerateHoursReportAsync(HoursReportRequest request)
-        {
-            var employees = await _context.Employees
-                .Include(e => e.Department)
-                .Where(e => e.Active)
-                .Where(e => request.EmployeeId == null || e.Id == request.EmployeeId)
-                .Where(e => request.DepartmentId == null || e.DepartmentId == request.DepartmentId)
-                .ToListAsync();
-
-            var hoursReport = new List<HoursReportDto>();
-
-            foreach (var employee in employees)
-            {
-                var totalWorkedHours = TimeSpan.Zero;
-                var totalBreakTime = TimeSpan.Zero;
-                var workingDays = 0;
-                var absentDays = 0;
-                var lateDays = 0;
-
-                var current = request.FromDate.Date;
-                while (current <= request.ToDate.Date)
+                return new AttendanceReportDto
                 {
-                    if (DateTimeService.IsWorkingDay(current))
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    GeneratedAt = DateTime.UtcNow,
+                    TotalEmployees = attendanceData.Count,
+                    AverageAttendance = attendanceData.Any() ? attendanceData.Average(a => a.AttendancePercentage) : 0,
+                    AttendanceRecords = attendanceData
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generando reporte de asistencia");
+                throw;
+            }
+        }
+
+        public async Task<HoursReportDto> GenerateHoursReportAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null)
+        {
+            try
+            {
+                var query = _context.TimeRecords
+                    .Include(tr => tr.Employee)
+                    .ThenInclude(e => e.Department)
+                    .Where(tr => tr.Date >= startDate.Date && 
+                               tr.Date <= endDate.Date &&
+                               tr.RecordType == RecordType.CheckIn)
+                    .AsQueryable();
+
+                if (employeeId.HasValue)
+                    query = query.Where(tr => tr.EmployeeId == employeeId);
+
+                if (departmentId.HasValue)
+                    query = query.Where(tr => tr.Employee.DepartmentId == departmentId);
+
+                var records = await query.ToListAsync();
+
+                var hoursData = records
+                    .GroupBy(r => new { r.EmployeeId, r.Employee.FirstName, r.Employee.LastName, r.Employee.EmployeeCode, DepartmentName = r.Employee.Department?.Name })
+                    .Select(g => new HoursRecordDto
                     {
-                        workingDays++;
-                        
-                        var dailyRecords = await _timeTrackingService.GetDailyRecordsAsync(employee.Id, current);
-                        var checkIn = dailyRecords.FirstOrDefault(r => r.Type == Shared.Models.Enums.RecordType.CheckIn);
+                        EmployeeId = g.Key.EmployeeId,
+                        EmployeeName = $"{g.Key.FirstName} {g.Key.LastName}",
+                        EmployeeCode = g.Key.EmployeeCode,
+                        DepartmentName = g.Key.DepartmentName ?? "Sin Departamento",
+                        TotalHours = g.Sum(r => r.TotalHours ?? 0),
+                        RegularHours = CalculateRegularHours(g.Sum(r => r.TotalHours ?? 0), GetWorkingDaysInPeriod(startDate, endDate)),
+                        OvertimeHours = CalculateOvertimeHours(g.Sum(r => r.TotalHours ?? 0), GetWorkingDaysInPeriod(startDate, endDate)),
+                        AverageHoursPerDay = g.Any() ? g.Sum(r => r.TotalHours ?? 0) / g.Select(r => r.Date).Distinct().Count() : 0,
+                        DaysWorked = g.Select(r => r.Date).Distinct().Count()
+                    })
+                    .OrderBy(h => h.EmployeeName)
+                    .ToList();
 
-                        if (checkIn == null)
-                        {
-                            absentDays++;
-                        }
-                        else
-                        {
-                            var workedHours = await _timeTrackingService.CalculateWorkedHoursAsync(employee.Id, current);
-                            var breakTime = await _timeTrackingService.CalculateBreakTimeAsync(employee.Id, current);
-                            
-                            totalWorkedHours = totalWorkedHours.Add(workedHours);
-                            totalBreakTime = totalBreakTime.Add(breakTime);
-
-                            var isLate = checkIn.Timestamp.TimeOfDay > employee.WorkStartTime.Add(TimeSpan.FromMinutes(employee.Company?.ToleranceMinutes ?? 15));
-                            if (isLate) lateDays++;
-                        }
-                    }
-
-                    current = current.AddDays(1);
-                }
-
-                var expectedHours = TimeSpan.FromHours(workingDays * 8); // 8 horas por día
-                var overtimeHours = totalWorkedHours > expectedHours ? totalWorkedHours - expectedHours : TimeSpan.Zero;
-                var attendancePercentage = workingDays > 0 ? (double)(workingDays - absentDays) / workingDays * 100 : 0;
-
-                hoursReport.Add(new HoursReportDto
+                return new HoursReportDto
                 {
-                    EmployeeId = employee.Id,
-                    EmployeeName = employee.FullName,
-                    EmployeeCode = employee.EmployeeCode,
-                    DepartmentName = employee.Department?.Name,
-                    FromDate = request.FromDate,
-                    ToDate = request.ToDate,
-                    TotalWorkedHours = totalWorkedHours,
-                    ExpectedHours = expectedHours,
-                    OvertimeHours = overtimeHours,
-                    BreakTime = totalBreakTime,
-                    WorkingDays = workingDays,
-                    AbsentDays = absentDays,
-                    LateDays = lateDays,
-                    AttendancePercentage = Math.Round(attendancePercentage, 2)
-                });
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    GeneratedAt = DateTime.UtcNow,
+                    TotalEmployees = hoursData.Count,
+                    TotalHours = hoursData.Sum(h => h.TotalHours),
+                    TotalRegularHours = hoursData.Sum(h => h.RegularHours),
+                    TotalOvertimeHours = hoursData.Sum(h => h.OvertimeHours),
+                    AverageHoursPerEmployee = hoursData.Any() ? hoursData.Average(h => h.TotalHours) : 0,
+                    HoursRecords = hoursData
+                };
             }
-
-            return hoursReport.OrderBy(r => r.EmployeeName);
-        }
-
-        public async Task<SummaryReportDto> GenerateSummaryReportAsync(DateTime fromDate, DateTime toDate)
-        {
-            var company = await _context.Companies.FirstOrDefaultAsync(c => c.Active);
-            var totalEmployees = await _context.Employees.CountAsync();
-            var activeEmployees = await _context.Employees.CountAsync(e => e.Active);
-            var totalDepartments = await _context.Departments.CountAsync(d => d.Active);
-
-            // Calcular estadísticas básicas
-            var attendanceRequest = new AttendanceReportRequest
+            catch (Exception ex)
             {
-                FromDate = fromDate,
-                ToDate = toDate,
-                IncludeAbsent = true,
-                IncludeWeekends = false
-            };
-
-            var attendanceData = await GenerateAttendanceReportAsync(attendanceRequest);
-            
-            var totalRecords = attendanceData.Count();
-            var presentRecords = attendanceData.Count(r => !r.IsAbsent);
-            var averageAttendanceRate = totalRecords > 0 ? (double)presentRecords / totalRecords * 100 : 0;
-
-            return new SummaryReportDto
-            {
-                ReportDate = DateTime.UtcNow,
-                FromDate = fromDate,
-                ToDate = toDate,
-                CompanyName = company?.Name ?? "Empresa",
-                TotalEmployees = totalEmployees,
-                ActiveEmployees = activeEmployees,
-                TotalDepartments = totalDepartments,
-                AverageAttendanceRate = Math.Round(averageAttendanceRate, 2),
-                TotalWorkingDays = DateTimeService.GetWorkingDays(fromDate, toDate),
-                TotalAbsences = attendanceData.Count(r => r.IsAbsent),
-                TotalLateArrivals = attendanceData.Count(r => r.IsLate),
-                TotalWorkedHours = TimeSpan.FromTicks(attendanceData.Where(r => r.WorkedHours.HasValue).Sum(r => r.WorkedHours!.Value.Ticks)),
-                TotalOvertimeHours = TimeSpan.FromTicks(attendanceData.Where(r => r.OvertimeHours.HasValue).Sum(r => r.OvertimeHours!.Value.Ticks)),
-                AverageWorkHoursPerEmployee = TimeSpan.Zero, // Calcular si es necesario
-                TopAttendance = new List<EmployeeAttendanceSummary>(), // Implementar si es necesario
-                TopHours = new List<EmployeeHoursSummary>(), // Implementar si es necesario
-                DepartmentStats = new List<DepartmentSummary>() // Implementar si es necesario
-            };
-        }
-
-        public async Task<byte[]> ExportAttendanceReportToExcelAsync(AttendanceReportRequest request)
-        {
-            var data = await GenerateAttendanceReportAsync(request);
-            
-            using var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Reporte de Asistencia");
-
-            // Headers
-            worksheet.Cell(1, 1).Value = "Empleado";
-            worksheet.Cell(1, 2).Value = "Código";
-            worksheet.Cell(1, 3).Value = "Departamento";
-            worksheet.Cell(1, 4).Value = "Fecha";
-            worksheet.Cell(1, 5).Value = "Entrada";
-            worksheet.Cell(1, 6).Value = "Salida";
-            worksheet.Cell(1, 7).Value = "Horas Trabajadas";
-            worksheet.Cell(1, 8).Value = "Estado";
-            worksheet.Cell(1, 9).Value = "Notas";
-
-            // Data
-            int row = 2;
-            foreach (var item in data)
-            {
-                worksheet.Cell(row, 1).Value = item.EmployeeName;
-                worksheet.Cell(row, 2).Value = item.EmployeeCode;
-                worksheet.Cell(row, 3).Value = item.DepartmentName ?? "";
-                worksheet.Cell(row, 4).Value = item.Date.ToString("dd/MM/yyyy");
-                worksheet.Cell(row, 5).Value = item.CheckInTime?.ToString("HH:mm") ?? "";
-                worksheet.Cell(row, 6).Value = item.CheckOutTime?.ToString("HH:mm") ?? "";
-                worksheet.Cell(row, 7).Value = item.WorkedHours?.ToString(@"hh\:mm") ?? "";
-                worksheet.Cell(row, 8).Value = item.Status;
-                worksheet.Cell(row, 9).Value = item.Notes ?? "";
-                row++;
+                _logger.LogError(ex, "Error generando reporte de horas");
+                throw;
             }
-
-            // Auto-fit columns
-            worksheet.ColumnsUsed().AdjustToContents();
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            return stream.ToArray();
         }
 
-        public async Task<byte[]> ExportHoursReportToExcelAsync(HoursReportRequest request)
+        public async Task<OvertimeReportDto> GenerateOvertimeReportAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null)
         {
-            var data = await GenerateHoursReportAsync(request);
-            
-            using var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Reporte de Horas");
-
-            // Headers
-            worksheet.Cell(1, 1).Value = "Empleado";
-            worksheet.Cell(1, 2).Value = "Código";
-            worksheet.Cell(1, 3).Value = "Departamento";
-            worksheet.Cell(1, 4).Value = "Horas Trabajadas";
-            worksheet.Cell(1, 5).Value = "Horas Esperadas";
-            worksheet.Cell(1, 6).Value = "Horas Extra";
-            worksheet.Cell(1, 7).Value = "Días Trabajados";
-            worksheet.Cell(1, 8).Value = "Días Ausente";
-            worksheet.Cell(1, 9).Value = "% Asistencia";
-
-            // Data
-            int row = 2;
-            foreach (var item in data)
+            try
             {
-                worksheet.Cell(row, 1).Value = item.EmployeeName;
-                worksheet.Cell(row, 2).Value = item.EmployeeCode;
-                worksheet.Cell(row, 3).Value = item.DepartmentName ?? "";
-                worksheet.Cell(row, 4).Value = item.TotalWorkedHours.ToString(@"hh\:mm");
-                worksheet.Cell(row, 5).Value = item.ExpectedHours.ToString(@"hh\:mm");
-                worksheet.Cell(row, 6).Value = item.OvertimeHours.ToString(@"hh\:mm");
-                worksheet.Cell(row, 7).Value = item.WorkingDays;
-                worksheet.Cell(row, 8).Value = item.AbsentDays;
-                worksheet.Cell(row, 9).Value = $"{item.AttendancePercentage:F2}%";
-                row++;
-            }
+                var query = _context.TimeRecords
+                    .Include(tr => tr.Employee)
+                    .ThenInclude(e => e.Department)
+                    .Where(tr => tr.Date >= startDate.Date && 
+                               tr.Date <= endDate.Date &&
+                               tr.RecordType == RecordType.CheckIn)
+                    .AsQueryable();
 
-            worksheet.ColumnsUsed().AdjustToContents();
+                if (employeeId.HasValue)
+                    query = query.Where(tr => tr.EmployeeId == employeeId);
 
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            return stream.ToArray();
-        }
+                if (departmentId.HasValue)
+                    query = query.Where(tr => tr.Employee.DepartmentId == departmentId);
 
-        public async Task<byte[]> ExportSummaryReportToExcelAsync(DateTime fromDate, DateTime toDate)
-        {
-            var summary = await GenerateSummaryReportAsync(fromDate, toDate);
-            
-            using var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Resumen Ejecutivo");
+                var records = await query.ToListAsync();
 
-            // Título
-            worksheet.Cell(1, 1).Value = $"Resumen Ejecutivo - {summary.CompanyName}";
-            worksheet.Cell(2, 1).Value = $"Período: {fromDate:dd/MM/yyyy} - {toDate:dd/MM/yyyy}";
-
-            // Estadísticas generales
-            worksheet.Cell(4, 1).Value = "Estadísticas Generales";
-            worksheet.Cell(5, 1).Value = "Total Empleados:";
-            worksheet.Cell(5, 2).Value = summary.TotalEmployees;
-            worksheet.Cell(6, 1).Value = "Empleados Activos:";
-            worksheet.Cell(6, 2).Value = summary.ActiveEmployees;
-            worksheet.Cell(7, 1).Value = "Total Departamentos:";
-            worksheet.Cell(7, 2).Value = summary.TotalDepartments;
-            worksheet.Cell(8, 1).Value = "Promedio Asistencia:";
-            worksheet.Cell(8, 2).Value = $"{summary.AverageAttendanceRate:F2}%";
-
-            worksheet.ColumnsUsed().AdjustToContents();
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            return stream.ToArray();
-        }
-
-        public async Task<string> ExportAttendanceReportToCsvAsync(AttendanceReportRequest request)
-        {
-            var data = await GenerateAttendanceReportAsync(request);
-            var csv = new StringBuilder();
-
-            // Headers
-            csv.AppendLine("Empleado,Código,Departamento,Fecha,Entrada,Salida,Horas Trabajadas,Estado,Notas");
-
-            // Data
-            foreach (var item in data)
-            {
-                csv.AppendLine($"{item.EmployeeName},{item.EmployeeCode},{item.DepartmentName ?? ""},{item.Date:dd/MM/yyyy},{item.CheckInTime?.ToString("HH:mm") ?? ""},{item.CheckOutTime?.ToString("HH:mm") ?? ""},{item.WorkedHours?.ToString(@"hh\:mm") ?? ""},{item.Status},{item.Notes ?? ""}");
-            }
-
-            return csv.ToString();
-        }
-
-        public async Task<string> ExportHoursReportToCsvAsync(HoursReportRequest request)
-        {
-            var data = await GenerateHoursReportAsync(request);
-            var csv = new StringBuilder();
-
-            // Headers
-            csv.AppendLine("Empleado,Código,Departamento,Horas Trabajadas,Horas Esperadas,Horas Extra,Días Trabajados,Días Ausente,% Asistencia");
-
-            // Data
-            foreach (var item in data)
-            {
-                csv.AppendLine($"{item.EmployeeName},{item.EmployeeCode},{item.DepartmentName ?? ""},{item.TotalWorkedHours:hh\\:mm},{item.ExpectedHours:hh\\:mm},{item.OvertimeHours:hh\\:mm},{item.WorkingDays},{item.AbsentDays},{item.AttendancePercentage:F2}%");
-            }
-
-            return csv.ToString();
-        }
-
-        public async Task<Dictionary<string, object>> GetDashboardStatsAsync(DateTime? fromDate = null, DateTime? toDate = null)
-        {
-            var from = fromDate ?? DateTime.Today.AddDays(-30);
-            var to = toDate ?? DateTime.Today;
-
-            var totalEmployees = await _context.Employees.CountAsync(e => e.Active);
-            var totalDepartments = await _context.Departments.CountAsync(d => d.Active);
-
-            // Empleados presentes hoy
-            var employees = await _context.Employees.Where(e => e.Active).ToListAsync();
-            var presentToday = 0;
-            var onBreak = 0;
-
-            foreach (var employee in employees)
-            {
-                if (await _timeTrackingService.IsEmployeeCheckedInAsync(employee.Id))
-                {
-                    presentToday++;
-                    if (await _timeTrackingService.IsEmployeeOnBreakAsync(employee.Id))
+                var overtimeData = records
+                    .GroupBy(r => new { r.EmployeeId, r.Employee.FirstName, r.Employee.LastName, r.Employee.EmployeeCode, DepartmentName = r.Employee.Department?.Name })
+                    .Where(g => CalculateOvertimeHours(g.Sum(r => r.TotalHours ?? 0), GetWorkingDaysInPeriod(startDate, endDate)) > 0)
+                    .Select(g => new OvertimeRecordDto
                     {
-                        onBreak++;
-                    }
-                }
-            }
+                        EmployeeId = g.Key.EmployeeId,
+                        EmployeeName = $"{g.Key.FirstName} {g.Key.LastName}",
+                        EmployeeCode = g.Key.EmployeeCode,
+                        DepartmentName = g.Key.DepartmentName ?? "Sin Departamento",
+                        TotalHours = g.Sum(r => r.TotalHours ?? 0),
+                        RegularHours = CalculateRegularHours(g.Sum(r => r.TotalHours ?? 0), GetWorkingDaysInPeriod(startDate, endDate)),
+                        OvertimeHours = CalculateOvertimeHours(g.Sum(r => r.TotalHours ?? 0), GetWorkingDaysInPeriod(startDate, endDate)),
+                        DaysWithOvertime = g.Count(r => (r.TotalHours ?? 0) > StandardWorkingHours),
+                        MaxDailyOvertime = g.Max(r => Math.Max(0, (r.TotalHours ?? 0) - StandardWorkingHours))
+                    })
+                    .OrderByDescending(o => o.OvertimeHours)
+                    .ToList();
 
-            var attendanceRate = totalEmployees > 0 ? (double)presentToday / totalEmployees * 100 : 0;
-
-            // Registros recientes
-            var recentRecords = await _context.TimeRecords
-                .Include(tr => tr.Employee)
-                .Where(tr => tr.Timestamp >= DateTime.Today)
-                .OrderByDescending(tr => tr.Timestamp)
-                .Take(10)
-                .Select(tr => new
+                return new OvertimeReportDto
                 {
-                    EmployeeName = tr.Employee.FullName,
-                    Type = tr.Type.ToString(),
-                    Timestamp = tr.Timestamp,
-                    Notes = tr.Notes
-                })
-                .ToListAsync();
-
-            return new Dictionary<string, object>
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    GeneratedAt = DateTime.UtcNow,
+                    TotalEmployeesWithOvertime = overtimeData.Count,
+                    TotalOvertimeHours = overtimeData.Sum(o => o.OvertimeHours),
+                    AverageOvertimePerEmployee = overtimeData.Any() ? overtimeData.Average(o => o.OvertimeHours) : 0,
+                    OvertimeRecords = overtimeData
+                };
+            }
+            catch (Exception ex)
             {
-                ["totalEmployees"] = totalEmployees,
-                ["totalDepartments"] = totalDepartments,
-                ["presentToday"] = presentToday,
-                ["onBreak"] = onBreak,
-                ["attendanceRate"] = Math.Round(attendanceRate, 2),
-                ["recentActivity"] = recentRecords,
-                ["lastUpdated"] = DateTime.UtcNow
-            };
+                _logger.LogError(ex, "Error generando reporte de horas extra");
+                throw;
+            }
         }
 
-        public async Task<Dictionary<string, object>> GetEmployeeStatsAsync(int employeeId, DateTime? fromDate = null, DateTime? toDate = null)
+        public async Task<SummaryReportDto> GenerateSummaryReportAsync(DateTime startDate, DateTime endDate, int? departmentId = null)
         {
-            var from = fromDate ?? DateTime.Today.AddDays(-30);
-            var to = toDate ?? DateTime.Today;
-
-            var employee = await _context.Employees
-                .Include(e => e.Department)
-                .FirstOrDefaultAsync(e => e.Id == employeeId);
-
-            if (employee == null)
+            try
             {
-                throw new ArgumentException("Empleado no encontrado");
-            }
+                var query = _context.TimeRecords
+                    .Include(tr => tr.Employee)
+                    .ThenInclude(e => e.Department)
+                    .Where(tr => tr.Date >= startDate.Date && 
+                               tr.Date <= endDate.Date &&
+                               tr.RecordType == RecordType.CheckIn)
+                    .AsQueryable();
 
-            var totalWorkingDays = DateTimeService.GetWorkingDays(from, to);
-            var totalWorkedHours = TimeSpan.Zero;
-            var presentDays = 0;
-            var lateDays = 0;
+                if (departmentId.HasValue)
+                    query = query.Where(tr => tr.Employee.DepartmentId == departmentId);
 
-            var current = from.Date;
-            while (current <= to.Date)
-            {
-                if (DateTimeService.IsWorkingDay(current))
-                {
-                    var dailyRecords = await _timeTrackingService.GetDailyRecordsAsync(employeeId, current);
-                    var checkIn = dailyRecords.FirstOrDefault(r => r.Type == Shared.Models.Enums.RecordType.CheckIn);
+                var records = await query.ToListAsync();
+                var workingDays = GetWorkingDaysInPeriod(startDate, endDate);
 
-                    if (checkIn != null)
+                var departmentSummaries = records
+                    .GroupBy(r => new { r.Employee.DepartmentId, DepartmentName = r.Employee.Department?.Name ?? "Sin Departamento" })
+                    .Select(g => new DepartmentSummaryDto
                     {
-                        presentDays++;
-                        var workedHours = await _timeTrackingService.CalculateWorkedHoursAsync(employeeId, current);
-                        totalWorkedHours = totalWorkedHours.Add(workedHours);
+                        DepartmentId = g.Key.DepartmentId,
+                        DepartmentName = g.Key.DepartmentName,
+                        TotalEmployees = g.Select(r => r.EmployeeId).Distinct().Count(),
+                        TotalHours = g.Sum(r => r.TotalHours ?? 0),
+                        AverageHoursPerEmployee = g.Select(r => r.EmployeeId).Distinct().Count() > 0 
+                            ? g.Sum(r => r.TotalHours ?? 0) / g.Select(r => r.EmployeeId).Distinct().Count() 
+                            : 0,
+                        AttendanceRate = CalculateAttendancePercentage(g.Select(r => r.Date).Distinct().Count(), startDate, endDate)
+                    })
+                    .OrderBy(d => d.DepartmentName)
+                    .ToList();
 
-                        var tolerance = employee.Company?.ToleranceMinutes ?? 15;
-                        var isLate = checkIn.Timestamp.TimeOfDay > employee.WorkStartTime.Add(TimeSpan.FromMinutes(tolerance));
-                        if (isLate) lateDays++;
-                    }
+                return new SummaryReportDto
+                {
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    GeneratedAt = DateTime.UtcNow,
+                    TotalEmployees = records.Select(r => r.EmployeeId).Distinct().Count(),
+                    TotalWorkingDays = workingDays,
+                    TotalHours = records.Sum(r => r.TotalHours ?? 0),
+                    AverageHoursPerDay = records.Any() ? records.Sum(r => r.TotalHours ?? 0) / workingDays : 0,
+                    OverallAttendanceRate = CalculateAttendancePercentage(records.Select(r => r.Date).Distinct().Count(), startDate, endDate),
+                    DepartmentSummaries = departmentSummaries
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generando reporte resumen");
+                throw;
+            }
+        }
+
+        public async Task<byte[]> ExportAttendanceReportToCsvAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null)
+        {
+            try
+            {
+                var report = await GenerateAttendanceReportAsync(startDate, endDate, employeeId, departmentId);
+                
+                var csv = new System.Text.StringBuilder();
+                csv.AppendLine("Código Empleado,Nombre,Departamento,Días Totales,Días Presente,Días Ausente,% Asistencia,Promedio Llegada,Total Horas");
+
+                foreach (var record in report.AttendanceRecords)
+                {
+                    csv.AppendLine($"{record.EmployeeCode},{record.EmployeeName},{record.DepartmentName},{record.TotalDays},{record.DaysPresent},{record.DaysAbsent},{record.AttendancePercentage:F1},{record.AverageArrivalTime:hh\\:mm},{record.TotalHours:F2}");
                 }
 
-                current = current.AddDays(1);
+                return System.Text.Encoding.UTF8.GetBytes(csv.ToString());
             }
-
-            var attendanceRate = totalWorkingDays > 0 ? (double)presentDays / totalWorkingDays * 100 : 0;
-            var averageHoursPerDay = presentDays > 0 ? totalWorkedHours.TotalHours / presentDays : 0;
-
-            return new Dictionary<string, object>
+            catch (Exception ex)
             {
-                ["employeeId"] = employeeId,
-                ["employeeName"] = employee.FullName,
-                ["departmentName"] = employee.Department?.Name ?? "",
-                ["totalWorkingDays"] = totalWorkingDays,
-                ["presentDays"] = presentDays,
-                ["absentDays"] = totalWorkingDays - presentDays,
-                ["lateDays"] = lateDays,
-                ["attendanceRate"] = Math.Round(attendanceRate, 2),
-                ["totalWorkedHours"] = totalWorkedHours.ToString(@"hh\:mm"),
-                ["averageHoursPerDay"] = Math.Round(averageHoursPerDay, 2),
-                ["period"] = new { from, to }
-            };
+                _logger.LogError(ex, "Error exportando reporte de asistencia a CSV");
+                throw;
+            }
         }
+
+        public async Task<byte[]> ExportHoursReportToCsvAsync(DateTime startDate, DateTime endDate, int? employeeId = null, int? departmentId = null)
+        {
+            try
+            {
+                var report = await GenerateHoursReportAsync(startDate, endDate, employeeId, departmentId);
+                
+                var csv = new System.Text.StringBuilder();
+                csv.AppendLine("Código Empleado,Nombre,Departamento,Total Horas,Horas Regulares,Horas Extra,Promedio Horas/Día,Días Trabajados");
+
+                foreach (var record in report.HoursRecords)
+                {
+                    csv.AppendLine($"{record.EmployeeCode},{record.EmployeeName},{record.DepartmentName},{record.TotalHours:F2},{record.RegularHours:F2},{record.OvertimeHours:F2},{record.AverageHoursPerDay:F2},{record.DaysWorked}");
+                }
+
+                return System.Text.Encoding.UTF8.GetBytes(csv.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exportando reporte de horas a CSV");
+                throw;
+            }
+        }
+
+        public async Task<DashboardStatsDto> GetDashboardStatsAsync(DateTime? startDate = null, DateTime? endDate = null)
+        {
+            try
+            {
+                var start = startDate ?? DateTime.Today;
+                var end = endDate ?? DateTime.Today;
+
+                var totalEmployees = await _context.Employees.CountAsync(e => e.Active);
+                var employeesPresent = await _context.TimeRecords
+                    .Where(tr => tr.Date >= start && tr.Date <= end && tr.RecordType == RecordType.CheckIn)
+                    .Select(tr => tr.EmployeeId)
+                    .Distinct()
+                    .CountAsync();
+
+                var totalHours = await _context.TimeRecords
+                    .Where(tr => tr.Date >= start && tr.Date <= end && tr.RecordType == RecordType.CheckIn)
+                    .SumAsync(tr => tr.TotalHours ?? 0);
+
+                var averageHours = employeesPresent > 0 ? totalHours / employeesPresent : 0;
+
+                return new DashboardStatsDto
+                {
+                    TotalEmployees = totalEmployees,
+                    EmployeesPresent = employeesPresent,
+                    AttendanceRate = totalEmployees > 0 ? (double)employeesPresent / totalEmployees * 100 : 0,
+                    TotalHours = totalHours,
+                    AverageHours = averageHours,
+                    Period = $"{start:dd/MM/yyyy} - {end:dd/MM/yyyy}"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo estadísticas del dashboard");
+                throw;
+            }
+        }
+
+        #region Private Helper Methods
+
+        private int GetWorkingDaysInPeriod(DateTime startDate, DateTime endDate)
+        {
+            int workingDays = 0;
+            for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
+            {
+                if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
+                {
+                    workingDays++;
+                }
+            }
+            return workingDays;
+        }
+
+        private double CalculateAttendancePercentage(int daysPresent, DateTime startDate, DateTime endDate)
+        {
+            var workingDays = GetWorkingDaysInPeriod(startDate, endDate);
+            return workingDays > 0 ? (double)daysPresent / workingDays * 100 : 0;
+        }
+
+        private TimeSpan CalculateAverageArrivalTime(IEnumerable<DateTime> arrivalTimes)
+        {
+            if (!arrivalTimes.Any()) return TimeSpan.Zero;
+            
+            var totalTicks = arrivalTimes.Sum(t => t.TimeOfDay.Ticks);
+            return new TimeSpan(totalTicks / arrivalTimes.Count());
+        }
+
+        private double CalculateRegularHours(double totalHours, int workingDays)
+        {
+            var maxRegularHours = workingDays * StandardWorkingHours;
+            return Math.Min(totalHours, maxRegularHours);
+        }
+
+        private double CalculateOvertimeHours(double totalHours, int workingDays)
+        {
+            var maxRegularHours = workingDays * StandardWorkingHours;
+            return Math.Max(0, totalHours - maxRegularHours);
+        }
+
+        #endregion
     }
 }

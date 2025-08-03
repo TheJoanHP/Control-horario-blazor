@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Company.Admin.Server.Services;
 using Shared.Models.Core;
 using Shared.Models.DTOs.Employee;
+using Shared.Services.Tenant;
 using AutoMapper;
 using System.ComponentModel.DataAnnotations;
 
@@ -15,15 +16,18 @@ namespace Company.Admin.Server.Controllers
     {
         private readonly IEmployeeService _employeeService;
         private readonly IMapper _mapper;
+        private readonly ITenantResolver _tenantResolver;
         private readonly ILogger<EmployeesController> _logger;
 
         public EmployeesController(
             IEmployeeService employeeService,
             IMapper mapper,
+            ITenantResolver tenantResolver,
             ILogger<EmployeesController> logger)
         {
             _employeeService = employeeService;
             _mapper = mapper;
+            _tenantResolver = tenantResolver;
             _logger = logger;
         }
 
@@ -39,8 +43,7 @@ namespace Company.Admin.Server.Controllers
             try
             {
                 var employees = await _employeeService.GetEmployeesAsync(search, departmentId, active);
-                var employeeDtos = _mapper.Map<IEnumerable<EmployeeDto>>(employees);
-                return Ok(employeeDtos);
+                return Ok(employees);
             }
             catch (Exception ex)
             {
@@ -64,8 +67,7 @@ namespace Company.Admin.Server.Controllers
                     return NotFound($"Empleado con ID {id} no encontrado");
                 }
 
-                var employeeDto = _mapper.Map<EmployeeDto>(employee);
-                return Ok(employeeDto);
+                return Ok(employee);
             }
             catch (Exception ex)
             {
@@ -87,14 +89,18 @@ namespace Company.Admin.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var employee = await _employeeService.CreateEmployeeAsync(createEmployeeDto);
-                var employeeDto = _mapper.Map<EmployeeDto>(employee);
+                var companyId = _tenantResolver.GetCompanyId();
+                var employee = await _employeeService.CreateEmployeeAsync(createEmployeeDto, companyId);
 
-                return CreatedAtAction(nameof(GetEmployee), new { id = employee.Id }, employeeDto);
+                return CreatedAtAction(nameof(GetEmployee), new { id = employee.Id }, employee);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(ex.Message);
+                return Conflict(ex.Message);
             }
             catch (Exception ex)
             {
@@ -104,7 +110,7 @@ namespace Company.Admin.Server.Controllers
         }
 
         /// <summary>
-        /// Actualizar empleado
+        /// Actualizar empleado existente
         /// </summary>
         [HttpPut("{id}")]
         public async Task<ActionResult<EmployeeDto>> UpdateEmployee(int id, [FromBody] UpdateEmployeeDto updateEmployeeDto)
@@ -116,14 +122,22 @@ namespace Company.Admin.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var employee = await _employeeService.UpdateEmployeeAsync(id, updateEmployeeDto);
-                var employeeDto = _mapper.Map<EmployeeDto>(employee);
+                var updatedEmployee = await _employeeService.UpdateEmployeeAsync(id, updateEmployeeDto);
+                
+                if (updatedEmployee == null)
+                {
+                    return NotFound($"Empleado con ID {id} no encontrado");
+                }
 
-                return Ok(employeeDto);
+                return Ok(updatedEmployee);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(ex.Message);
+                return Conflict(ex.Message);
             }
             catch (Exception ex)
             {
@@ -349,7 +363,8 @@ namespace Company.Admin.Server.Controllers
     /// </summary>
     public class ChangeEmployeePasswordDto
     {
-        [Required, MinLength(6)]
+        [Required(ErrorMessage = "La nueva contraseña es requerida")]
+        [MinLength(6, ErrorMessage = "La contraseña debe tener al menos 6 caracteres")]
         public string NewPassword { get; set; } = string.Empty;
     }
 }

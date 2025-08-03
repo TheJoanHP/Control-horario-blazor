@@ -1,116 +1,153 @@
 using Microsoft.EntityFrameworkCore;
+using AutoMapper;
 using Company.Admin.Server.Data;
 using Shared.Models.Core;
+using Shared.Models.DTOs.Department;
 
 namespace Company.Admin.Server.Services
 {
+    public interface IDepartmentService
+    {
+        Task<IEnumerable<DepartmentDto>> GetDepartmentsAsync(int companyId, bool? active = null);
+        Task<DepartmentDto?> GetDepartmentByIdAsync(int id);
+        Task<DepartmentDto> CreateDepartmentAsync(CreateDepartmentDto createDto, int companyId);
+        Task<DepartmentDto?> UpdateDepartmentAsync(int id, UpdateDepartmentDto updateDto);
+        Task<bool> DeleteDepartmentAsync(int id);
+        Task<bool> ActivateDepartmentAsync(int id);
+        Task<bool> DeactivateDepartmentAsync(int id);
+        Task<int> GetEmployeeCountByDepartmentAsync(int departmentId);
+        Task<IEnumerable<DepartmentStatsDto>> GetDepartmentStatsAsync(int companyId);
+    }
+
     public class DepartmentService : IDepartmentService
     {
         private readonly CompanyDbContext _context;
+        private readonly IMapper _mapper;
         private readonly ILogger<DepartmentService> _logger;
 
         public DepartmentService(
             CompanyDbContext context,
+            IMapper mapper,
             ILogger<DepartmentService> logger)
         {
             _context = context;
+            _mapper = mapper;
             _logger = logger;
         }
 
-        public async Task<Department> CreateDepartmentAsync(string name, string? description = null)
+        public async Task<IEnumerable<DepartmentDto>> GetDepartmentsAsync(int companyId, bool? active = null)
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(name))
-                    throw new ArgumentException("El nombre del departamento es requerido");
+                var query = _context.Departments
+                    .Where(d => d.CompanyId == companyId)
+                    .AsQueryable();
 
-                // Verificar unicidad del nombre (a nivel de empresa se valida en el controlador)
-                var department = new Department
+                if (active.HasValue)
                 {
-                    Name = name.Trim(),
-                    Description = description?.Trim(),
-                    Active = true,
-                    CreatedAt = DateTime.UtcNow
-                };
+                    query = query.Where(d => d.Active == active);
+                }
 
-                _context.Departments.Add(department);
-                await _context.SaveChangesAsync();
+                var departments = await query
+                    .OrderBy(d => d.Name)
+                    .ToListAsync();
 
-                return department;
+                return _mapper.Map<IEnumerable<DepartmentDto>>(departments);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creando departamento {Name}", name);
+                _logger.LogError(ex, "Error obteniendo departamentos para empresa {CompanyId}", companyId);
                 throw;
             }
         }
 
-        public async Task<Department> UpdateDepartmentAsync(int id, string name, string? description = null)
+        public async Task<DepartmentDto?> GetDepartmentByIdAsync(int id)
+        {
+            try
+            {
+                var department = await _context.Departments
+                    .FirstOrDefaultAsync(d => d.Id == id);
+
+                return department != null ? _mapper.Map<DepartmentDto>(department) : null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo departamento {DepartmentId}", id);
+                throw;
+            }
+        }
+
+        public async Task<DepartmentDto> CreateDepartmentAsync(CreateDepartmentDto createDto, int companyId)
+        {
+            try
+            {
+                // Validar que no exista un departamento con el mismo nombre en la empresa
+                var existingDepartment = await _context.Departments
+                    .AnyAsync(d => d.CompanyId == companyId && d.Name == createDto.Name);
+
+                if (existingDepartment)
+                {
+                    throw new InvalidOperationException($"Ya existe un departamento con el nombre '{createDto.Name}'");
+                }
+
+                var department = _mapper.Map<Department>(createDto);
+                department.CompanyId = companyId;
+                department.Active = true;
+                department.CreatedAt = DateTime.UtcNow;
+                department.UpdatedAt = DateTime.UtcNow;
+
+                _context.Departments.Add(department);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Departamento creado: {DepartmentName} para empresa {CompanyId}", 
+                    department.Name, companyId);
+
+                return _mapper.Map<DepartmentDto>(department);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creando departamento {DepartmentName}", createDto.Name);
+                throw;
+            }
+        }
+
+        public async Task<DepartmentDto?> UpdateDepartmentAsync(int id, UpdateDepartmentDto updateDto)
         {
             try
             {
                 var department = await _context.Departments.FindAsync(id);
                 if (department == null)
-                    throw new KeyNotFoundException($"Departamento con ID {id} no encontrado");
+                    return null;
 
-                if (string.IsNullOrWhiteSpace(name))
-                    throw new ArgumentException("El nombre del departamento es requerido");
+                // Validar que no exista otro departamento con el mismo nombre
+                if (!string.IsNullOrWhiteSpace(updateDto.Name) && updateDto.Name != department.Name)
+                {
+                    var existingDepartment = await _context.Departments
+                        .AnyAsync(d => d.CompanyId == department.CompanyId && 
+                                      d.Name == updateDto.Name && 
+                                      d.Id != id);
 
-                department.Name = name.Trim();
-                department.Description = description?.Trim();
+                    if (existingDepartment)
+                    {
+                        throw new InvalidOperationException($"Ya existe un departamento con el nombre '{updateDto.Name}'");
+                    }
+                }
+
+                _mapper.Map(updateDto, department);
+                department.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
-                return department;
+                _logger.LogInformation("Departamento actualizado: {DepartmentId} - {DepartmentName}", 
+                    id, department.Name);
+
+                return _mapper.Map<DepartmentDto>(department);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error actualizando departamento {Id}", id);
+                _logger.LogError(ex, "Error actualizando departamento {DepartmentId}", id);
                 throw;
             }
-        }
-
-        public async Task<Department?> GetDepartmentByIdAsync(int id)
-        {
-            try
-            {
-                return await _context.Departments
-                    .Include(d => d.Company)
-                    .Include(d => d.Employees)
-                    .FirstOrDefaultAsync(d => d.Id == id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo departamento {Id}", id);
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<Department>> GetDepartmentsAsync(bool? active = null)
-        {
-            try
-            {
-                var query = _context.Departments
-                    .Include(d => d.Company)
-                    .AsQueryable();
-
-                if (active.HasValue)
-                    query = query.Where(d => d.Active == active.Value);
-
-                return await query
-                    .OrderBy(d => d.Name)
-                    .ToListAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo departamentos");
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<Department>> GetActiveDepartmentsAsync()
-        {
-            return await GetDepartmentsAsync(active: true);
         }
 
         public async Task<bool> DeleteDepartmentAsync(int id)
@@ -127,21 +164,20 @@ namespace Company.Admin.Server.Services
 
                 if (hasEmployees)
                 {
-                    // Solo desactivar si tiene empleados
-                    department.Active = false;
-                }
-                else
-                {
-                    // Eliminar completamente si no tiene empleados
-                    _context.Departments.Remove(department);
+                    throw new InvalidOperationException("No se puede eliminar un departamento que tiene empleados asignados. Use la desactivación en su lugar.");
                 }
 
+                _context.Departments.Remove(department);
                 await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Departamento eliminado: {DepartmentId} - {DepartmentName}", 
+                    id, department.Name);
+
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error eliminando departamento {Id}", id);
+                _logger.LogError(ex, "Error eliminando departamento {DepartmentId}", id);
                 throw;
             }
         }
@@ -155,13 +191,17 @@ namespace Company.Admin.Server.Services
                     return false;
 
                 department.Active = true;
+                department.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Departamento activado: {DepartmentId} - {DepartmentName}", 
+                    id, department.Name);
 
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error activando departamento {Id}", id);
+                _logger.LogError(ex, "Error activando departamento {DepartmentId}", id);
                 throw;
             }
         }
@@ -175,18 +215,22 @@ namespace Company.Admin.Server.Services
                     return false;
 
                 department.Active = false;
+                department.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Departamento desactivado: {DepartmentId} - {DepartmentName}", 
+                    id, department.Name);
 
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error desactivando departamento {Id}", id);
+                _logger.LogError(ex, "Error desactivando departamento {DepartmentId}", id);
                 throw;
             }
         }
 
-        public async Task<int> GetEmployeeCountAsync(int departmentId)
+        public async Task<int> GetEmployeeCountByDepartmentAsync(int departmentId)
         {
             try
             {
@@ -195,39 +239,34 @@ namespace Company.Admin.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo conteo de empleados del departamento {Id}", departmentId);
+                _logger.LogError(ex, "Error obteniendo conteo de empleados para departamento {DepartmentId}", departmentId);
                 throw;
             }
         }
 
-        public async Task<bool> CanDeleteDepartmentAsync(int departmentId)
+        public async Task<IEnumerable<DepartmentStatsDto>> GetDepartmentStatsAsync(int companyId)
         {
             try
             {
-                var employeeCount = await GetEmployeeCountAsync(departmentId);
-                return employeeCount == 0;
+                var stats = await _context.Departments
+                    .Where(d => d.CompanyId == companyId)
+                    .Select(d => new DepartmentStatsDto
+                    {
+                        Id = d.Id,
+                        Name = d.Name,
+                        Active = d.Active,
+                        TotalEmployees = d.Employees.Count,
+                        ActiveEmployees = d.Employees.Count(e => e.Active),
+                        CreatedAt = d.CreatedAt
+                    })
+                    .OrderBy(d => d.Name)
+                    .ToListAsync();
+
+                return stats;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error verificando si se puede eliminar departamento {Id}", departmentId);
-                throw;
-            }
-        }
-
-        public async Task<bool> IsDepartmentNameUniqueAsync(string name, int? excludeId = null)
-        {
-            try
-            {
-                var query = _context.Departments.Where(d => d.Name == name);
-
-                if (excludeId.HasValue)
-                    query = query.Where(d => d.Id != excludeId);
-
-                return !await query.AnyAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error verificando unicidad del nombre de departamento {Name}", name);
+                _logger.LogError(ex, "Error obteniendo estadísticas de departamentos para empresa {CompanyId}", companyId);
                 throw;
             }
         }

@@ -1,11 +1,9 @@
 using AutoMapper;
 using Shared.Models.Core;
-using Shared.Models.TimeTracking;
-using Shared.Models.Vacations;
 using Shared.Models.DTOs.Employee;
+using Shared.Models.DTOs.Department;
 using Shared.Models.DTOs.TimeTracking;
-using Shared.Models.DTOs.Reports;
-using Shared.Models.Enums;
+using Shared.Models.TimeTracking;
 
 namespace Company.Admin.Server.Mappings
 {
@@ -13,141 +11,97 @@ namespace Company.Admin.Server.Mappings
     {
         public AutoMapperProfile()
         {
-            CreateEmployeeMappings();
-            CreateTimeTrackingMappings();
-            CreateVacationMappings();
-            CreateReportMappings();
-        }
-
-        private void CreateEmployeeMappings()
-        {
-            // Employee -> EmployeeDto
+            // Employee mappings
             CreateMap<Employee, EmployeeDto>()
-                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.FullName))
                 .ForMember(dest => dest.DepartmentName, opt => opt.MapFrom(src => src.Department != null ? src.Department.Name : null))
-                .ForMember(dest => dest.CompanyName, opt => opt.MapFrom(src => src.Company != null ? src.Company.Name : ""))
-                .ForMember(dest => dest.WorkStartTime, opt => opt.MapFrom(src => src.WorkStartTime))
-                .ForMember(dest => dest.WorkEndTime, opt => opt.MapFrom(src => src.WorkEndTime))
-                .ForMember(dest => dest.TotalTimeRecords, opt => opt.Ignore())
-                .ForMember(dest => dest.VacationDaysUsed, opt => opt.Ignore())
-                .ForMember(dest => dest.VacationDaysAvailable, opt => opt.Ignore());
+                .ForMember(dest => dest.CompanyName, opt => opt.MapFrom(src => src.Company != null ? src.Company.Name : null))
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => $"{src.FirstName} {src.LastName}"));
 
-            // CreateEmployeeDto -> Employee
             CreateMap<CreateEmployeeDto, Employee>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
-                .ForMember(dest => dest.PasswordHash, opt => opt.Ignore()) // Se establece en el servicio
-                .ForMember(dest => dest.CompanyId, opt => opt.Ignore()) // Se establece en el servicio
-                .ForMember(dest => dest.LastLoginAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CompanyId, opt => opt.Ignore())
+                .ForMember(dest => dest.PasswordHash, opt => opt.Ignore())
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.LastLoginAt, opt => opt.Ignore())
                 .ForMember(dest => dest.Company, opt => opt.Ignore())
                 .ForMember(dest => dest.Department, opt => opt.Ignore())
                 .ForMember(dest => dest.TimeRecords, opt => opt.Ignore())
-                .ForMember(dest => dest.VacationRequests, opt => opt.Ignore())
-                .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role ?? UserRole.Employee));
+                .ForMember(dest => dest.VacationRequests, opt => opt.Ignore());
 
-            // UpdateEmployeeDto -> Employee
             CreateMap<UpdateEmployeeDto, Employee>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
-                .ForMember(dest => dest.PasswordHash, opt => opt.Ignore()) // Se maneja por separado
                 .ForMember(dest => dest.CompanyId, opt => opt.Ignore())
-                .ForMember(dest => dest.LastLoginAt, opt => opt.Ignore())
+                .ForMember(dest => dest.PasswordHash, opt => opt.Ignore())
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.LastLoginAt, opt => opt.Ignore())
                 .ForMember(dest => dest.Company, opt => opt.Ignore())
                 .ForMember(dest => dest.Department, opt => opt.Ignore())
                 .ForMember(dest => dest.TimeRecords, opt => opt.Ignore())
                 .ForMember(dest => dest.VacationRequests, opt => opt.Ignore())
                 .ForAllMembers(opt => opt.Condition((src, dest, srcMember) => srcMember != null));
-        }
 
-        private void CreateTimeTrackingMappings()
-        {
-            // TimeRecord -> TimeRecordDto
-            CreateMap<TimeRecord, TimeRecordDto>()
-                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => 
-                    src.Employee != null ? $"{src.Employee.FirstName} {src.Employee.LastName}" : ""))
-                .ForMember(dest => dest.EmployeeCode, opt => opt.MapFrom(src => 
-                    src.Employee != null ? src.Employee.EmployeeCode : ""));
+            // Department mappings
+            CreateMap<Department, DepartmentDto>()
+                .ForMember(dest => dest.EmployeeCount, opt => opt.MapFrom(src => src.Employees != null ? src.Employees.Count(e => e.Active) : 0));
 
-            // CreateTimeRecordDto -> TimeRecord
-            CreateMap<CreateTimeRecordDto, TimeRecord>()
+            CreateMap<CreateDepartmentDto, Department>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
-                .ForMember(dest => dest.IpAddress, opt => opt.Ignore()) // Se establece en el controlador
-                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
-                .ForMember(dest => dest.Employee, opt => opt.Ignore());
-
-            // WorkSchedule mappings
-            CreateMap<WorkSchedule, WorkScheduleDto>()
-                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => 
-                    src.Employee != null ? $"{src.Employee.FirstName} {src.Employee.LastName}" : ""));
-
-            // Break mappings
-            CreateMap<Break, BreakDto>()
-                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => 
-                    src.Employee != null ? $"{src.Employee.FirstName} {src.Employee.LastName}" : ""))
-                .ForMember(dest => dest.Duration, opt => opt.MapFrom(src => src.Duration))
-                .ForMember(dest => dest.IsActive, opt => opt.MapFrom(src => src.IsActive));
-
-            // Overtime mappings
-            CreateMap<Overtime, OvertimeDto>()
-                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => 
-                    src.Employee != null ? $"{src.Employee.FirstName} {src.Employee.LastName}" : ""))
-                .ForMember(dest => dest.ApprovedByName, opt => opt.MapFrom(src => 
-                    src.ApprovedBy != null ? $"{src.ApprovedBy.FirstName} {src.ApprovedBy.LastName}" : null));
-        }
-
-        private void CreateVacationMappings()
-        {
-            // VacationRequest -> VacationRequestDto
-            CreateMap<VacationRequest, VacationRequestDto>()
-                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => 
-                    src.Employee != null ? $"{src.Employee.FirstName} {src.Employee.LastName}" : ""))
-                .ForMember(dest => dest.ApprovedByName, opt => opt.MapFrom(src => 
-                    src.ApprovedBy != null ? $"{src.ApprovedBy.FirstName} {src.ApprovedBy.LastName}" : null))
-                .ForMember(dest => dest.TotalDays, opt => opt.MapFrom(src => src.TotalDays));
-
-            // CreateVacationRequestDto -> VacationRequest
-            CreateMap<CreateVacationRequestDto, VacationRequest>()
-                .ForMember(dest => dest.Id, opt => opt.Ignore())
-                .ForMember(dest => dest.EmployeeId, opt => opt.Ignore()) // Se establece en el servicio
-                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => VacationStatus.Pending))
+                .ForMember(dest => dest.CompanyId, opt => opt.Ignore())
+                .ForMember(dest => dest.Active, opt => opt.Ignore())
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
-                .ForMember(dest => dest.Employee, opt => opt.Ignore())
-                .ForMember(dest => dest.ApprovedBy, opt => opt.Ignore());
+                .ForMember(dest => dest.Company, opt => opt.Ignore())
+                .ForMember(dest => dest.Employees, opt => opt.Ignore());
 
-            // VacationPolicy mappings
-            CreateMap<VacationPolicy, VacationPolicyDto>();
+            CreateMap<UpdateDepartmentDto, Department>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.CompanyId, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.Company, opt => opt.Ignore())
+                .ForMember(dest => dest.Employees, opt => opt.Ignore())
+                .ForAllMembers(opt => opt.Condition((src, dest, srcMember) => srcMember != null));
 
-            // VacationBalance mappings
-            CreateMap<VacationBalance, VacationBalanceDto>()
-                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => 
-                    src.Employee != null ? $"{src.Employee.FirstName} {src.Employee.LastName}" : ""));
-        }
+            // TimeRecord mappings
+            CreateMap<TimeRecord, TimeRecordDto>()
+                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => src.Employee != null ? $"{src.Employee.FirstName} {src.Employee.LastName}" : null))
+                .ForMember(dest => dest.EmployeeCode, opt => opt.MapFrom(src => src.Employee != null ? src.Employee.EmployeeCode : null));
 
-        private void CreateReportMappings()
-        {
-            // Mappings para reportes (se pueden expandir según necesidades)
-            CreateMap<Employee, AttendanceReportDto>()
-                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => src.FullName))
-                .ForMember(dest => dest.DepartmentName, opt => opt.MapFrom(src => 
-                    src.Department != null ? src.Department.Name : null))
+            CreateMap<CheckInDto, TimeRecord>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.EmployeeId, opt => opt.Ignore())
+                .ForMember(dest => dest.Date, opt => opt.MapFrom(src => src.Timestamp.Date))
+                .ForMember(dest => dest.CheckIn, opt => opt.MapFrom(src => src.Timestamp))
+                .ForMember(dest => dest.CheckOut, opt => opt.Ignore())
                 .ForMember(dest => dest.TotalHours, opt => opt.Ignore())
-                .ForMember(dest => dest.WorkingDays, opt => opt.Ignore())
-                .ForMember(dest => dest.AbsentDays, opt => opt.Ignore())
-                .ForMember(dest => dest.LateDays, opt => opt.Ignore())
-                .ForMember(dest => dest.OvertimeHours, opt => opt.Ignore());
+                .ForMember(dest => dest.RecordType, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.Employee, opt => opt.Ignore());
 
-            CreateMap<Employee, HoursReportDto>()
-                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => src.FullName))
-                .ForMember(dest => dest.DepartmentName, opt => opt.MapFrom(src => 
-                    src.Department != null ? src.Department.Name : null))
-                .ForMember(dest => dest.RegularHours, opt => opt.Ignore())
-                .ForMember(dest => dest.OvertimeHours, opt => opt.Ignore())
-                .ForMember(dest => dest.TotalHours, opt => opt.Ignore())
-                .ForMember(dest => dest.ExpectedHours, opt => opt.Ignore())
-                .ForMember(dest => dest.Efficiency, opt => opt.Ignore());
+            // Company mapping
+            CreateMap<Company, CompanyDto>()
+                .ForMember(dest => dest.EmployeeCount, opt => opt.MapFrom(src => src.Employees != null ? src.Employees.Count(e => e.Active) : 0))
+                .ForMember(dest => dest.DepartmentCount, opt => opt.MapFrom(src => src.Departments != null ? src.Departments.Count(d => d.Active) : 0));
         }
+    }
+
+    // DTO adicional para Company
+    public class CompanyDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string? Website { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public bool Active { get; set; }
+        public int EmployeeCount { get; set; }
+        public int DepartmentCount { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
     }
 }

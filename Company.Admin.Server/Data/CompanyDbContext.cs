@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Shared.Models.Core;
 using Shared.Models.TimeTracking;
 using Shared.Models.Vacations;
+using Shared.Models.Enums;
 
 namespace Company.Admin.Server.Data
 {
@@ -11,18 +12,14 @@ namespace Company.Admin.Server.Data
         {
         }
 
-        // Entidades principales
-        public DbSet<Shared.Models.Core.Company> Companies { get; set; }
+        // DbSets
+        public DbSet<Company> Companies { get; set; }
         public DbSet<Department> Departments { get; set; }
         public DbSet<Employee> Employees { get; set; }
-        
-        // Entidades de control de tiempo
         public DbSet<TimeRecord> TimeRecords { get; set; }
         public DbSet<WorkSchedule> WorkSchedules { get; set; }
         public DbSet<Break> Breaks { get; set; }
         public DbSet<Overtime> Overtimes { get; set; }
-        
-        // Entidades de vacaciones
         public DbSet<VacationRequest> VacationRequests { get; set; }
         public DbSet<VacationPolicy> VacationPolicies { get; set; }
         public DbSet<VacationBalance> VacationBalances { get; set; }
@@ -32,308 +29,281 @@ namespace Company.Admin.Server.Data
             base.OnModelCreating(modelBuilder);
 
             // Configuración de Company
-            modelBuilder.Entity<Shared.Models.Core.Company>(entity =>
+            modelBuilder.Entity<Company>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.TaxId).HasMaxLength(20);
-                entity.Property(e => e.Address).HasMaxLength(255);
-                entity.Property(e => e.Phone).HasMaxLength(20);
-                entity.Property(e => e.Email).HasMaxLength(255);
-                entity.HasIndex(e => e.TaxId).IsUnique().HasFilter("[TaxId] IS NOT NULL");
-                entity.HasIndex(e => e.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
-                
-                // Configuración de valores por defecto
-                entity.Property(e => e.Active).HasDefaultValue(true);
-                entity.Property(e => e.WorkStartTime).HasDefaultValue(new TimeSpan(9, 0, 0));
-                entity.Property(e => e.WorkEndTime).HasDefaultValue(new TimeSpan(17, 0, 0));
-                entity.Property(e => e.ToleranceMinutes).HasDefaultValue(15);
-                entity.Property(e => e.VacationDaysPerYear).HasDefaultValue(22);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(c => c.Id);
+                entity.Property(c => c.Name).IsRequired().HasMaxLength(200);
+                entity.Property(c => c.Description).HasMaxLength(500);
+                entity.Property(c => c.Website).HasMaxLength(255);
+                entity.Property(c => c.Email).HasMaxLength(255);
+                entity.Property(c => c.Phone).HasMaxLength(20);
+                entity.Property(c => c.Address).HasMaxLength(500);
+                entity.HasIndex(c => c.Name).IsUnique();
+                entity.HasIndex(c => c.Email).IsUnique();
             });
 
             // Configuración de Department
             modelBuilder.Entity<Department>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.Description).HasMaxLength(500);
-                entity.Property(e => e.Active).HasDefaultValue(true);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(d => d.Id);
+                entity.Property(d => d.Name).IsRequired().HasMaxLength(100);
+                entity.Property(d => d.Description).HasMaxLength(500);
                 
-                entity.HasOne(e => e.Company)
+                entity.HasOne(d => d.Company)
                       .WithMany(c => c.Departments)
-                      .HasForeignKey(e => e.CompanyId)
-                      .OnDelete(DeleteBehavior.Restrict);
+                      .HasForeignKey(d => d.CompanyId)
+                      .OnDelete(DeleteBehavior.Cascade);
 
-                // Índice único por empresa
-                entity.HasIndex(e => new { e.CompanyId, e.Name })
-                      .IsUnique()
-                      .HasDatabaseName("IX_Departments_CompanyId_Name");
+                entity.HasIndex(d => new { d.CompanyId, d.Name }).IsUnique();
             });
 
             // Configuración de Employee
             modelBuilder.Entity<Employee>(entity =>
             {
                 entity.HasKey(e => e.Id);
-                entity.Property(e => e.FirstName).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.LastName).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.FirstName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
                 entity.Property(e => e.Phone).HasMaxLength(20);
                 entity.Property(e => e.EmployeeCode).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.PasswordHash).IsRequired();
-                entity.Property(e => e.Active).HasDefaultValue(true);
-                entity.Property(e => e.HiredAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.Property(e => e.PasswordHash).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Role).HasConversion<string>();
 
-                // Relaciones
                 entity.HasOne(e => e.Company)
                       .WithMany(c => c.Employees)
                       .HasForeignKey(e => e.CompanyId)
-                      .OnDelete(DeleteBehavior.Restrict);
+                      .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasOne(e => e.Department)
                       .WithMany(d => d.Employees)
                       .HasForeignKey(e => e.DepartmentId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // Índices únicos
-                entity.HasIndex(e => e.Email)
-                      .IsUnique()
-                      .HasDatabaseName("IX_Employees_Email");
-
-                entity.HasIndex(e => new { e.CompanyId, e.EmployeeCode })
-                      .IsUnique()
-                      .HasDatabaseName("IX_Employees_CompanyId_EmployeeCode");
-
-                // Propiedad calculada para FullName
-                entity.Ignore(e => e.FullName);
-                entity.Ignore(e => e.WorkStartTime);
-                entity.Ignore(e => e.WorkEndTime);
+                entity.HasIndex(e => e.Email).IsUnique();
+                entity.HasIndex(e => new { e.CompanyId, e.EmployeeCode }).IsUnique();
             });
 
             // Configuración de TimeRecord
             modelBuilder.Entity<TimeRecord>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Type).IsRequired();
-                entity.Property(e => e.Timestamp).IsRequired();
-                entity.Property(e => e.Notes).HasMaxLength(500);
-                entity.Property(e => e.Location).HasMaxLength(255);
-                entity.Property(e => e.DeviceInfo).HasMaxLength(100);
-                entity.Property(e => e.IpAddress).HasMaxLength(45);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(tr => tr.Id);
+                entity.Property(tr => tr.Date).HasColumnType("date");
+                entity.Property(tr => tr.TotalHours).HasColumnType("decimal(5,2)");
+                entity.Property(tr => tr.RecordType).HasConversion<string>();
+                entity.Property(tr => tr.Location).HasMaxLength(200);
+                entity.Property(tr => tr.Notes).HasMaxLength(500);
 
-                entity.HasOne(e => e.Employee)
-                      .WithMany(emp => emp.TimeRecords)
-                      .HasForeignKey(e => e.EmployeeId)
+                entity.HasOne(tr => tr.Employee)
+                      .WithMany(e => e.TimeRecords)
+                      .HasForeignKey(tr => tr.EmployeeId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                // Índices para optimizar consultas
-                entity.HasIndex(e => new { e.EmployeeId, e.Timestamp })
-                      .HasDatabaseName("IX_TimeRecords_EmployeeId_Timestamp");
-
-                entity.HasIndex(e => new { e.Type, e.Timestamp })
-                      .HasDatabaseName("IX_TimeRecords_Type_Timestamp");
-
-                entity.HasIndex(e => e.Timestamp)
-                      .HasDatabaseName("IX_TimeRecords_Timestamp");
+                entity.HasIndex(tr => new { tr.EmployeeId, tr.Date, tr.RecordType });
             });
 
             // Configuración de WorkSchedule
             modelBuilder.Entity<WorkSchedule>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.Active).HasDefaultValue(true);
-                entity.Property(e => e.EffectiveFrom).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(ws => ws.Id);
+                entity.Property(ws => ws.Name).IsRequired().HasMaxLength(100);
+                entity.Property(ws => ws.DayOfWeek).HasConversion<string>();
 
-                entity.HasOne(e => e.Employee)
+                entity.HasOne(ws => ws.Employee)
                       .WithMany()
-                      .HasForeignKey(e => e.EmployeeId)
+                      .HasForeignKey(ws => ws.EmployeeId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                // Índice para consultas por empleado y fecha efectiva
-                entity.HasIndex(e => new { e.EmployeeId, e.EffectiveFrom, e.Active })
-                      .HasDatabaseName("IX_WorkSchedules_Employee_Effective");
+                entity.HasOne(ws => ws.Department)
+                      .WithMany()
+                      .HasForeignKey(ws => ws.DepartmentId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Configuración de Break
             modelBuilder.Entity<Break>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.StartTime).IsRequired();
-                entity.Property(e => e.Notes).HasMaxLength(500);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(b => b.Id);
+                entity.Property(b => b.Reason).HasMaxLength(200);
+                entity.Property(b => b.Notes).HasMaxLength(500);
 
-                entity.HasOne(e => e.Employee)
+                entity.HasOne(b => b.TimeRecord)
                       .WithMany()
-                      .HasForeignKey(e => e.EmployeeId)
+                      .HasForeignKey(b => b.TimeRecordId)
                       .OnDelete(DeleteBehavior.Cascade);
-
-                // Propiedades calculadas
-                entity.Ignore(e => e.Duration);
-                entity.Ignore(e => e.IsActive);
-
-                // Índices
-                entity.HasIndex(e => new { e.EmployeeId, e.StartTime })
-                      .HasDatabaseName("IX_Breaks_EmployeeId_StartTime");
             });
 
             // Configuración de Overtime
             modelBuilder.Entity<Overtime>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Date).IsRequired();
-                entity.Property(e => e.Duration).IsRequired();
-                entity.Property(e => e.Reason).HasMaxLength(500);
-                entity.Property(e => e.Approved).HasDefaultValue(false);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(o => o.Id);
+                entity.Property(o => o.Date).HasColumnType("date");
+                entity.Property(o => o.Hours).HasColumnType("decimal(5,2)");
+                entity.Property(o => o.Reason).HasMaxLength(500);
+                entity.Property(o => o.Notes).HasMaxLength(500);
 
-                entity.HasOne(e => e.Employee)
+                entity.HasOne(o => o.Employee)
                       .WithMany()
-                      .HasForeignKey(e => e.EmployeeId)
+                      .HasForeignKey(o => o.EmployeeId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne(e => e.ApprovedBy)
+                entity.HasOne(o => o.ApprovedByEmployee)
                       .WithMany()
-                      .HasForeignKey(e => e.ApprovedById)
+                      .HasForeignKey(o => o.ApprovedBy)
                       .OnDelete(DeleteBehavior.SetNull);
-
-                // Índices
-                entity.HasIndex(e => new { e.EmployeeId, e.Date })
-                      .HasDatabaseName("IX_Overtime_EmployeeId_Date");
             });
 
             // Configuración de VacationRequest
             modelBuilder.Entity<VacationRequest>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.StartDate).IsRequired();
-                entity.Property(e => e.EndDate).IsRequired();
-                entity.Property(e => e.DaysRequested).IsRequired();
-                entity.Property(e => e.Comments).HasMaxLength(1000);
-                entity.Property(e => e.Status).HasDefaultValue(Shared.Models.Enums.VacationStatus.Pending);
-                entity.Property(e => e.ResponseComments).HasMaxLength(1000);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(vr => vr.Id);
+                entity.Property(vr => vr.StartDate).HasColumnType("date");
+                entity.Property(vr => vr.EndDate).HasColumnType("date");
+                entity.Property(vr => vr.DaysRequested).HasColumnType("decimal(4,1)");
+                entity.Property(vr => vr.Reason).IsRequired().HasMaxLength(500);
+                entity.Property(vr => vr.Status).HasConversion<string>();
+                entity.Property(vr => vr.Comments).HasMaxLength(500);
+                entity.Property(vr => vr.ReviewComments).HasMaxLength(500);
 
-                entity.HasOne(e => e.Employee)
-                      .WithMany(emp => emp.VacationRequests)
-                      .HasForeignKey(e => e.EmployeeId)
+                entity.HasOne(vr => vr.Employee)
+                      .WithMany(e => e.VacationRequests)
+                      .HasForeignKey(vr => vr.EmployeeId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne(e => e.ReviewedBy)
+                entity.HasOne(vr => vr.ReviewedByEmployee)
                       .WithMany()
-                      .HasForeignKey(e => e.ReviewedById)
+                      .HasForeignKey(vr => vr.ReviewedBy)
                       .OnDelete(DeleteBehavior.SetNull);
-
-                // Índices
-                entity.HasIndex(e => new { e.EmployeeId, e.StartDate })
-                      .HasDatabaseName("IX_VacationRequests_EmployeeId_StartDate");
-
-                entity.HasIndex(e => e.Status)
-                      .HasDatabaseName("IX_VacationRequests_Status");
             });
 
             // Configuración de VacationPolicy
             modelBuilder.Entity<VacationPolicy>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.AnnualDays).HasDefaultValue(22);
-                entity.Property(e => e.MaxConsecutiveDays).HasDefaultValue(15);
-                entity.Property(e => e.MinAdvanceNoticeDays).HasDefaultValue(15);
-                entity.Property(e => e.RequireApproval).HasDefaultValue(true);
-                entity.Property(e => e.CarryOverEnabled).HasDefaultValue(true);
-                entity.Property(e => e.MaxCarryOverDays).HasDefaultValue(5);
-                entity.Property(e => e.Active).HasDefaultValue(true);
-                entity.Property(e => e.EffectiveFrom).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(vp => vp.Id);
+                entity.Property(vp => vp.Name).IsRequired().HasMaxLength(100);
+                entity.Property(vp => vp.Description).HasMaxLength(500);
+                entity.Property(vp => vp.AnnualDays).HasColumnType("decimal(4,1)");
+                entity.Property(vp => vp.MaxConsecutiveDays).HasColumnType("decimal(4,1)");
+                entity.Property(vp => vp.MinRequestDays).HasColumnType("decimal(4,1)");
 
-                // Índice único por empresa y periodo
-                entity.HasIndex(e => new { e.CompanyId, e.EffectiveFrom, e.Active })
-                      .HasDatabaseName("IX_VacationPolicies_Company_Effective");
+                entity.HasOne(vp => vp.Company)
+                      .WithMany()
+                      .HasForeignKey(vp => vp.CompanyId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Configuración de VacationBalance
             modelBuilder.Entity<VacationBalance>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Year).IsRequired();
-                entity.Property(e => e.TotalDays).IsRequired();
-                entity.Property(e => e.UsedDays).HasDefaultValue(0);
-                entity.Property(e => e.PendingDays).HasDefaultValue(0);
-                entity.Property(e => e.CarriedOverDays).HasDefaultValue(0);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasKey(vb => vb.Id);
+                entity.Property(vb => vb.TotalDays).HasColumnType("decimal(4,1)");
+                entity.Property(vb => vb.UsedDays).HasColumnType("decimal(4,1)");
+                entity.Property(vb => vb.PendingDays).HasColumnType("decimal(4,1)");
+                entity.Property(vb => vb.CarryOverDays).HasColumnType("decimal(4,1)");
 
-                entity.HasOne(e => e.Employee)
+                entity.HasOne(vb => vb.Employee)
                       .WithMany()
-                      .HasForeignKey(e => e.EmployeeId)
+                      .HasForeignKey(vb => vb.EmployeeId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                // Propiedades calculadas
-                entity.Ignore(e => e.AvailableDays);
-                entity.Ignore(e => e.RemainingDays);
-
-                // Índice único por empleado y año
-                entity.HasIndex(e => new { e.EmployeeId, e.Year })
-                      .IsUnique()
-                      .HasDatabaseName("IX_VacationBalances_EmployeeId_Year");
+                entity.HasIndex(vb => new { vb.EmployeeId, vb.Year }).IsUnique();
             });
 
-            // Configurar nombres de tablas si es necesario
-            ConfigureTableNames(modelBuilder);
+            // Datos semilla para desarrollo
+            if (Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+            {
+                SeedData(modelBuilder);
+            }
         }
 
-        private static void ConfigureTableNames(ModelBuilder modelBuilder)
+        private void SeedData(ModelBuilder modelBuilder)
         {
-            // Si necesitas nombres de tabla específicos, configúralos aquí
-            // modelBuilder.Entity<Company>().ToTable("Companies");
-            // modelBuilder.Entity<Department>().ToTable("Departments");
-            // etc.
+            // Empresa de ejemplo
+            modelBuilder.Entity<Company>().HasData(
+                new Company
+                {
+                    Id = 1,
+                    Name = "Empresa Demo",
+                    Description = "Empresa de demostración para pruebas",
+                    Email = "info@empresademo.com",
+                    Phone = "+34 123 456 789",
+                    Address = "Calle Principal 123, Madrid, España",
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                }
+            );
+
+            // Departamentos de ejemplo
+            modelBuilder.Entity<Department>().HasData(
+                new Department
+                {
+                    Id = 1,
+                    CompanyId = 1,
+                    Name = "Recursos Humanos",
+                    Description = "Departamento de gestión de recursos humanos",
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                },
+                new Department
+                {
+                    Id = 2,
+                    CompanyId = 1,
+                    Name = "Desarrollo",
+                    Description = "Departamento de desarrollo de software",
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                },
+                new Department
+                {
+                    Id = 3,
+                    CompanyId = 1,
+                    Name = "Marketing",
+                    Description = "Departamento de marketing y ventas",
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                }
+            );
+
+            // Empleado administrador de ejemplo
+            modelBuilder.Entity<Employee>().HasData(
+                new Employee
+                {
+                    Id = 1,
+                    CompanyId = 1,
+                    DepartmentId = 1,
+                    FirstName = "Admin",
+                    LastName = "Sistema",
+                    Email = "admin@empresademo.com",
+                    Phone = "+34 123 456 700",
+                    EmployeeCode = "ADM001",
+                    Role = UserRole.CompanyAdmin,
+                    PasswordHash = "$2a$11$123456789012345678901e", // Placeholder - se debe hashear "admin123"
+                    Active = true,
+                    HiredAt = DateTime.UtcNow.AddMonths(-6),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                }
+            );
         }
 
-        // Método para guardar cambios con actualización automática de timestamps
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-        {
-            UpdateTimestamps();
-            return await base.SaveChangesAsync(cancellationToken);
-        }
-
-        public override int SaveChanges()
-        {
-            UpdateTimestamps();
-            return base.SaveChanges();
-        }
-
-        private void UpdateTimestamps()
         {
             var entries = ChangeTracker
                 .Entries()
-                .Where(e => e.Entity is Shared.Models.Core.Company || e.Entity is Department || e.Entity is Employee ||
-                           e.Entity is VacationRequest || e.Entity is VacationBalance)
-                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified);
+                .Where(e => e.Entity is Employee && (e.State == EntityState.Added || e.State == EntityState.Modified));
 
             foreach (var entityEntry in entries)
             {
-                if (entityEntry.State == EntityState.Added)
+                if (entityEntry.State == EntityState.Modified)
                 {
-                    if (entityEntry.Property("CreatedAt").CurrentValue == null)
-                    {
-                        entityEntry.Property("CreatedAt").CurrentValue = DateTime.UtcNow;
-                    }
-                }
-
-                if (entityEntry.Property("UpdatedAt") != null)
-                {
-                    entityEntry.Property("UpdatedAt").CurrentValue = DateTime.UtcNow;
+                    ((Employee)entityEntry.Entity).UpdatedAt = DateTime.UtcNow;
                 }
             }
+
+            return await base.SaveChangesAsync(cancellationToken);
         }
     }
 }
