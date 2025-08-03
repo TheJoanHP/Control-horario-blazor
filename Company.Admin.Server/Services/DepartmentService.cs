@@ -9,7 +9,9 @@ namespace Company.Admin.Server.Services
         private readonly CompanyDbContext _context;
         private readonly ILogger<DepartmentService> _logger;
 
-        public DepartmentService(CompanyDbContext context, ILogger<DepartmentService> logger)
+        public DepartmentService(
+            CompanyDbContext context,
+            ILogger<DepartmentService> logger)
         {
             _context = context;
             _logger = logger;
@@ -17,80 +19,93 @@ namespace Company.Admin.Server.Services
 
         public async Task<Department> CreateDepartmentAsync(string name, string? description = null)
         {
-            // Validar nombre único
-            if (!await IsDepartmentNameUniqueAsync(name))
+            try
             {
-                throw new InvalidOperationException("Ya existe un departamento con este nombre");
+                if (string.IsNullOrWhiteSpace(name))
+                    throw new ArgumentException("El nombre del departamento es requerido");
+
+                // Verificar unicidad del nombre (a nivel de empresa se valida en el controlador)
+                var department = new Department
+                {
+                    Name = name.Trim(),
+                    Description = description?.Trim(),
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Departments.Add(department);
+                await _context.SaveChangesAsync();
+
+                return department;
             }
-
-            // Obtener la empresa (primera que esté activa, ya que estamos en el contexto del tenant)
-            var company = await _context.Companies.FirstOrDefaultAsync(c => c.Active);
-            if (company == null)
+            catch (Exception ex)
             {
-                throw new InvalidOperationException("No se encontró una empresa activa para este tenant");
+                _logger.LogError(ex, "Error creando departamento {Name}", name);
+                throw;
             }
-
-            var department = new Department
-            {
-                CompanyId = company.Id,
-                Name = name.Trim(),
-                Description = description?.Trim(),
-                Active = true,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Departments.Add(department);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Departamento creado: {DepartmentId} - {DepartmentName}", department.Id, department.Name);
-            return department;
         }
 
         public async Task<Department> UpdateDepartmentAsync(int id, string name, string? description = null)
         {
-            var department = await _context.Departments.FindAsync(id);
-            if (department == null)
+            try
             {
-                throw new ArgumentException($"Departamento con ID {id} no encontrado");
-            }
+                var department = await _context.Departments.FindAsync(id);
+                if (department == null)
+                    throw new KeyNotFoundException($"Departamento con ID {id} no encontrado");
 
-            // Validar nombre único si se está cambiando
-            if (name.Trim() != department.Name && !await IsDepartmentNameUniqueAsync(name, id))
+                if (string.IsNullOrWhiteSpace(name))
+                    throw new ArgumentException("El nombre del departamento es requerido");
+
+                department.Name = name.Trim();
+                department.Description = description?.Trim();
+
+                await _context.SaveChangesAsync();
+
+                return department;
+            }
+            catch (Exception ex)
             {
-                throw new InvalidOperationException("Ya existe un departamento con este nombre");
+                _logger.LogError(ex, "Error actualizando departamento {Id}", id);
+                throw;
             }
-
-            department.Name = name.Trim();
-            department.Description = description?.Trim();
-
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Departamento actualizado: {DepartmentId} - {DepartmentName}", department.Id, department.Name);
-            return department;
         }
 
         public async Task<Department?> GetDepartmentByIdAsync(int id)
         {
-            return await _context.Departments
-                .Include(d => d.Company)
-                .Include(d => d.Employees.Where(e => e.Active))
-                .FirstOrDefaultAsync(d => d.Id == id);
+            try
+            {
+                return await _context.Departments
+                    .Include(d => d.Company)
+                    .Include(d => d.Employees)
+                    .FirstOrDefaultAsync(d => d.Id == id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo departamento {Id}", id);
+                throw;
+            }
         }
 
         public async Task<IEnumerable<Department>> GetDepartmentsAsync(bool? active = null)
         {
-            var query = _context.Departments
-                .Include(d => d.Company)
-                .AsQueryable();
-
-            if (active.HasValue)
+            try
             {
-                query = query.Where(d => d.Active == active.Value);
-            }
+                var query = _context.Departments
+                    .Include(d => d.Company)
+                    .AsQueryable();
 
-            return await query
-                .OrderBy(d => d.Name)
-                .ToListAsync();
+                if (active.HasValue)
+                    query = query.Where(d => d.Active == active.Value);
+
+                return await query
+                    .OrderBy(d => d.Name)
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo departamentos");
+                throw;
+            }
         }
 
         public async Task<IEnumerable<Department>> GetActiveDepartmentsAsync()
@@ -100,62 +115,121 @@ namespace Company.Admin.Server.Services
 
         public async Task<bool> DeleteDepartmentAsync(int id)
         {
-            var department = await _context.Departments.FindAsync(id);
-            if (department == null) return false;
-
-            // Verificar si se puede eliminar (no tiene empleados activos)
-            if (!await CanDeleteDepartmentAsync(id))
+            try
             {
-                throw new InvalidOperationException("No se puede eliminar el departamento porque tiene empleados asignados");
+                var department = await _context.Departments.FindAsync(id);
+                if (department == null)
+                    return false;
+
+                // Verificar si tiene empleados asignados
+                var hasEmployees = await _context.Employees
+                    .AnyAsync(e => e.DepartmentId == id);
+
+                if (hasEmployees)
+                {
+                    // Solo desactivar si tiene empleados
+                    department.Active = false;
+                }
+                else
+                {
+                    // Eliminar completamente si no tiene empleados
+                    _context.Departments.Remove(department);
+                }
+
+                await _context.SaveChangesAsync();
+                return true;
             }
-
-            // Soft delete
-            department.Active = false;
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Departamento desactivado: {DepartmentId} - {DepartmentName}", department.Id, department.Name);
-            return true;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error eliminando departamento {Id}", id);
+                throw;
+            }
         }
 
         public async Task<bool> ActivateDepartmentAsync(int id)
         {
-            var department = await _context.Departments.FindAsync(id);
-            if (department == null) return false;
+            try
+            {
+                var department = await _context.Departments.FindAsync(id);
+                if (department == null)
+                    return false;
 
-            department.Active = true;
-            await _context.SaveChangesAsync();
+                department.Active = true;
+                await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Departamento activado: {DepartmentId} - {DepartmentName}", department.Id, department.Name);
-            return true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error activando departamento {Id}", id);
+                throw;
+            }
         }
 
         public async Task<bool> DeactivateDepartmentAsync(int id)
         {
-            return await DeleteDepartmentAsync(id);
+            try
+            {
+                var department = await _context.Departments.FindAsync(id);
+                if (department == null)
+                    return false;
+
+                department.Active = false;
+                await _context.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error desactivando departamento {Id}", id);
+                throw;
+            }
         }
 
         public async Task<int> GetEmployeeCountAsync(int departmentId)
         {
-            return await _context.Employees
-                .CountAsync(e => e.DepartmentId == departmentId && e.Active);
+            try
+            {
+                return await _context.Employees
+                    .CountAsync(e => e.DepartmentId == departmentId && e.Active);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo conteo de empleados del departamento {Id}", departmentId);
+                throw;
+            }
         }
 
         public async Task<bool> CanDeleteDepartmentAsync(int departmentId)
         {
-            var employeeCount = await GetEmployeeCountAsync(departmentId);
-            return employeeCount == 0;
+            try
+            {
+                var employeeCount = await GetEmployeeCountAsync(departmentId);
+                return employeeCount == 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error verificando si se puede eliminar departamento {Id}", departmentId);
+                throw;
+            }
         }
 
         public async Task<bool> IsDepartmentNameUniqueAsync(string name, int? excludeId = null)
         {
-            var query = _context.Departments.Where(d => d.Name.ToLower() == name.ToLower().Trim());
-
-            if (excludeId.HasValue)
+            try
             {
-                query = query.Where(d => d.Id != excludeId.Value);
-            }
+                var query = _context.Departments.Where(d => d.Name == name);
 
-            return !await query.AnyAsync();
+                if (excludeId.HasValue)
+                    query = query.Where(d => d.Id != excludeId);
+
+                return !await query.AnyAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error verificando unicidad del nombre de departamento {Name}", name);
+                throw;
+            }
         }
     }
 }

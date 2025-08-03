@@ -15,10 +15,10 @@ namespace Shared.Services.Security
 
         public JwtService(IConfiguration configuration)
         {
-            _key = configuration["Jwt:Key"] ?? "your-super-secret-jwt-key-that-should-be-at-least-32-characters-long";
-            _issuer = configuration["Jwt:Issuer"] ?? "SphereTimeControl";
-            _audience = configuration["Jwt:Audience"] ?? "CompanyAdmin";
-            _expirationMinutes = int.Parse(configuration["Jwt:ExpirationMinutes"] ?? "480"); // 8 horas por defecto
+            _key = configuration["JwtSettings:SecretKey"] ?? configuration["Jwt:Key"] ?? "ThisIsAVeryLongSecretKeyForJwtTokenGenerationAndValidation123456789";
+            _issuer = configuration["JwtSettings:Issuer"] ?? configuration["Jwt:Issuer"] ?? "SphereTimeControl";
+            _audience = configuration["JwtSettings:Audience"] ?? configuration["Jwt:Audience"] ?? "CompanyAdmin";
+            _expirationMinutes = int.Parse(configuration["JwtSettings:ExpirationMinutes"] ?? configuration["Jwt:ExpirationMinutes"] ?? "480");
         }
 
         public string GenerateToken(int userId, string email, string role, Dictionary<string, string>? additionalClaims = null)
@@ -136,6 +136,41 @@ namespace Shared.Services.Security
             {
                 return null;
             }
+        }
+
+        // Métodos adicionales para compatibilidad con EmployeeDto (mantener funcionalidad extendida)
+        public async Task<string> GenerateTokenAsync(Shared.Models.DTOs.Employee.EmployeeDto employee)
+        {
+            var additionalClaims = new Dictionary<string, string>
+            {
+                ["employee_code"] = employee.EmployeeCode,
+                ["company_id"] = employee.CompanyId.ToString(),
+                ["full_name"] = employee.FullName
+            };
+
+            if (employee.DepartmentId.HasValue)
+                additionalClaims["department_id"] = employee.DepartmentId.Value.ToString();
+
+            if (!string.IsNullOrEmpty(employee.DepartmentName))
+                additionalClaims["department_name"] = employee.DepartmentName;
+
+            return await Task.FromResult(GenerateToken(employee.Id, employee.Email, employee.Role.ToString(), additionalClaims));
+        }
+
+        public async Task<ClaimsPrincipal?> ValidateTokenAsync(string token)
+        {
+            return await Task.FromResult(ValidateToken(token));
+        }
+
+        public async Task<bool> IsTokenValidAsync(string token)
+        {
+            var principal = await ValidateTokenAsync(token);
+            return principal != null && !IsTokenExpired(token);
+        }
+
+        public string GenerateRefreshToken()
+        {
+            return Guid.NewGuid().ToString();
         }
     }
 }
