@@ -2,45 +2,42 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
-using Shared.Models.DTOs.Auth;
 
 namespace Shared.Services.Security
 {
     public class JwtService : IJwtService
     {
-        private readonly IConfiguration _configuration;
-        private readonly string _secretKey;
+        private readonly string _key;
         private readonly string _issuer;
         private readonly string _audience;
         private readonly int _expirationMinutes;
 
         public JwtService(IConfiguration configuration)
         {
-            _configuration = configuration;
-            _secretKey = _configuration["JwtSettings:SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey no configurada");
-            _issuer = _configuration["JwtSettings:Issuer"] ?? throw new InvalidOperationException("JWT Issuer no configurado");
-            _audience = _configuration["JwtSettings:Audience"] ?? throw new InvalidOperationException("JWT Audience no configurado");
-            _expirationMinutes = int.Parse(_configuration["JwtSettings:ExpirationMinutes"] ?? "480");
+            _key = configuration["Jwt:Key"] ?? "your-super-secret-jwt-key-that-should-be-at-least-32-characters-long";
+            _issuer = configuration["Jwt:Issuer"] ?? "SphereTimeControl";
+            _audience = configuration["Jwt:Audience"] ?? "CompanyAdmin";
+            _expirationMinutes = int.Parse(configuration["Jwt:ExpirationMinutes"] ?? "480"); // 8 horas por defecto
         }
 
-        public string GenerateToken(int userId, string email, string role, string tenantId, Dictionary<string, string>? additionalClaims = null)
+        public string GenerateToken(int userId, string email, string role, Dictionary<string, string>? additionalClaims = null)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_secretKey);
-            
+            var key = Encoding.UTF8.GetBytes(_key);
+
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, userId.ToString()),
                 new(ClaimTypes.Email, email),
                 new(ClaimTypes.Role, role),
-                new("tenant_id", tenantId),
+                new(JwtRegisteredClaimNames.Sub, userId.ToString()),
+                new(JwtRegisteredClaimNames.Email, email),
                 new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
             };
 
-            // Agregar claims adicionales si se proporcionan
+            // Agregar claims adicionales
             if (additionalClaims != null)
             {
                 foreach (var claim in additionalClaims)
@@ -62,34 +59,26 @@ namespace Shared.Services.Security
             return tokenHandler.WriteToken(token);
         }
 
-        public string GenerateRefreshToken()
-        {
-            var randomNumber = new byte[64];
-            using var rng = RandomNumberGenerator.Create();
-            rng.GetBytes(randomNumber);
-            return Convert.ToBase64String(randomNumber);
-        }
-
         public ClaimsPrincipal? ValidateToken(string token)
         {
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var key = Encoding.UTF8.GetBytes(_secretKey);
+                var key = Encoding.UTF8.GetBytes(_key);
 
                 var validationParameters = new TokenValidationParameters
                 {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(key),
                     ValidateIssuer = true,
-                    ValidIssuer = _issuer,
                     ValidateAudience = true,
-                    ValidAudience = _audience,
                     ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = _issuer,
+                    ValidAudience = _audience,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ClockSkew = TimeSpan.FromMinutes(5)
                 };
 
-                var principal = tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
+                var principal = tokenHandler.ValidateToken(token, validationParameters, out _);
                 return principal;
             }
             catch
@@ -98,30 +87,13 @@ namespace Shared.Services.Security
             }
         }
 
-        public TokenInfo CreateTokenInfo(int userId, string email, string role, string tenantId, Dictionary<string, string>? additionalClaims = null)
-        {
-            var token = GenerateToken(userId, email, role, tenantId, additionalClaims);
-            var refreshToken = GenerateRefreshToken();
-            var expiresAt = DateTime.UtcNow.AddMinutes(_expirationMinutes);
-
-            return new TokenInfo
-            {
-                Token = token,
-                RefreshToken = refreshToken,
-                ExpiresAt = expiresAt,
-                UserId = userId,
-                UserEmail = email,
-                TenantId = tenantId
-            };
-        }
-
         public bool IsTokenExpired(string token)
         {
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var jsonToken = tokenHandler.ReadJwtToken(token);
-                return jsonToken.ValidTo <= DateTime.UtcNow;
+                var jwt = tokenHandler.ReadJwtToken(token);
+                return jwt.ValidTo < DateTime.UtcNow;
             }
             catch
             {
@@ -129,13 +101,36 @@ namespace Shared.Services.Security
             }
         }
 
-        public string? GetClaimValue(string token, string claimType)
+        public int? GetUserIdFromToken(string token)
         {
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var jsonToken = tokenHandler.ReadJwtToken(token);
-                return jsonToken.Claims.FirstOrDefault(x => x.Type == claimType)?.Value;
+                var jwt = tokenHandler.ReadJwtToken(token);
+                var userIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+                
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    return userId;
+                }
+                
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public string? GetEmailFromToken(string token)
+        {
+            try
+            {
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var jwt = tokenHandler.ReadJwtToken(token);
+                var emailClaim = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+                
+                return emailClaim?.Value;
             }
             catch
             {

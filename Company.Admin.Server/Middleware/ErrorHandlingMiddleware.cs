@@ -22,7 +22,7 @@ namespace Company.Admin.Server.Middleware
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "An unhandled exception occurred");
+                _logger.LogError(ex, "Error no controlado en la aplicación");
                 await HandleExceptionAsync(context, ex);
             }
         }
@@ -35,42 +35,40 @@ namespace Company.Admin.Server.Middleware
 
             switch (exception)
             {
-                case ArgumentNullException argEx:
-                    response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    response.Message = "Invalid request parameters";
-                    response.Details = argEx.Message;
-                    break;
-
                 case ArgumentException argEx:
                     response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    response.Message = "Invalid argument";
-                    response.Details = argEx.Message;
+                    response.Message = argEx.Message;
+                    response.Details = "Argumentos inválidos";
                     break;
 
                 case InvalidOperationException invOpEx:
                     response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    response.Message = "Invalid operation";
-                    response.Details = invOpEx.Message;
+                    response.Message = invOpEx.Message;
+                    response.Details = "Operación inválida";
                     break;
 
                 case UnauthorizedAccessException:
                     response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                    response.Message = "Unauthorized access";
+                    response.Message = "No autorizado";
+                    response.Details = "No tiene permisos para realizar esta acción";
                     break;
 
-                case KeyNotFoundException:
+                case FileNotFoundException:
                     response.StatusCode = (int)HttpStatusCode.NotFound;
-                    response.Message = "Resource not found";
+                    response.Message = "Recurso no encontrado";
+                    response.Details = "El recurso solicitado no existe";
                     break;
 
                 case TimeoutException:
                     response.StatusCode = (int)HttpStatusCode.RequestTimeout;
-                    response.Message = "Request timeout";
+                    response.Message = "Tiempo de espera agotado";
+                    response.Details = "La operación tardó demasiado tiempo";
                     break;
 
                 default:
                     response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                    response.Message = "An error occurred while processing the request";
+                    response.Message = "Error interno del servidor";
+                    response.Details = "Ha ocurrido un error inesperado";
                     break;
             }
 
@@ -89,7 +87,7 @@ namespace Company.Admin.Server.Middleware
     {
         public int StatusCode { get; set; }
         public string Message { get; set; } = string.Empty;
-        public string? Details { get; set; }
+        public string Details { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
 }

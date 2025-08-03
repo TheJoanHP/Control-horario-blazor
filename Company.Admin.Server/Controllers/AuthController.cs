@@ -59,14 +59,14 @@ namespace Company.Admin.Server.Controllers
                     });
                 }
 
-                // Verificar que el usuario tenga permisos de administración
+                // Verificar que tenga permisos de administrador o supervisor
                 if (employee.Role != UserRole.CompanyAdmin && employee.Role != UserRole.Supervisor)
                 {
-                    _logger.LogWarning("Usuario {Email} intentó acceso sin permisos de administración", request.Email);
-                    return Forbidden(new LoginResponse
+                    _logger.LogWarning("Acceso denegado para {Email} - Rol: {Role}", request.Email, employee.Role);
+                    return StatusCode(403, new LoginResponse
                     {
                         Success = false,
-                        Message = "No tienes permisos para acceder al panel de administración"
+                        Message = "No tiene permisos para acceder al panel de administración"
                     });
                 }
 
@@ -76,73 +76,50 @@ namespace Company.Admin.Server.Controllers
                     ["employee_id"] = employee.Id.ToString(),
                     ["company_id"] = employee.CompanyId.ToString(),
                     ["department_id"] = employee.DepartmentId?.ToString() ?? "",
-                    ["full_name"] = employee.FullName
+                    ["tenant_id"] = tenantId
                 };
 
-                var tokenInfo = _jwtService.CreateTokenInfo(
-                    employee.Id,
-                    employee.Email,
-                    employee.Role.ToString(),
-                    tenantId,
-                    additionalClaims
-                );
+                var token = _jwtService.GenerateToken(employee.Id, employee.Email, employee.Role.ToString(), additionalClaims);
+                var expiresAt = DateTime.UtcNow.AddHours(8); // Ajustar según configuración
 
-                _logger.LogInformation("Login exitoso para {Email} con rol {Role}", employee.Email, employee.Role);
-
-                return Ok(new LoginResponse
+                var response = new LoginResponse
                 {
                     Success = true,
+                    Token = token,
+                    ExpiresAt = expiresAt,
                     Message = "Login exitoso",
-                    Token = tokenInfo.Token,
-                    RefreshToken = tokenInfo.RefreshToken,
-                    ExpiresAt = tokenInfo.ExpiresAt,
                     User = new UserInfo
                     {
                         Id = employee.Id,
+                        Name = employee.FirstName,
                         FullName = employee.FullName,
                         Email = employee.Email,
                         Role = employee.Role,
+                        Active = employee.Active,
+                        LastLogin = employee.LastLoginAt,
                         DepartmentName = employee.Department?.Name,
-                        CompanyName = employee.Company?.Name
+                        CompanyName = employee.Company?.Name,
+                        Employee = new EmployeeInfo
+                        {
+                            Id = employee.Id,
+                            EmployeeCode = employee.EmployeeCode,
+                            DepartmentName = employee.Department?.Name,
+                            HiredAt = employee.HiredAt,
+                            Company = new CompanyInfo
+                            {
+                                Id = employee.CompanyId,
+                                Name = employee.Company?.Name ?? ""
+                            }
+                        }
                     }
-                });
+                };
+
+                _logger.LogInformation("Login exitoso para {Email}", request.Email);
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error durante el login para {Email}", request.Email);
-                return StatusCode(500, new LoginResponse
-                {
-                    Success = false,
-                    Message = "Error interno del servidor"
-                });
-            }
-        }
-
-        /// <summary>
-        /// Renovar token de acceso
-        /// </summary>
-        [HttpPost("refresh")]
-        public async Task<ActionResult<LoginResponse>> RefreshToken([FromBody] RefreshTokenRequest request)
-        {
-            try
-            {
-                // Aquí deberías implementar la lógica de validación del refresh token
-                // Por simplicidad, este ejemplo asume que el refresh token es válido
-                
-                // En una implementación real, deberías:
-                // 1. Validar el refresh token en base de datos
-                // 2. Verificar que no haya expirado
-                // 3. Obtener los datos del usuario asociado
-
-                return BadRequest(new LoginResponse
-                {
-                    Success = false,
-                    Message = "Refresh token no implementado aún"
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al renovar token");
+                _logger.LogError(ex, "Error durante el login");
                 return StatusCode(500, new LoginResponse
                 {
                     Success = false,
@@ -161,9 +138,9 @@ namespace Company.Admin.Server.Controllers
             try
             {
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+                if (!int.TryParse(userIdClaim, out var userId))
                 {
-                    return Unauthorized();
+                    return Unauthorized("Token inválido");
                 }
 
                 var employee = await _employeeService.GetEmployeeByIdAsync(userId);
@@ -172,45 +149,36 @@ namespace Company.Admin.Server.Controllers
                     return NotFound("Usuario no encontrado");
                 }
 
-                return Ok(new UserInfo
+                var userInfo = new UserInfo
                 {
                     Id = employee.Id,
+                    Name = employee.FirstName,
                     FullName = employee.FullName,
                     Email = employee.Email,
                     Role = employee.Role,
+                    Active = employee.Active,
+                    LastLogin = employee.LastLoginAt,
                     DepartmentName = employee.Department?.Name,
-                    CompanyName = employee.Company?.Name
-                });
+                    CompanyName = employee.Company?.Name,
+                    Employee = new EmployeeInfo
+                    {
+                        Id = employee.Id,
+                        EmployeeCode = employee.EmployeeCode,
+                        DepartmentName = employee.Department?.Name,
+                        HiredAt = employee.HiredAt,
+                        Company = new CompanyInfo
+                        {
+                            Id = employee.CompanyId,
+                            Name = employee.Company?.Name ?? ""
+                        }
+                    }
+                };
+
+                return Ok(userInfo);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al obtener información del usuario actual");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Logout (invalidar token)
-        /// </summary>
-        [HttpPost("logout")]
-        [Authorize]
-        public async Task<ActionResult> Logout()
-        {
-            try
-            {
-                // En una implementación real, aquí deberías:
-                // 1. Invalidar el token en una blacklist
-                // 2. Eliminar el refresh token de la base de datos
-                // 3. Limpiar cualquier sesión del lado del servidor
-
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                _logger.LogInformation("Usuario {UserId} ha cerrado sesión", userIdClaim);
-
-                return Ok(new { message = "Logout exitoso" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error durante el logout");
+                _logger.LogError(ex, "Error al obtener usuario actual");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
@@ -226,33 +194,29 @@ namespace Company.Admin.Server.Controllers
             {
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest("Datos de entrada no válidos");
+                    return BadRequest(ModelState);
                 }
 
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+                if (!int.TryParse(userIdClaim, out var userId))
                 {
-                    return Unauthorized();
+                    return Unauthorized("Token inválido");
                 }
 
-                // Verificar contraseña actual
                 var employee = await _employeeService.GetEmployeeByIdAsync(userId);
                 if (employee == null)
                 {
                     return NotFound("Usuario no encontrado");
                 }
 
+                // Verificar contraseña actual
                 if (!await _employeeService.ValidateEmployeeCredentialsAsync(employee.Email, request.CurrentPassword))
                 {
-                    return BadRequest("La contraseña actual no es correcta");
+                    return BadRequest("La contraseña actual es incorrecta");
                 }
 
                 // Cambiar contraseña
-                var success = await _employeeService.ChangePasswordAsync(userId, request.NewPassword);
-                if (!success)
-                {
-                    return BadRequest("No se pudo cambiar la contraseña");
-                }
+                await _employeeService.ChangePasswordAsync(userId, request.NewPassword);
 
                 _logger.LogInformation("Contraseña cambiada para usuario {UserId}", userId);
                 return Ok(new { message = "Contraseña cambiada exitosamente" });

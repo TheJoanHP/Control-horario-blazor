@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using Shared.Models.Core;
 using Shared.Models.Enums;
 
@@ -14,26 +13,22 @@ namespace Shared.Models.TimeTracking
         
         public DateTime Timestamp { get; set; }
         
-        [MaxLength(500)]
-        public string? Notes { get; set; }
-        
-        // Geolocalización (opcional)
-        public double? Latitude { get; set; }
-        public double? Longitude { get; set; }
-        
-        [MaxLength(255)]
         public string? Location { get; set; }
         
-        // Información del dispositivo
-        [MaxLength(100)]
+        public string? Notes { get; set; }
+        
         public string? DeviceInfo { get; set; }
         
-        [MaxLength(45)]
         public string? IpAddress { get; set; }
+        
+        public int? PairedRecordId { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        
         // Navegación
         public Employee Employee { get; set; } = null!;
+        public TimeRecord? PairedRecord { get; set; }
     }
 }

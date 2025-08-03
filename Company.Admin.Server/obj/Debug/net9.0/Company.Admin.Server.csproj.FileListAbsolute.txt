@@ -163,3 +163,4 @@ C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Server\bin\Debug\net9.0\Shared.Services.dll
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Server\bin\Debug\net9.0\Shared.Models.pdb
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Server\bin\Debug\net9.0\Shared.Services.pdb
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Server\obj\Debug\net9.0\Company.Admin.Server.sourcelink.json

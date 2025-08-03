@@ -98,6 +98,10 @@
             "System.Drawing.Common": {
               "target": "Package",
               "version": "[9.0.7, )"
+            },
+            "System.IdentityModel.Tokens.Jwt": {
+              "target": "Package",
+              "version": "[8.13.0, )"
             }
           },
           "imports": [
@@ -248,13 +252,17 @@
               "target": "Package",
               "version": "[9.0.7, )"
             },
+            "Microsoft.Extensions.Configuration.Binder": {
+              "target": "Package",
+              "version": "[9.0.7, )"
+            },
             "Microsoft.Extensions.DependencyInjection.Abstractions": {
               "target": "Package",
               "version": "[9.0.7, )"
             },
             "Microsoft.IdentityModel.Tokens": {
               "target": "Package",
-              "version": "[8.3.0, )"
+              "version": "[8.13.0, )"
             },
             "MimeKit": {
               "target": "Package",
@@ -262,7 +270,7 @@
             },
             "System.IdentityModel.Tokens.Jwt": {
               "target": "Package",
-              "version": "[8.3.0, )"
+              "version": "[8.13.0, )"
             }
           },
           "imports": [

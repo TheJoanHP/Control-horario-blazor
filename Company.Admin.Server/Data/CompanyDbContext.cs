@@ -12,7 +12,7 @@ namespace Company.Admin.Server.Data
         }
 
         // Entidades principales
-        public DbSet<Company> Companies { get; set; }
+        public DbSet<Shared.Models.Core.Company> Companies { get; set; }
         public DbSet<Department> Departments { get; set; }
         public DbSet<Employee> Employees { get; set; }
         
@@ -32,7 +32,7 @@ namespace Company.Admin.Server.Data
             base.OnModelCreating(modelBuilder);
 
             // Configuración de Company
-            modelBuilder.Entity<Company>(entity =>
+            modelBuilder.Entity<Shared.Models.Core.Company>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
@@ -315,7 +315,7 @@ namespace Company.Admin.Server.Data
         {
             var entries = ChangeTracker
                 .Entries()
-                .Where(e => e.Entity is Company || e.Entity is Department || e.Entity is Employee || 
+                .Where(e => e.Entity is Shared.Models.Core.Company || e.Entity is Department || e.Entity is Employee ||
                            e.Entity is VacationRequest || e.Entity is VacationBalance)
                 .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified);
 

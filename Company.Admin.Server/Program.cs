@@ -1,99 +1,43 @@
-var builder = WebApplication.CreateBuilder(args);
-
-// Configuración de servicios
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new() { Title = "Company Admin API", Version = "v1" });
-    c.AddSecurityDefinition("Bearer", new()
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-        Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-    cusing Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 using Company.Admin.Server.Data;
 using Company.Admin.Server.Services;
 using Company.Admin.Server.Middleware;
-using Company.Admin.Server.Mappings;
 using Shared.Services.Security;
 using Shared.Services.Database;
-using Shared.Services.Communication;
-using Shared.Services.Storage;
-using AutoMapper;
-using FluentValidation;
-using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var builder = WebApplication.CreateBuilder(args);
+// Configuración de la base de datos
+builder.Services.AddDbContext<CompanyDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Configuración de servicios
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new() { Title = "Company Admin API", Version = "v1" });
-    c.AddSecurityDefinition("Bearer", new()
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-        Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-    c.AddSecurityRequirement(new()
-    {
-        {
-            new()
-            {
-                Reference = new() { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "Bearer" }
-            },
-            new string[] {}
-        }
-    });
-});
+// Configuración de AutoMapper
+builder.Services.AddAutoMapper(typeof(Company.Admin.Server.Mappings.AutoMapperProfile));
 
-// Configuración de CORS
+// Configuración CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowSpecificOrigins", policy =>
     {
         policy.WithOrigins(
-                "https://localhost:7002", // Company.Admin.Client
-                "http://localhost:5002",
-                "https://localhost:7003", // Employee.App.Client  
-                "http://localhost:5003"
+                "https://localhost:7000", // Company.Admin.Client
+                "http://localhost:5173",  // Vite dev server
+                "http://localhost:3000"   // Posible frontend alternativo
             )
-            .AllowAnyHeader()
             .AllowAnyMethod()
+            .AllowAnyHeader()
             .AllowCredentials();
     });
 });
 
-// Configuración de Entity Framework
-builder.Services.AddDbContext<CompanyDbContext>((serviceProvider, options) =>
-{
-    var tenantResolver = serviceProvider.GetRequiredService<ITenantResolver>();
-    var connectionString = tenantResolver.GetConnectionString();
-    options.UseNpgsql(connectionString);
-    
-    if (builder.Environment.IsDevelopment())
-    {
-        options.EnableSensitiveDataLogging();
-        options.EnableDetailedErrors();
-    }
-});
-
 // Configuración de autenticación JWT
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey no está configurada");
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "your-super-secret-jwt-key-that-should-be-at-least-32-characters-long";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SphereTimeControl";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "CompanyAdmin";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -104,48 +48,58 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-            ClockSkew = TimeSpan.Zero
-        };
-        
-        options.Events = new JwtBearerEvents
-        {
-            OnAuthenticationFailed = context =>
-            {
-                Console.WriteLine("Authentication failed: " + context.Exception.Message);
-                return Task.CompletedTask;
-            },
-            OnTokenValidated = context =>
-            {
-                Console.WriteLine("Token validated for: " + context.Principal?.Identity?.Name);
-                return Task.CompletedTask;
-            }
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.FromMinutes(5)
         };
     });
 
-builder.Services.AddAuthorization(options =>
+builder.Services.AddAuthorization();
+
+// Configuración de controladores
+builder.Services.AddControllers();
+
+// Configuración de Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
 {
-    options.AddPolicy("CompanyAdmin", policy => 
-        policy.RequireRole("CompanyAdmin"));
-    options.AddPolicy("Supervisor", policy => 
-        policy.RequireRole("CompanyAdmin", "Supervisor"));
+    c.SwaggerDoc("v1", new OpenApiInfo 
+    { 
+        Title = "Company Admin API", 
+        Version = "v1",
+        Description = "API para administración de empresas y empleados"
+    });
+    
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header usando el esquema Bearer. Ejemplo: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+    
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
-// AutoMapper
-builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
-
-// FluentValidation
-builder.Services.AddFluentValidationAutoValidation();
-builder.Services.AddValidatorsFromAssemblyContaining<Program>();
-
 // Servicios compartidos
-builder.Services.AddScoped<ITenantResolver, TenantResolver>();
-builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
-builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddScoped<IFileService, FileService>();
+builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<ITenantResolver, TenantResolver>();
 
 // Servicios de la aplicación
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
@@ -214,7 +168,7 @@ if (app.Environment.IsDevelopment())
         await context.Database.EnsureCreatedAsync();
         
         // Seed data si es necesario
-        await SeedDevelopmentDataAsync(context);
+        await SeedDevelopmentDataAsync(context, scope.ServiceProvider);
     }
     catch (Exception ex)
     {
@@ -226,11 +180,13 @@ if (app.Environment.IsDevelopment())
 app.Run();
 
 // Método para sembrar datos de desarrollo
-static async Task SeedDevelopmentDataAsync(CompanyDbContext context)
+static async Task SeedDevelopmentDataAsync(CompanyDbContext context, IServiceProvider serviceProvider)
 {
     // Solo agregar datos si no existen
     if (!context.Companies.Any())
     {
+        var passwordService = serviceProvider.GetRequiredService<IPasswordService>();
+        
         var company = new Shared.Models.Core.Company
         {
             Name = "Empresa Demo",
@@ -241,7 +197,9 @@ static async Task SeedDevelopmentDataAsync(CompanyDbContext context)
             WorkStartTime = new TimeSpan(9, 0, 0),
             WorkEndTime = new TimeSpan(18, 0, 0),
             ToleranceMinutes = 15,
-            VacationDaysPerYear = 22
+            VacationDaysPerYear = 22,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
         
         context.Companies.Add(company);
@@ -253,14 +211,14 @@ static async Task SeedDevelopmentDataAsync(CompanyDbContext context)
             CompanyId = company.Id,
             Name = "Administración",
             Description = "Departamento de administración general",
-            Active = true
+            Active = true,
+            CreatedAt = DateTime.UtcNow
         };
         
         context.Departments.Add(department);
         await context.SaveChangesAsync();
         
         // Agregar administrador por defecto
-        var passwordService = new Shared.Services.Security.PasswordService();
         var admin = new Shared.Models.Core.Employee
         {
             CompanyId = company.Id,
@@ -272,10 +230,16 @@ static async Task SeedDevelopmentDataAsync(CompanyDbContext context)
             Role = Shared.Models.Enums.UserRole.CompanyAdmin,
             PasswordHash = passwordService.HashPassword("admin123"),
             Active = true,
-            HiredAt = DateTime.UtcNow
+            HiredAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
         
         context.Employees.Add(admin);
         await context.SaveChangesAsync();
+
+        Console.WriteLine("✅ Datos de desarrollo creados:");
+        Console.WriteLine("   • Empresa: Empresa Demo");
+        Console.WriteLine("   • Admin: admin@empresademo.com / admin123");
     }
 }
