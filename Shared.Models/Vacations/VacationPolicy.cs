@@ -1,34 +1,46 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Shared.Models.Core;
 
 namespace Shared.Models.Vacations
 {
+    /// <summary>
+    /// Política de vacaciones de la empresa
+    /// </summary>
+    [Table("VacationPolicies")]
     public class VacationPolicy
     {
+        [Key]
         public int Id { get; set; }
-        
+
+        [Required]
         public int CompanyId { get; set; }
-        
-        [Required, MaxLength(100)]
+
+        [Required]
+        [StringLength(100)]
         public string Name { get; set; } = string.Empty;
-        
-        public int AnnualDays { get; set; } = 22;
-        
+
+        [StringLength(500)]
+        public string? Description { get; set; }
+
+        public int DefaultDaysPerYear { get; set; } = 22;
+
+        public int MinimumServiceMonths { get; set; } = 0;
+
         public int MaxConsecutiveDays { get; set; } = 15;
-        
+
         public int MinAdvanceNoticeDays { get; set; } = 15;
-        
+
         public bool RequireApproval { get; set; } = true;
-        
-        public bool CarryOverEnabled { get; set; } = true;
-        
-        public int MaxCarryOverDays { get; set; } = 5;
-        
+
         public bool Active { get; set; } = true;
-        
-        public DateTime EffectiveFrom { get; set; } = DateTime.UtcNow;
-        
-        public DateTime? EffectiveTo { get; set; }
-        
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        // Navegación
+        [ForeignKey("CompanyId")]
+        public virtual Company? Company { get; set; }
     }
 }

@@ -3,290 +3,568 @@ using Microsoft.Extensions.Logging;
 using Shared.Models.Core;
 using Shared.Models.Enums;
 using Shared.Services.Security;
+using Npgsql;
 
 namespace Database.Setup.Tools
 {
+    /// <summary>
+    /// Herramienta para sembrar datos iniciales en las bases de datos
+    /// </summary>
     public class DatabaseSeeder
     {
         private readonly ILogger<DatabaseSeeder> _logger;
         private readonly IPasswordService _passwordService;
+        private readonly string _connectionString;
 
-        public DatabaseSeeder(ILogger<DatabaseSeeder> logger, IPasswordService passwordService)
+        public DatabaseSeeder(ILogger<DatabaseSeeder> logger, IPasswordService passwordService, string connectionString)
         {
             _logger = logger;
             _passwordService = passwordService;
+            _connectionString = connectionString;
         }
 
         /// <summary>
-        /// Sembrar datos iniciales en la base de datos central de Sphere
+        /// Sembrar todos los datos necesarios
         /// </summary>
-        public async Task SeedSphereDataAsync(DbContext context)
+        public async Task SeedAllAsync()
         {
+            _logger.LogInformation("🌱 Iniciando siembra completa de datos");
+
             try
             {
-                _logger.LogInformation("Iniciando siembra de datos para Sphere Admin");
-
-                // Crear super administrador si no existe
-                await CreateSuperAdminAsync(context);
-
-                // Crear empresa demo si no existe
-                await CreateDemoCompanyAsync(context);
-
-                await context.SaveChangesAsync();
-                _logger.LogInformation("Siembra de datos completada para Sphere Admin");
+                await CreateCentralDatabaseAsync();
+                await CreateDemoTenantAsync();
+                
+                _logger.LogInformation("✅ Siembra completa finalizada exitosamente");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sembrando datos para Sphere Admin");
+                _logger.LogError(ex, "❌ Error durante la siembra completa");
                 throw;
             }
         }
 
         /// <summary>
-        /// Sembrar datos iniciales para una empresa (tenant)
+        /// Crear y sembrar la base de datos central
         /// </summary>
-        public async Task SeedCompanyDataAsync(DbContext context, int companyId, string companyName)
+        public async Task CreateCentralDatabaseAsync()
         {
+            _logger.LogInformation("📦 Creando base de datos central de Sphere");
+
             try
             {
-                _logger.LogInformation("Iniciando siembra de datos para empresa {CompanyName}", companyName);
+                // Crear la base de datos central si no existe
+                await CreateDatabaseIfNotExistsAsync("SphereTimeControl_Central");
+                
+                // Conectar a la BD central y sembrar datos
+                var centralConnectionString = _connectionString.Replace("Database=postgres", "Database=SphereTimeControl_Central");
+                
+                using var connection = new NpgsqlConnection(centralConnectionString);
+                await connection.OpenAsync();
 
-                // Crear departamentos por defecto
-                await CreateDefaultDepartmentsAsync(context, companyId);
+                // Ejecutar script de estructura si es necesario
+                await ExecuteSqlScriptAsync(connection, "Scripts/01-CreateCentralDB.sql");
 
-                // Crear empleado administrador
-                await CreateCompanyAdminAsync(context, companyId);
+                // Sembrar datos iniciales
+                await SeedCentralDataAsync(connection);
 
-                // Crear empleados demo
-                await CreateDemoEmployeesAsync(context, companyId);
-
-                await context.SaveChangesAsync();
-                _logger.LogInformation("Siembra de datos completada para empresa {CompanyName}", companyName);
+                _logger.LogInformation("✅ Base de datos central creada y sembrada");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sembrando datos para empresa {CompanyName}", companyName);
+                _logger.LogError(ex, "❌ Error creando base de datos central");
                 throw;
             }
         }
 
         /// <summary>
-        /// Crear super administrador del sistema
+        /// Crear tenant de demostración
         /// </summary>
-        private async Task CreateSuperAdminAsync(DbContext context)
+        public async Task CreateDemoTenantAsync()
         {
-            var adminEmail = "admin@spheretime.com";
-            
-            // Verificar si ya existe
-            var existingAdmin = await context.Set<SphereAdmin>()
-                .FirstOrDefaultAsync(sa => sa.Email == adminEmail);
+            _logger.LogInformation("🏢 Creando tenant de demostración");
 
-            if (existingAdmin == null)
+            try
             {
-                var superAdmin = new SphereAdmin
-                {
-                    FirstName = "Super",
-                    LastName = "Administrador",
-                    Email = adminEmail,
-                    PasswordHash = _passwordService.HashPassword("SphereAdmin123!"),
-                    Active = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                context.Set<SphereAdmin>().Add(superAdmin);
-                _logger.LogInformation("Super administrador creado: {Email}", adminEmail);
+                var tenantCreator = new TenantCreator(_connectionString);
+                await tenantCreator.CreateTenantAsync("demo", "Empresa Demo", "admin@demo.com");
+                
+                _logger.LogInformation("✅ Tenant demo creado exitosamente");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error creando tenant demo");
+                throw;
             }
         }
 
         /// <summary>
-        /// Crear empresa demo
+        /// Sembrar datos iniciales en la base de datos central
         /// </summary>
-        private async Task CreateDemoCompanyAsync(DbContext context)
+        private async Task SeedCentralDataAsync(NpgsqlConnection connection)
         {
-            var companyName = "Empresa Demo";
+            _logger.LogInformation("🌱 Sembrando datos en BD central");
+
+            // Crear super administrador por defecto
+            await CreateSuperAdminAsync(connection);
             
-            // Verificar si ya existe
-            var existingCompany = await context.Set<Company>()
-                .FirstOrDefaultAsync(c => c.Name == companyName);
+            // Crear configuraciones del sistema
+            await CreateSystemConfigurationsAsync(connection);
+        }
 
-            if (existingCompany == null)
+        /// <summary>
+        /// Crear super administrador por defecto
+        /// </summary>
+        private async Task CreateSuperAdminAsync(NpgsqlConnection connection)
+        {
+            var checkQuery = @"SELECT COUNT(*) FROM ""SphereAdmins"" WHERE ""Email"" = @email";
+            
+            using var checkCmd = new NpgsqlCommand(checkQuery, connection);
+            checkCmd.Parameters.AddWithValue("email", "admin@spheretimecontrol.com");
+            
+            var exists = (long)(await checkCmd.ExecuteScalarAsync() ?? 0) > 0;
+            
+            if (!exists)
             {
-                var demoCompany = new Company
-                {
-                    Name = companyName,
-                    Email = "contacto@empresademo.com",
-                    Phone = "+34 123 456 789",
-                    Address = "Calle Demo 123, 28001 Madrid",
-                    TaxId = "B12345678",
-                    Active = true,
-                    CreatedAt = DateTime.UtcNow
-                };
+                var passwordHash = _passwordService.HashPassword("admin123");
+                
+                var insertQuery = @"
+                    INSERT INTO ""SphereAdmins"" (""FirstName"", ""LastName"", ""Email"", ""PasswordHash"", ""Active"", ""CreatedAt"", ""UpdatedAt"")
+                    VALUES (@firstName, @lastName, @email, @passwordHash, @active, @createdAt, @updatedAt)";
 
-                context.Set<Company>().Add(demoCompany);
-                _logger.LogInformation("Empresa demo creada: {Name}", companyName);
+                using var insertCmd = new NpgsqlCommand(insertQuery, connection);
+                insertCmd.Parameters.AddWithValue("firstName", "Super");
+                insertCmd.Parameters.AddWithValue("lastName", "Admin");
+                insertCmd.Parameters.AddWithValue("email", "admin@spheretimecontrol.com");
+                insertCmd.Parameters.AddWithValue("passwordHash", passwordHash);
+                insertCmd.Parameters.AddWithValue("active", true);
+                insertCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+                insertCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+                await insertCmd.ExecuteNonQueryAsync();
+                
+                _logger.LogInformation("👤 Super administrador creado: admin@spheretimecontrol.com");
+            }
+            else
+            {
+                _logger.LogInformation("👤 Super administrador ya existe");
             }
         }
 
         /// <summary>
-        /// Crear departamentos por defecto para una empresa
+        /// Crear configuraciones del sistema
         /// </summary>
-        private async Task CreateDefaultDepartmentsAsync(DbContext context, int companyId)
+        private async Task CreateSystemConfigurationsAsync(NpgsqlConnection connection)
         {
-            var defaultDepartments = new[]
+            var configs = new Dictionary<string, string>
             {
-                new { Name = "Recursos Humanos", Description = "Gestión de personal y recursos humanos" },
-                new { Name = "Desarrollo", Description = "Equipo de desarrollo de software" },
-                new { Name = "Marketing", Description = "Marketing y comunicación" },
-                new { Name = "Ventas", Description = "Equipo comercial y ventas" },
-                new { Name = "Administración", Description = "Administración y finanzas" }
+                { "SystemName", "Sphere Time Control" },
+                { "SystemVersion", "1.0.0" },
+                { "DefaultLicenseType", "Trial" },
+                { "TrialDurationDays", "30" },
+                { "MaxEmployeesBasic", "10" },
+                { "MaxEmployeesProfessional", "50" },
+                { "MaxEmployeesEnterprise", "999" },
+                { "MaintenanceMode", "false" }
             };
 
-            foreach (var deptInfo in defaultDepartments)
+            foreach (var config in configs)
             {
-                // Verificar si ya existe
-                var existingDept = await context.Set<Department>()
-                    .FirstOrDefaultAsync(d => d.Name == deptInfo.Name && d.CompanyId == companyId);
-
-                if (existingDept == null)
+                var checkQuery = @"SELECT COUNT(*) FROM ""SystemConfigs"" WHERE ""Key"" = @key";
+                
+                using var checkCmd = new NpgsqlCommand(checkQuery, connection);
+                checkCmd.Parameters.AddWithValue("key", config.Key);
+                
+                var exists = (long)(await checkCmd.ExecuteScalarAsync() ?? 0) > 0;
+                
+                if (!exists)
                 {
-                    var department = new Department
-                    {
-                        Name = deptInfo.Name,
-                        Description = deptInfo.Description,
-                        CompanyId = companyId,
-                        Active = true,
-                        CreatedAt = DateTime.UtcNow
-                    };
+                    var insertQuery = @"
+                        INSERT INTO ""SystemConfigs"" (""Key"", ""Value"", ""CreatedAt"", ""UpdatedAt"")
+                        VALUES (@key, @value, @createdAt, @updatedAt)";
 
-                    context.Set<Department>().Add(department);
-                    _logger.LogInformation("Departamento creado: {Name} para empresa {CompanyId}", deptInfo.Name, companyId);
+                    using var insertCmd = new NpgsqlCommand(insertQuery, connection);
+                    insertCmd.Parameters.AddWithValue("key", config.Key);
+                    insertCmd.Parameters.AddWithValue("value", config.Value);
+                    insertCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+                    insertCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+                    await insertCmd.ExecuteNonQueryAsync();
                 }
             }
+            
+            _logger.LogInformation("⚙️ Configuraciones del sistema creadas");
+        }
+
+        /// <summary>
+        /// Sembrar datos de empresa en un tenant
+        /// </summary>
+        public async Task SeedTenantDataAsync(string databaseName, string tenantCode, string companyName, string adminEmail, string adminPassword)
+        {
+            _logger.LogInformation("🏢 Sembrando datos en tenant {TenantCode}", tenantCode);
+
+            try
+            {
+                var tenantConnectionString = _connectionString.Replace("Database=postgres", $"Database={databaseName}");
+                
+                using var connection = new NpgsqlConnection(tenantConnectionString);
+                await connection.OpenAsync();
+
+                // Crear datos de la empresa
+                await CreateCompanyDataAsync(connection, companyName);
+                
+                // Crear departamentos por defecto
+                await CreateDefaultDepartmentsAsync(connection);
+                
+                // Crear administrador de la empresa
+                await CreateCompanyAdminAsync(connection, adminEmail, adminPassword);
+                
+                // Crear empleados de demostración
+                await CreateDemoEmployeesAsync(connection);
+
+                _logger.LogInformation("✅ Datos del tenant sembrados exitosamente");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error sembrando datos del tenant {TenantCode}", tenantCode);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Crear datos de la empresa
+        /// </summary>
+        private async Task CreateCompanyDataAsync(NpgsqlConnection connection, string companyName)
+        {
+            var checkQuery = @"SELECT COUNT(*) FROM ""Companies""";
+            
+            using var checkCmd = new NpgsqlCommand(checkQuery, connection);
+            var exists = (long)(await checkCmd.ExecuteScalarAsync() ?? 0) > 0;
+            
+            if (!exists)
+            {
+                var insertQuery = @"
+                    INSERT INTO ""Companies"" (""Name"", ""TaxId"", ""Address"", ""Phone"", ""Email"", ""Active"", ""CreatedAt"", ""UpdatedAt"")
+                    VALUES (@name, @taxId, @address, @phone, @email, @active, @createdAt, @updatedAt)";
+
+                using var insertCmd = new NpgsqlCommand(insertQuery, connection);
+                insertCmd.Parameters.AddWithValue("name", companyName);
+                insertCmd.Parameters.AddWithValue("taxId", "B12345678");
+                insertCmd.Parameters.AddWithValue("address", "Calle Principal 123, Madrid, España");
+                insertCmd.Parameters.AddWithValue("phone", "+34 911 234 567");
+                insertCmd.Parameters.AddWithValue("email", $"info@{companyName.ToLower().Replace(" ", "")}.com");
+                insertCmd.Parameters.AddWithValue("active", true);
+                insertCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+                insertCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+                await insertCmd.ExecuteNonQueryAsync();
+                
+                _logger.LogInformation("🏢 Company data created: {CompanyName}", companyName);
+            }
+        }
+
+        /// <summary>
+        /// Crear departamentos por defecto
+        /// </summary>
+        private async Task CreateDefaultDepartmentsAsync(NpgsqlConnection connection)
+        {
+            var departments = new[]
+            {
+                ("Administración", "Departamento de administración y recursos humanos"),
+                ("Desarrollo", "Departamento de desarrollo de software"),
+                ("Marketing", "Departamento de marketing y comunicación"),
+                ("Ventas", "Departamento comercial y de ventas"),
+                ("Soporte", "Departamento de soporte técnico")
+            };
+
+            foreach (var (name, description) in departments)
+            {
+                var checkQuery = @"SELECT COUNT(*) FROM ""Departments"" WHERE ""Name"" = @name";
+                
+                using var checkCmd = new NpgsqlCommand(checkQuery, connection);
+                checkCmd.Parameters.AddWithValue("name", name);
+                
+                var exists = (long)(await checkCmd.ExecuteScalarAsync() ?? 0) > 0;
+                
+                if (!exists)
+                {
+                    var insertQuery = @"
+                        INSERT INTO ""Departments"" (""CompanyId"", ""Name"", ""Description"", ""Active"", ""CreatedAt"", ""UpdatedAt"")
+                        VALUES (1, @name, @description, @active, @createdAt, @updatedAt)";
+
+                    using var insertCmd = new NpgsqlCommand(insertQuery, connection);
+                    insertCmd.Parameters.AddWithValue("name", name);
+                    insertCmd.Parameters.AddWithValue("description", description);
+                    insertCmd.Parameters.AddWithValue("active", true);
+                    insertCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+                    insertCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+                    await insertCmd.ExecuteNonQueryAsync();
+                }
+            }
+            
+            _logger.LogInformation("🏬 Default departments created");
         }
 
         /// <summary>
         /// Crear administrador de la empresa
         /// </summary>
-        private async Task CreateCompanyAdminAsync(DbContext context, int companyId)
+        private async Task CreateCompanyAdminAsync(NpgsqlConnection connection, string adminEmail, string adminPassword)
         {
-            var adminEmail = $"admin@company{companyId}.com";
+            var checkQuery = @"SELECT COUNT(*) FROM ""Employees"" WHERE ""Email"" = @email";
             
-            // Verificar si ya existe
-            var existingAdmin = await context.Set<Employee>()
-                .FirstOrDefaultAsync(e => e.Email == adminEmail);
-
-            if (existingAdmin == null)
+            using var checkCmd = new NpgsqlCommand(checkQuery, connection);
+            checkCmd.Parameters.AddWithValue("email", adminEmail);
+            
+            var exists = (long)(await checkCmd.ExecuteScalarAsync() ?? 0) > 0;
+            
+            if (!exists)
             {
-                // Obtener departamento de Administración
-                var adminDept = await context.Set<Department>()
-                    .FirstOrDefaultAsync(d => d.Name == "Administración" && d.CompanyId == companyId);
+                var passwordHash = _passwordService.HashPassword(adminPassword);
+                
+                var insertQuery = @"
+                    INSERT INTO ""Employees"" (
+                        ""CompanyId"", ""DepartmentId"", ""FirstName"", ""LastName"", ""Email"", 
+                        ""Phone"", ""EmployeeCode"", ""Role"", ""PasswordHash"", ""Active"", ""CreatedAt"", ""UpdatedAt""
+                    )
+                    VALUES (
+                        1, 1, @firstName, @lastName, @email, 
+                        @phone, @employeeCode, @role, @passwordHash, @active, @createdAt, @updatedAt
+                    )";
 
-                var admin = new Employee
-                {
-                    FirstName = "Administrador",
-                    LastName = "Empresa",
-                    Email = adminEmail,
-                    EmployeeCode = "ADM001",
-                    Phone = "+34 600 000 001",
-                    CompanyId = companyId,
-                    DepartmentId = adminDept?.Id,
-                    Position = "Administrador",
-                    Role = UserRole.Admin,
-                    HireDate = DateTime.Today,
-                    Salary = 50000,
-                    PasswordHash = _passwordService.HashPassword("Admin123!"),
-                    Active = true,
-                    CreatedAt = DateTime.UtcNow
-                };
+                using var insertCmd = new NpgsqlCommand(insertQuery, connection);
+                insertCmd.Parameters.AddWithValue("firstName", "Admin");
+                insertCmd.Parameters.AddWithValue("lastName", "Company");
+                insertCmd.Parameters.AddWithValue("email", adminEmail);
+                insertCmd.Parameters.AddWithValue("phone", "+34 666 111 222");
+                insertCmd.Parameters.AddWithValue("employeeCode", "EMP001");
+                insertCmd.Parameters.AddWithValue("role", (int)UserRole.CompanyAdmin);
+                insertCmd.Parameters.AddWithValue("passwordHash", passwordHash);
+                insertCmd.Parameters.AddWithValue("active", true);
+                insertCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+                insertCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
 
-                context.Set<Employee>().Add(admin);
-                _logger.LogInformation("Administrador de empresa creado: {Email}", adminEmail);
+                await insertCmd.ExecuteNonQueryAsync();
+                
+                _logger.LogInformation("👤 Company admin created: {AdminEmail}", adminEmail);
             }
         }
 
         /// <summary>
-        /// Crear empleados demo
+        /// Crear empleados de demostración
         /// </summary>
-        private async Task CreateDemoEmployeesAsync(DbContext context, int companyId)
+        private async Task CreateDemoEmployeesAsync(NpgsqlConnection connection)
         {
-            var demoEmployees = new[]
+            var employees = new[]
             {
-                new { FirstName = "Juan", LastName = "Pérez", Email = "juan.perez@company.com", Department = "Desarrollo", Position = "Desarrollador Senior", Role = UserRole.Employee },
-                new { FirstName = "María", LastName = "García", Email = "maria.garcia@company.com", Department = "Recursos Humanos", Position = "HR Manager", Role = UserRole.Supervisor },
-                new { FirstName = "Carlos", LastName = "López", Email = "carlos.lopez@company.com", Department = "Marketing", Position = "Marketing Specialist", Role = UserRole.Employee },
-                new { FirstName = "Ana", LastName = "Rodríguez", Email = "ana.rodriguez@company.com", Department = "Ventas", Position = "Sales Representative", Role = UserRole.Employee },
-                new { FirstName = "Luis", LastName = "Martínez", Email = "luis.martinez@company.com", Department = "Desarrollo", Position = "Team Lead", Role = UserRole.Supervisor }
+                ("Juan", "Pérez", "juan.perez@demo.com", "+34 666 222 333", "EMP002", 2, UserRole.Supervisor),
+                ("María", "García", "maria.garcia@demo.com", "+34 666 333 444", "EMP003", 2, UserRole.Employee),
+                ("Carlos", "López", "carlos.lopez@demo.com", "+34 666 444 555", "EMP004", 3, UserRole.Employee),
+                ("Ana", "Martín", "ana.martin@demo.com", "+34 666 555 666", "EMP005", 4, UserRole.Employee)
             };
 
-            var departments = await context.Set<Department>()
-                .Where(d => d.CompanyId == companyId)
-                .ToListAsync();
-
-            int employeeCounter = 2; // Empezar después del admin (ADM001)
-
-            foreach (var empInfo in demoEmployees)
+            foreach (var (firstName, lastName, email, phone, code, deptId, role) in employees)
             {
-                // Verificar si ya existe
-                var existingEmployee = await context.Set<Employee>()
-                    .FirstOrDefaultAsync(e => e.Email == empInfo.Email);
-
-                if (existingEmployee == null)
+                var checkQuery = @"SELECT COUNT(*) FROM ""Employees"" WHERE ""Email"" = @email";
+                
+                using var checkCmd = new NpgsqlCommand(checkQuery, connection);
+                checkCmd.Parameters.AddWithValue("email", email);
+                
+                var exists = (long)(await checkCmd.ExecuteScalarAsync() ?? 0) > 0;
+                
+                if (!exists)
                 {
-                    var department = departments.FirstOrDefault(d => d.Name == empInfo.Department);
-
-                    var employee = new Employee
-                    {
-                        FirstName = empInfo.FirstName,
-                        LastName = empInfo.LastName,
-                        Email = empInfo.Email,
-                        EmployeeCode = $"EMP{employeeCounter:D3}",
-                        Phone = $"+34 600 000 {employeeCounter:D3}",
-                        CompanyId = companyId,
-                        DepartmentId = department?.Id,
-                        Position = empInfo.Position,
-                        Role = empInfo.Role,
-                        HireDate = DateTime.Today.AddDays(-Random.Shared.Next(30, 365)),
-                        Salary = Random.Shared.Next(25000, 45000),
-                        PasswordHash = _passwordService.HashPassword("Employee123!"),
-                        Active = true,
-                        CreatedAt = DateTime.UtcNow
-                    };
-
-                    context.Set<Employee>().Add(employee);
-                    _logger.LogInformation("Empleado demo creado: {Email}", empInfo.Email);
+                    var passwordHash = _passwordService.HashPassword("employee123");
                     
-                    employeeCounter++;
+                    var insertQuery = @"
+                        INSERT INTO ""Employees"" (
+                            ""CompanyId"", ""DepartmentId"", ""FirstName"", ""LastName"", ""Email"", 
+                            ""Phone"", ""EmployeeCode"", ""Role"", ""PasswordHash"", ""Active"", ""CreatedAt"", ""UpdatedAt""
+                        )
+                        VALUES (
+                            1, @deptId, @firstName, @lastName, @email, 
+                            @phone, @employeeCode, @role, @passwordHash, @active, @createdAt, @updatedAt
+                        )";
+
+                    using var insertCmd = new NpgsqlCommand(insertQuery, connection);
+                    insertCmd.Parameters.AddWithValue("deptId", deptId);
+                    insertCmd.Parameters.AddWithValue("firstName", firstName);
+                    insertCmd.Parameters.AddWithValue("lastName", lastName);
+                    insertCmd.Parameters.AddWithValue("email", email);
+                    insertCmd.Parameters.AddWithValue("phone", phone);
+                    insertCmd.Parameters.AddWithValue("employeeCode", code);
+                    insertCmd.Parameters.AddWithValue("role", (int)role);
+                    insertCmd.Parameters.AddWithValue("passwordHash", passwordHash);
+                    insertCmd.Parameters.AddWithValue("active", true);
+                    insertCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+                    insertCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+                    await insertCmd.ExecuteNonQueryAsync();
                 }
             }
+            
+            _logger.LogInformation("👥 Demo employees created");
         }
 
         /// <summary>
-        /// Limpiar todos los datos de la base de datos
+        /// Limpiar todas las bases de datos
         /// </summary>
-        public async Task CleanDatabaseAsync(DbContext context)
+        public async Task CleanupAllDatabasesAsync()
         {
+            _logger.LogInformation("🧹 Iniciando limpieza de bases de datos");
+
             try
             {
-                _logger.LogWarning("ATENCIÓN: Limpiando toda la base de datos");
+                using var connection = new NpgsqlConnection(_connectionString);
+                await connection.OpenAsync();
 
-                // Eliminar en orden inverso a las dependencias
-                context.Set<VacationRequest>().RemoveRange(context.Set<VacationRequest>());
-                context.Set<VacationBalance>().RemoveRange(context.Set<VacationBalance>());
-                context.Set<VacationPolicy>().RemoveRange(context.Set<VacationPolicy>());
-                context.Set<TimeRecord>().RemoveRange(context.Set<TimeRecord>());
-                context.Set<WorkSchedule>().RemoveRange(context.Set<WorkSchedule>());
-                context.Set<Employee>().RemoveRange(context.Set<Employee>());
-                context.Set<Department>().RemoveRange(context.Set<Department>());
-                context.Set<Company>().RemoveRange(context.Set<Company>());
-                context.Set<SphereAdmin>().RemoveRange(context.Set<SphereAdmin>());
+                // Obtener lista de bases de datos del sistema
+                var getDatabasesQuery = @"
+                    SELECT datname FROM pg_database 
+                    WHERE datname LIKE 'SphereTimeControl_%' 
+                    AND datname != 'SphereTimeControl_Central'";
 
-                await context.SaveChangesAsync();
-                _logger.LogWarning("Base de datos limpiada completamente");
+                var databases = new List<string>();
+                using var cmd = new NpgsqlCommand(getDatabasesQuery, connection);
+                using var reader = await cmd.ExecuteReaderAsync();
+                
+                while (await reader.ReadAsync())
+                {
+                    databases.Add(reader.GetString(0));
+                }
+                reader.Close();
+
+                // Eliminar bases de datos de tenants
+                foreach (var dbName in databases)
+                {
+                    var dropQuery = $@"DROP DATABASE IF EXISTS ""{dbName}""";
+                    using var dropCmd = new NpgsqlCommand(dropQuery, connection);
+                    await dropCmd.ExecuteNonQueryAsync();
+                    
+                    _logger.LogInformation("🗑️ Database dropped: {DatabaseName}", dbName);
+                }
+
+                // Limpiar registros de la BD central
+                await CleanupCentralDatabaseAsync(connection);
+
+                _logger.LogInformation("✅ Limpieza completada");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error limpiando la base de datos");
+                _logger.LogError(ex, "❌ Error durante la limpieza");
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Limpiar datos de la base de datos central
+        /// </summary>
+        private async Task CleanupCentralDatabaseAsync(NpgsqlConnection connection)
+        {
+            var centralConnectionString = _connectionString.Replace("Database=postgres", "Database=SphereTimeControl_Central");
+            
+            using var centralConnection = new NpgsqlConnection(centralConnectionString);
+            await centralConnection.OpenAsync();
+
+            // Eliminar todos los tenants excepto el demo
+            var cleanupQuery = @"DELETE FROM ""Tenants"" WHERE ""Code"" != 'demo'";
+            using var cleanupCmd = new NpgsqlCommand(cleanupQuery, centralConnection);
+            await cleanupCmd.ExecuteNonQueryAsync();
+
+            _logger.LogInformation("🧹 Central database cleaned");
+        }
+
+        /// <summary>
+        /// Mostrar estado de las bases de datos
+        /// </summary>
+        public async Task ShowDatabaseStatusAsync()
+        {
+            _logger.LogInformation("📊 Estado de las bases de datos:");
+
+            try
+            {
+                using var connection = new NpgsqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                // Obtener información de las bases de datos
+                var query = @"
+                    SELECT 
+                        datname,
+                        pg_size_pretty(pg_database_size(datname)) as size,
+                        (SELECT count(*) FROM pg_stat_activity WHERE datname = pg_stat_activity.datname) as connections
+                    FROM pg_database 
+                    WHERE datname LIKE 'SphereTimeControl_%'
+                    ORDER BY datname";
+
+                using var cmd = new NpgsqlCommand(query, connection);
+                using var reader = await cmd.ExecuteReaderAsync();
+
+                Console.WriteLine("┌─────────────────────────────────┬─────────────┬─────────────┐");
+                Console.WriteLine("│ Database                        │ Size        │ Connections │");
+                Console.WriteLine("├─────────────────────────────────┼─────────────┼─────────────┤");
+
+                while (await reader.ReadAsync())
+                {
+                    var name = reader.GetString(0).PadRight(31);
+                    var size = reader.GetString(1).PadRight(11);
+                    var connections = reader.GetInt32(2).ToString().PadRight(11);
+                    
+                    Console.WriteLine($"│ {name} │ {size} │ {connections} │");
+                }
+
+                Console.WriteLine("└─────────────────────────────────┴─────────────┴─────────────┘");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error obteniendo estado de las bases de datos");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Crear base de datos si no existe
+        /// </summary>
+        private async Task CreateDatabaseIfNotExistsAsync(string databaseName)
+        {
+            using var connection = new NpgsqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            var checkQuery = @"SELECT 1 FROM pg_database WHERE datname = @databaseName";
+            using var checkCmd = new NpgsqlCommand(checkQuery, connection);
+            checkCmd.Parameters.AddWithValue("databaseName", databaseName);
+            
+            var exists = await checkCmd.ExecuteScalarAsync() != null;
+            
+            if (!exists)
+            {
+                var createQuery = $@"CREATE DATABASE ""{databaseName}"" WITH ENCODING = 'UTF8'";
+                using var createCmd = new NpgsqlCommand(createQuery, connection);
+                await createCmd.ExecuteNonQueryAsync();
+                
+                _logger.LogInformation("📦 Database created: {DatabaseName}", databaseName);
+            }
+            else
+            {
+                _logger.LogInformation("📦 Database already exists: {DatabaseName}", databaseName);
+            }
+        }
+
+        /// <summary>
+        /// Ejecutar script SQL desde archivo
+        /// </summary>
+        private async Task ExecuteSqlScriptAsync(NpgsqlConnection connection, string scriptPath)
+        {
+            if (File.Exists(scriptPath))
+            {
+                var script = await File.ReadAllTextAsync(scriptPath);
+                using var cmd = new NpgsqlCommand(script, connection);
+                await cmd.ExecuteNonQueryAsync();
+                
+                _logger.LogInformation("📜 Script executed: {ScriptPath}", scriptPath);
+            }
+            else
+            {
+                _logger.LogWarning("⚠️ Script not found: {ScriptPath}", scriptPath);
             }
         }
     }

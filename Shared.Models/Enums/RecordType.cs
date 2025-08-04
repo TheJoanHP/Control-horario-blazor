@@ -1,12 +1,28 @@
-// ===== Shared/Models/Enums/RecordType.cs =====
 namespace Shared.Models.Enums
 {
+    /// <summary>
+    /// Tipos de registro de tiempo
+    /// </summary>
     public enum RecordType
     {
-        CheckIn = 1,
-        CheckOut = 2,
-        Break = 3,
-        Return = 4,
-        Overtime = 5
+        /// <summary>
+        /// Entrada al trabajo
+        /// </summary>
+        CheckIn = 0,
+
+        /// <summary>
+        /// Salida del trabajo
+        /// </summary>
+        CheckOut = 1,
+
+        /// <summary>
+        /// Inicio de descanso/pausa
+        /// </summary>
+        BreakStart = 2,
+
+        /// <summary>
+        /// Fin de descanso/pausa
+        /// </summary>
+        BreakEnd = 3
     }
 }

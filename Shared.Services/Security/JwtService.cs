@@ -3,41 +3,44 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Shared.Models.Enums;
 
 namespace Shared.Services.Security
 {
+    /// <summary>
+    /// Implementación del servicio de gestión de tokens JWT
+    /// </summary>
     public class JwtService : IJwtService
     {
-        private readonly string _key;
+        private readonly string _secretKey;
         private readonly string _issuer;
         private readonly string _audience;
         private readonly int _expirationMinutes;
 
         public JwtService(IConfiguration configuration)
         {
-            _key = configuration["JwtSettings:SecretKey"] ?? configuration["Jwt:Key"] ?? "ThisIsAVeryLongSecretKeyForJwtTokenGenerationAndValidation123456789";
-            _issuer = configuration["JwtSettings:Issuer"] ?? configuration["Jwt:Issuer"] ?? "SphereTimeControl";
-            _audience = configuration["JwtSettings:Audience"] ?? configuration["Jwt:Audience"] ?? "CompanyAdmin";
-            _expirationMinutes = int.Parse(configuration["JwtSettings:ExpirationMinutes"] ?? configuration["Jwt:ExpirationMinutes"] ?? "480");
+            _secretKey = configuration["JWT:SecretKey"] ?? "SphereTimeControl-SuperSecretKey-2025-!@#$%^&*()";
+            _issuer = configuration["JWT:Issuer"] ?? "SphereTimeControl";
+            _audience = configuration["JWT:Audience"] ?? "SphereTimeControl";
+            _expirationMinutes = int.Parse(configuration["JWT:ExpirationMinutes"] ?? "480"); // 8 horas por defecto
         }
 
-        public string GenerateToken(int userId, string email, string role, Dictionary<string, string>? additionalClaims = null)
+        public string GenerateToken(int userId, string email, UserRole role, Dictionary<string, string>? additionalClaims = null)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_key);
+            var key = Encoding.ASCII.GetBytes(_secretKey);
 
             var claims = new List<Claim>
             {
-                new(ClaimTypes.NameIdentifier, userId.ToString()),
-                new(ClaimTypes.Email, email),
-                new(ClaimTypes.Role, role),
-                new(JwtRegisteredClaimNames.Sub, userId.ToString()),
-                new(JwtRegisteredClaimNames.Email, email),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
+                new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                new Claim(ClaimTypes.Email, email),
+                new Claim(ClaimTypes.Role, role.ToString()),
+                new Claim("role", ((int)role).ToString()),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
             };
 
-            // Agregar claims adicionales
+            // Agregar claims adicionales si se proporcionan
             if (additionalClaims != null)
             {
                 foreach (var claim in additionalClaims)
@@ -59,32 +62,53 @@ namespace Shared.Services.Security
             return tokenHandler.WriteToken(token);
         }
 
-        public ClaimsPrincipal? ValidateToken(string token)
+        public Dictionary<string, string>? ValidateToken(string token)
         {
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var key = Encoding.UTF8.GetBytes(_key);
+                var key = Encoding.ASCII.GetBytes(_secretKey);
 
-                var validationParameters = new TokenValidationParameters
+                tokenHandler.ValidateToken(token, new TokenValidationParameters
                 {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = _issuer,
-                    ValidAudience = _audience,
                     IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ClockSkew = TimeSpan.FromMinutes(5)
-                };
+                    ValidateIssuer = true,
+                    ValidIssuer = _issuer,
+                    ValidateAudience = true,
+                    ValidAudience = _audience,
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero
+                }, out SecurityToken validatedToken);
 
-                var principal = tokenHandler.ValidateToken(token, validationParameters, out _);
-                return principal;
+                var jwtToken = (JwtSecurityToken)validatedToken;
+                var claims = new Dictionary<string, string>();
+
+                foreach (var claim in jwtToken.Claims)
+                {
+                    claims[claim.Type] = claim.Value;
+                }
+
+                return claims;
             }
             catch
             {
                 return null;
             }
+        }
+
+        public int? GetUserIdFromToken(string token)
+        {
+            var claims = ValidateToken(token);
+            return claims != null && claims.TryGetValue(ClaimTypes.NameIdentifier, out var userIdStr) && int.TryParse(userIdStr, out var userId)
+                ? userId : null;
+        }
+
+        public UserRole? GetUserRoleFromToken(string token)
+        {
+            var claims = ValidateToken(token);
+            return claims != null && claims.TryGetValue("role", out var roleStr) && int.TryParse(roleStr, out var roleInt)
+                ? (UserRole)roleInt : null;
         }
 
         public bool IsTokenExpired(string token)
@@ -92,85 +116,13 @@ namespace Shared.Services.Security
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var jwt = tokenHandler.ReadJwtToken(token);
-                return jwt.ValidTo < DateTime.UtcNow;
+                var jwtToken = tokenHandler.ReadJwtToken(token);
+                return jwtToken.ValidTo <= DateTime.UtcNow;
             }
             catch
             {
                 return true;
             }
-        }
-
-        public int? GetUserIdFromToken(string token)
-        {
-            try
-            {
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var jwt = tokenHandler.ReadJwtToken(token);
-                var userIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
-                
-                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out var userId))
-                {
-                    return userId;
-                }
-                
-                return null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        public string? GetEmailFromToken(string token)
-        {
-            try
-            {
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var jwt = tokenHandler.ReadJwtToken(token);
-                var emailClaim = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
-                
-                return emailClaim?.Value;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        // Métodos adicionales para compatibilidad con EmployeeDto (mantener funcionalidad extendida)
-        public async Task<string> GenerateTokenAsync(Shared.Models.DTOs.Employee.EmployeeDto employee)
-        {
-            var additionalClaims = new Dictionary<string, string>
-            {
-                ["employee_code"] = employee.EmployeeCode,
-                ["company_id"] = employee.CompanyId.ToString(),
-                ["full_name"] = employee.FullName
-            };
-
-            if (employee.DepartmentId.HasValue)
-                additionalClaims["department_id"] = employee.DepartmentId.Value.ToString();
-
-            if (!string.IsNullOrEmpty(employee.DepartmentName))
-                additionalClaims["department_name"] = employee.DepartmentName;
-
-            return await Task.FromResult(GenerateToken(employee.Id, employee.Email, employee.Role.ToString(), additionalClaims));
-        }
-
-        public async Task<ClaimsPrincipal?> ValidateTokenAsync(string token)
-        {
-            return await Task.FromResult(ValidateToken(token));
-        }
-
-        public async Task<bool> IsTokenValidAsync(string token)
-        {
-            var principal = await ValidateTokenAsync(token);
-            return principal != null && !IsTokenExpired(token);
-        }
-
-        public string GenerateRefreshToken()
-        {
-            return Guid.NewGuid().ToString();
         }
     }
 }

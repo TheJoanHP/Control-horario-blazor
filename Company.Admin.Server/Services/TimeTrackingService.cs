@@ -153,9 +153,10 @@ namespace Company.Admin.Server.Services
         public async Task<TimeRecord?> GetLastOpenRecordAsync(int employeeId)
         {
             return await _context.TimeRecords
-                .Where(tr => tr.EmployeeId == employeeId)
+                .Where(tr => tr.EmployeeId == employeeId &&
+                            (tr.Type == RecordType.CheckIn || tr.Type == RecordType.BreakStart))
                 .OrderByDescending(tr => tr.CreatedAt)
-                .FirstOrDefaultAsync(tr => tr.Type == RecordType.CheckIn || tr.Type == RecordType.BreakStart);
+                .FirstOrDefaultAsync();
         }
 
         public async Task<TimeRecord?> GetLastRecordAsync(int employeeId)

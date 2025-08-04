@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Npgsql;
+using Microsoft.Extensions.Logging;
+using Shared.Models.Enums;
 
 namespace Database.Setup.Tools
 {
@@ -12,11 +14,13 @@ namespace Database.Setup.Tools
     {
         private readonly string _connectionString;
         private readonly string _scriptsPath;
+        private readonly ILogger<TenantCreator>? _logger;
 
-        public TenantCreator(string connectionString, string scriptsPath = "Scripts")
+        public TenantCreator(string connectionString, string? scriptsPath = null, ILogger<TenantCreator>? logger = null)
         {
             _connectionString = connectionString;
-            _scriptsPath = scriptsPath;
+            _scriptsPath = scriptsPath ?? "Scripts";
+            _logger = logger;
         }
 
         /// <summary>
@@ -28,8 +32,8 @@ namespace Database.Setup.Tools
         /// <param name="adminPassword">Contraseña del administrador</param>
         public async Task CreateTenantAsync(
             string tenantId, 
-            string companyName = null, 
-            string adminEmail = null, 
+            string? companyName = null, 
+            string? adminEmail = null, 
             string adminPassword = "admin123")
         {
             if (string.IsNullOrEmpty(tenantId))
@@ -66,25 +70,427 @@ namespace Database.Setup.Tools
                 await SeedTenantDataAsync(tenantDbName, tenantId, companyName, adminEmail, adminPassword);
 
                 Console.WriteLine("✅ ¡Tenant creado exitosamente!");
-                Console.WriteLine("=====================================");
-                Console.WriteLine("🔑 Credenciales de acceso:");
-                Console.WriteLine($"   URL: https://{tenantId}.tudominio.com");
-                Console.WriteLine($"   Email: {adminEmail}");
-                Console.WriteLine($"   Contraseña: {adminPassword}");
-                Console.WriteLine("=====================================");
+                Console.WriteLine($"📊 Database: {tenantDbName}");
+                Console.WriteLine($"🔗 URL: https://{tenantId}.tudominio.com");
+                Console.WriteLine($"👤 Admin: {adminEmail} / {adminPassword}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error al crear tenant {tenantId}: {ex.Message}");
-                
-                // Intentar limpiar en caso de error
-                await CleanupFailedTenantAsync(tenantId);
+                Console.WriteLine($"❌ Error creando tenant: {ex.Message}");
+                _logger?.LogError(ex, "Error creando tenant {TenantId}", tenantId);
                 throw;
             }
         }
 
         /// <summary>
-        /// Elimina un tenant específico
+        /// Sanitiza el ID del tenant para que sea válido como nombre de BD
+        /// </summary>
+        private string SanitizeTenantId(string tenantId)
+        {
+            // Convertir a minúsculas y quitar caracteres especiales
+            var sanitized = tenantId.ToLowerInvariant()
+                .Replace(" ", "")
+                .Replace("-", "_")
+                .Replace(".", "_");
+
+            // Solo permitir letras, números y guiones bajos
+            var result = "";
+            foreach (char c in sanitized)
+            {
+                if (char.IsLetterOrDigit(c) || c == '_')
+                {
+                    result += c;
+                }
+            }
+
+            // Asegurar que empiece con letra
+            if (result.Length > 0 && !char.IsLetter(result[0]))
+            {
+                result = "t" + result;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Validar que el tenant no existe ya
+        /// </summary>
+        private async Task ValidateTenantNotExistsAsync(string tenantId)
+        {
+            var centralConnectionString = _connectionString.Replace("Database=postgres", "Database=SphereTimeControl_Central");
+            
+            try
+            {
+                using var connection = new NpgsqlConnection(centralConnectionString);
+                await connection.OpenAsync();
+
+                var query = @"SELECT COUNT(*) FROM ""Tenants"" WHERE ""Code"" = @tenantId OR ""Subdomain"" = @tenantId";
+                using var cmd = new NpgsqlCommand(query, connection);
+                cmd.Parameters.AddWithValue("tenantId", tenantId);
+
+                var count = (long)(await cmd.ExecuteScalarAsync() ?? 0);
+                
+                if (count > 0)
+                {
+                    throw new InvalidOperationException($"El tenant '{tenantId}' ya existe");
+                }
+            }
+            catch (NpgsqlException ex) when (ex.SqlState == "3D000") // Database does not exist
+            {
+                // Si la BD central no existe, está bien, la crearemos después
+                _logger?.LogWarning("Base de datos central no existe, se creará automáticamente");
+            }
+        }
+
+        /// <summary>
+        /// Crear registro del tenant en la base de datos central
+        /// </summary>
+        private async Task CreateTenantRecordAsync(string tenantId, string companyName, string adminEmail)
+        {
+            var centralConnectionString = _connectionString.Replace("Database=postgres", "Database=SphereTimeControl_Central");
+            
+            using var connection = new NpgsqlConnection(centralConnectionString);
+            await connection.OpenAsync();
+
+            var insertQuery = @"
+                INSERT INTO ""Tenants"" (
+                    ""Code"", ""Name"", ""Subdomain"", ""ContactEmail"", ""DatabaseName"", 
+                    ""Active"", ""LicenseType"", ""CreatedAt"", ""UpdatedAt""
+                )
+                VALUES (
+                    @code, @name, @subdomain, @contactEmail, @databaseName, 
+                    @active, @licenseType, @createdAt, @updatedAt
+                )
+                RETURNING ""Id""";
+
+            using var cmd = new NpgsqlCommand(insertQuery, connection);
+            cmd.Parameters.AddWithValue("code", tenantId);
+            cmd.Parameters.AddWithValue("name", companyName);
+            cmd.Parameters.AddWithValue("subdomain", tenantId);
+            cmd.Parameters.AddWithValue("contactEmail", adminEmail);
+            cmd.Parameters.AddWithValue("databaseName", $"SphereTimeControl_{tenantId}");
+            cmd.Parameters.AddWithValue("active", true);
+            cmd.Parameters.AddWithValue("licenseType", (int)LicenseType.Trial);
+            cmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+            cmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+            var tenantDbId = await cmd.ExecuteScalarAsync();
+            
+            // Crear licencia por defecto para el tenant
+            await CreateDefaultLicenseAsync(connection, Convert.ToInt32(tenantDbId));
+            
+            Console.WriteLine($"📝 Tenant registrado en BD central con ID: {tenantDbId}");
+        }
+
+        /// <summary>
+        /// Crear licencia por defecto para el tenant
+        /// </summary>
+        private async Task CreateDefaultLicenseAsync(NpgsqlConnection connection, int tenantId)
+        {
+            var insertQuery = @"
+                INSERT INTO ""Licenses"" (
+                    ""TenantId"", ""LicenseType"", ""MaxEmployees"", ""HasReports"", ""HasAPI"", ""HasMobileApp"", 
+                    ""MonthlyPrice"", ""StartDate"", ""EndDate"", ""Active"", ""CreatedAt"", ""UpdatedAt""
+                )
+                VALUES (
+                    @tenantId, @licenseType, @maxEmployees, @hasReports, @hasAPI, @hasMobileApp, 
+                    @monthlyPrice, @startDate, @endDate, @active, @createdAt, @updatedAt
+                )";
+
+            using var cmd = new NpgsqlCommand(insertQuery, connection);
+            cmd.Parameters.AddWithValue("tenantId", tenantId);
+            cmd.Parameters.AddWithValue("licenseType", (int)LicenseType.Trial);
+            cmd.Parameters.AddWithValue("maxEmployees", 5);
+            cmd.Parameters.AddWithValue("hasReports", false);
+            cmd.Parameters.AddWithValue("hasAPI", false);
+            cmd.Parameters.AddWithValue("hasMobileApp", true);
+            cmd.Parameters.AddWithValue("monthlyPrice", 0m);
+            cmd.Parameters.AddWithValue("startDate", DateTime.UtcNow);
+            cmd.Parameters.AddWithValue("endDate", DateTime.UtcNow.AddDays(30)); // 30 días de trial
+            cmd.Parameters.AddWithValue("active", true);
+            cmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+            cmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+            await cmd.ExecuteNonQueryAsync();
+            
+            Console.WriteLine("📜 Licencia trial creada (30 días, 5 empleados)");
+        }
+
+        /// <summary>
+        /// Crear la base de datos del tenant
+        /// </summary>
+        private async Task CreateTenantDatabaseAsync(string databaseName)
+        {
+            using var connection = new NpgsqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // Verificar si la BD ya existe
+            var checkQuery = @"SELECT 1 FROM pg_database WHERE datname = @databaseName";
+            using var checkCmd = new NpgsqlCommand(checkQuery, connection);
+            checkCmd.Parameters.AddWithValue("databaseName", databaseName);
+            
+            var exists = await checkCmd.ExecuteScalarAsync() != null;
+            
+            if (!exists)
+            {
+                var createQuery = $@"CREATE DATABASE ""{databaseName}"" WITH ENCODING = 'UTF8'";
+                using var createCmd = new NpgsqlCommand(createQuery, connection);
+                await createCmd.ExecuteNonQueryAsync();
+                
+                Console.WriteLine($"🗄️ Base de datos creada: {databaseName}");
+            }
+            else
+            {
+                Console.WriteLine($"🗄️ Base de datos ya existe: {databaseName}");
+            }
+        }
+
+        /// <summary>
+        /// Crear estructura de tablas en la BD del tenant
+        /// </summary>
+        private async Task CreateTenantStructureAsync(string databaseName)
+        {
+            var tenantConnectionString = _connectionString.Replace("Database=postgres", $"Database={databaseName}");
+            
+            using var connection = new NpgsqlConnection(tenantConnectionString);
+            await connection.OpenAsync();
+
+            // Leer y ejecutar script de estructura
+            var scriptPath = Path.Combine(_scriptsPath, "02-CreateTenantTemplate.sql");
+            
+            if (File.Exists(scriptPath))
+            {
+                var script = await File.ReadAllTextAsync(scriptPath);
+                // Reemplazar placeholder si existe
+                script = script.Replace("{TENANT_ID}", databaseName.Replace("SphereTimeControl_", ""));
+                
+                using var cmd = new NpgsqlCommand(script, connection);
+                await cmd.ExecuteNonQueryAsync();
+                
+                Console.WriteLine("🏗️ Estructura de tablas creada");
+            }
+            else
+            {
+                // Crear estructura básica si no hay script
+                await CreateBasicTenantStructureAsync(connection);
+            }
+        }
+
+        /// <summary>
+        /// Crear estructura básica si no hay script disponible
+        /// </summary>
+        private async Task CreateBasicTenantStructureAsync(NpgsqlConnection connection)
+        {
+            var createTablesScript = @"
+                -- Extensiones
+                CREATE EXTENSION IF NOT EXISTS ""uuid-ossp"";
+                CREATE EXTENSION IF NOT EXISTS ""pgcrypto"";
+
+                -- Tabla Companies
+                CREATE TABLE IF NOT EXISTS ""Companies"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""Name"" VARCHAR(100) NOT NULL,
+                    ""TaxId"" VARCHAR(20),
+                    ""Address"" VARCHAR(255),
+                    ""Phone"" VARCHAR(20),
+                    ""Email"" VARCHAR(255),
+                    ""Active"" BOOLEAN NOT NULL DEFAULT true,
+                    ""WorkStartTime"" TIME NOT NULL DEFAULT '09:00:00',
+                    ""WorkEndTime"" TIME NOT NULL DEFAULT '17:00:00',
+                    ""ToleranceMinutes"" INTEGER NOT NULL DEFAULT 15,
+                    ""VacationDaysPerYear"" INTEGER NOT NULL DEFAULT 22,
+                    ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+                    ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+
+                -- Tabla Departments
+                CREATE TABLE IF NOT EXISTS ""Departments"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""CompanyId"" INTEGER NOT NULL REFERENCES ""Companies""(""Id""),
+                    ""Name"" VARCHAR(100) NOT NULL,
+                    ""Description"" VARCHAR(255),
+                    ""Active"" BOOLEAN NOT NULL DEFAULT true,
+                    ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+                    ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+
+                -- Tabla Employees
+                CREATE TABLE IF NOT EXISTS ""Employees"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""CompanyId"" INTEGER NOT NULL REFERENCES ""Companies""(""Id""),
+                    ""DepartmentId"" INTEGER REFERENCES ""Departments""(""Id""),
+                    ""FirstName"" VARCHAR(50) NOT NULL,
+                    ""LastName"" VARCHAR(50) NOT NULL,
+                    ""Email"" VARCHAR(255) NOT NULL UNIQUE,
+                    ""Phone"" VARCHAR(20),
+                    ""EmployeeCode"" VARCHAR(20) NOT NULL UNIQUE,
+                    ""Position"" VARCHAR(100),
+                    ""Role"" INTEGER NOT NULL DEFAULT 3,
+                    ""PasswordHash"" VARCHAR(255) NOT NULL,
+                    ""HireDate"" DATE,
+                    ""Salary"" DECIMAL(10,2),
+                    ""Active"" BOOLEAN NOT NULL DEFAULT true,
+                    ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+                    ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+
+                -- Tabla TimeRecords
+                CREATE TABLE IF NOT EXISTS ""TimeRecords"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""EmployeeId"" INTEGER NOT NULL REFERENCES ""Employees""(""Id""),
+                    ""RecordType"" INTEGER NOT NULL, -- 0=CheckIn, 1=CheckOut, 2=BreakStart, 3=BreakEnd
+                    ""RecordDateTime"" TIMESTAMP NOT NULL,
+                    ""Location"" VARCHAR(255),
+                    ""Notes"" VARCHAR(500),
+                    ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+
+                -- Tabla WorkSchedules
+                CREATE TABLE IF NOT EXISTS ""WorkSchedules"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""EmployeeId"" INTEGER NOT NULL REFERENCES ""Employees""(""Id""),
+                    ""DayOfWeek"" INTEGER NOT NULL, -- 0=Sunday, 1=Monday, etc.
+                    ""StartTime"" TIME NOT NULL,
+                    ""EndTime"" TIME NOT NULL,
+                    ""IsWorkingDay"" BOOLEAN NOT NULL DEFAULT true,
+                    ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+                    ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+
+                -- Tabla VacationRequests
+                CREATE TABLE IF NOT EXISTS ""VacationRequests"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""EmployeeId"" INTEGER NOT NULL REFERENCES ""Employees""(""Id""),
+                    ""StartDate"" DATE NOT NULL,
+                    ""EndDate"" DATE NOT NULL,
+                    ""DaysRequested"" INTEGER NOT NULL,
+                    ""Reason"" VARCHAR(500),
+                    ""Status"" INTEGER NOT NULL DEFAULT 0, -- 0=Pending, 1=Approved, 2=Rejected
+                    ""ApprovedById"" INTEGER REFERENCES ""Employees""(""Id""),
+                    ""ApprovedAt"" TIMESTAMP,
+                    ""Comments"" VARCHAR(500),
+                    ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+                    ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+
+                -- Índices
+                CREATE INDEX IF NOT EXISTS ""IX_Companies_Active"" ON ""Companies"" (""Active"");
+                CREATE INDEX IF NOT EXISTS ""IX_Departments_CompanyId"" ON ""Departments"" (""CompanyId"");
+                CREATE INDEX IF NOT EXISTS ""IX_Employees_CompanyId"" ON ""Employees"" (""CompanyId"");
+                CREATE INDEX IF NOT EXISTS ""IX_Employees_DepartmentId"" ON ""Employees"" (""DepartmentId"");
+                CREATE INDEX IF NOT EXISTS ""IX_Employees_Email"" ON ""Employees"" (""Email"");
+                CREATE INDEX IF NOT EXISTS ""IX_Employees_EmployeeCode"" ON ""Employees"" (""EmployeeCode"");
+                CREATE INDEX IF NOT EXISTS ""IX_TimeRecords_EmployeeId"" ON ""TimeRecords"" (""EmployeeId"");
+                CREATE INDEX IF NOT EXISTS ""IX_TimeRecords_RecordDateTime"" ON ""TimeRecords"" (""RecordDateTime"");
+                CREATE INDEX IF NOT EXISTS ""IX_WorkSchedules_EmployeeId"" ON ""WorkSchedules"" (""EmployeeId"");
+                CREATE INDEX IF NOT EXISTS ""IX_VacationRequests_EmployeeId"" ON ""VacationRequests"" (""EmployeeId"");
+                CREATE INDEX IF NOT EXISTS ""IX_VacationRequests_Status"" ON ""VacationRequests"" (""Status"");
+            ";
+
+            using var cmd = new NpgsqlCommand(createTablesScript, connection);
+            await cmd.ExecuteNonQueryAsync();
+            
+            Console.WriteLine("🏗️ Estructura básica de tablas creada");
+        }
+
+        /// <summary>
+        /// Sembrar datos iniciales en el tenant
+        /// </summary>
+        private async Task SeedTenantDataAsync(string databaseName, string tenantId, string companyName, string adminEmail, string adminPassword)
+        {
+            var tenantConnectionString = _connectionString.Replace("Database=postgres", $"Database={databaseName}");
+            
+            using var connection = new NpgsqlConnection(tenantConnectionString);
+            await connection.OpenAsync();
+
+            // Leer y ejecutar script de datos si existe
+            var scriptPath = Path.Combine(_scriptsPath, "03-SeedTenantData.sql");
+            
+            if (File.Exists(scriptPath))
+            {
+                var script = await File.ReadAllTextAsync(scriptPath);
+                // Reemplazar placeholders
+                script = script.Replace("{COMPANY_NAME}", companyName);
+                script = script.Replace("{ADMIN_EMAIL}", adminEmail);
+                script = script.Replace("{ADMIN_PASSWORD_HASH}", BCrypt.Net.BCrypt.HashPassword(adminPassword));
+                
+                using var cmd = new NpgsqlCommand(script, connection);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            else
+            {
+                // Crear datos básicos si no hay script
+                await CreateBasicTenantDataAsync(connection, companyName, adminEmail, adminPassword);
+            }
+            
+            Console.WriteLine("🌱 Datos iniciales sembrados");
+        }
+
+        /// <summary>
+        /// Crear datos básicos del tenant si no hay script disponible
+        /// </summary>
+        private async Task CreateBasicTenantDataAsync(NpgsqlConnection connection, string companyName, string adminEmail, string adminPassword)
+        {
+            // Crear empresa
+            var insertCompanyQuery = @"
+                INSERT INTO ""Companies"" (""Name"", ""Email"", ""Active"", ""CreatedAt"", ""UpdatedAt"")
+                VALUES (@name, @email, @active, @createdAt, @updatedAt)
+                RETURNING ""Id""";
+
+            using var companyCmd = new NpgsqlCommand(insertCompanyQuery, connection);
+            companyCmd.Parameters.AddWithValue("name", companyName);
+            companyCmd.Parameters.AddWithValue("email", adminEmail);
+            companyCmd.Parameters.AddWithValue("active", true);
+            companyCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+            companyCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+            var companyId = Convert.ToInt32(await companyCmd.ExecuteScalarAsync());
+
+            // Crear departamento por defecto
+            var insertDeptQuery = @"
+                INSERT INTO ""Departments"" (""CompanyId"", ""Name"", ""Description"", ""Active"", ""CreatedAt"", ""UpdatedAt"")
+                VALUES (@companyId, @name, @description, @active, @createdAt, @updatedAt)
+                RETURNING ""Id""";
+
+            using var deptCmd = new NpgsqlCommand(insertDeptQuery, connection);
+            deptCmd.Parameters.AddWithValue("companyId", companyId);
+            deptCmd.Parameters.AddWithValue("name", "Administración");
+            deptCmd.Parameters.AddWithValue("description", "Departamento de administración");
+            deptCmd.Parameters.AddWithValue("active", true);
+            deptCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+            deptCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+            var deptId = Convert.ToInt32(await deptCmd.ExecuteScalarAsync());
+
+            // Crear administrador
+            var insertAdminQuery = @"
+                INSERT INTO ""Employees"" (
+                    ""CompanyId"", ""DepartmentId"", ""FirstName"", ""LastName"", ""Email"", 
+                    ""EmployeeCode"", ""Role"", ""PasswordHash"", ""Active"", ""CreatedAt"", ""UpdatedAt""
+                )
+                VALUES (
+                    @companyId, @deptId, @firstName, @lastName, @email, 
+                    @employeeCode, @role, @passwordHash, @active, @createdAt, @updatedAt
+                )";
+
+            using var adminCmd = new NpgsqlCommand(insertAdminQuery, connection);
+            adminCmd.Parameters.AddWithValue("companyId", companyId);
+            adminCmd.Parameters.AddWithValue("deptId", deptId);
+            adminCmd.Parameters.AddWithValue("firstName", "Admin");
+            adminCmd.Parameters.AddWithValue("lastName", "User");
+            adminCmd.Parameters.AddWithValue("email", adminEmail);
+            adminCmd.Parameters.AddWithValue("employeeCode", "ADMIN001");
+            adminCmd.Parameters.AddWithValue("role", (int)UserRole.CompanyAdmin);
+            adminCmd.Parameters.AddWithValue("passwordHash", BCrypt.Net.BCrypt.HashPassword(adminPassword));
+            adminCmd.Parameters.AddWithValue("active", true);
+            adminCmd.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
+            adminCmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
+
+            await adminCmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Eliminar un tenant completamente
         /// </summary>
         public async Task DeleteTenantAsync(string tenantId)
         {
@@ -92,443 +498,112 @@ namespace Database.Setup.Tools
                 throw new ArgumentException("El ID del tenant es requerido", nameof(tenantId));
 
             tenantId = SanitizeTenantId(tenantId);
+            var databaseName = $"SphereTimeControl_{tenantId}";
 
-            Console.WriteLine($"🗑️  Eliminando tenant: {tenantId}");
+            Console.WriteLine($"🗑️ Eliminando tenant: {tenantId}");
 
             try
             {
-                // 1. Eliminar BD del tenant
-                var tenantDbName = $"SphereTimeControl_{tenantId}";
-                await DropTenantDatabaseAsync(tenantDbName);
+                // 1. Eliminar base de datos del tenant
+                using var connection = new NpgsqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var dropQuery = $@"DROP DATABASE IF EXISTS ""{databaseName}""";
+                using var dropCmd = new NpgsqlCommand(dropQuery, connection);
+                await dropCmd.ExecuteNonQueryAsync();
+
+                Console.WriteLine($"🗄️ Base de datos eliminada: {databaseName}");
 
                 // 2. Eliminar registro de la BD central
-                await DeleteTenantRecordAsync(tenantId);
+                var centralConnectionString = _connectionString.Replace("Database=postgres", "Database=SphereTimeControl_Central");
+                
+                using var centralConnection = new NpgsqlConnection(centralConnectionString);
+                await centralConnection.OpenAsync();
 
-                Console.WriteLine($"✅ Tenant {tenantId} eliminado exitosamente");
+                var deleteQuery = @"DELETE FROM ""Tenants"" WHERE ""Code"" = @tenantId";
+                using var deleteCmd = new NpgsqlCommand(deleteQuery, centralConnection);
+                deleteCmd.Parameters.AddWithValue("tenantId", tenantId);
+
+                var deleted = await deleteCmd.ExecuteNonQueryAsync();
+                
+                if (deleted > 0)
+                {
+                    Console.WriteLine("📝 Registro eliminado de BD central");
+                    Console.WriteLine("✅ Tenant eliminado exitosamente");
+                }
+                else
+                {
+                    Console.WriteLine("⚠️ No se encontró el tenant en la BD central");
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error al eliminar tenant {tenantId}: {ex.Message}");
+                Console.WriteLine($"❌ Error eliminando tenant: {ex.Message}");
+                _logger?.LogError(ex, "Error eliminando tenant {TenantId}", tenantId);
                 throw;
             }
         }
 
         /// <summary>
-        /// Lista todos los tenants existentes
+        /// Listar todos los tenants existentes
         /// </summary>
         public async Task ListTenantsAsync()
         {
-            Console.WriteLine("🏢 Listado de Tenants:");
-            Console.WriteLine("=====================");
-
+            var centralConnectionString = _connectionString.Replace("Database=postgres", "Database=SphereTimeControl_Central");
+            
             try
             {
-                var centralConnectionString = GetCentralConnectionString();
-
                 using var connection = new NpgsqlConnection(centralConnectionString);
                 await connection.OpenAsync();
 
-                var command = new NpgsqlCommand(@"
-                    SELECT Id, CompanyName, AdminEmail, CreatedAt, IsActive
-                    FROM Tenants 
-                    ORDER BY CreatedAt DESC", connection);
+                var query = @"
+                    SELECT t.""Code"", t.""Name"", t.""ContactEmail"", t.""Active"", 
+                           l.""LicenseType"", l.""MaxEmployees"", l.""EndDate""
+                    FROM ""Tenants"" t
+                    LEFT JOIN ""Licenses"" l ON t.""Id"" = l.""TenantId""
+                    ORDER BY t.""CreatedAt""";
 
-                using var reader = await command.ExecuteReaderAsync();
+                using var cmd = new NpgsqlCommand(query, connection);
+                using var reader = await cmd.ExecuteReaderAsync();
 
-                if (!reader.HasRows)
-                {
-                    Console.WriteLine("❌ No hay tenants configurados");
-                    return;
-                }
+                Console.WriteLine("\n📋 Tenants registrados:");
+                Console.WriteLine("┌──────────────┬────────────────────────┬───────────────────────────┬────────┬─────────┬──────────┬────────────┐");
+                Console.WriteLine("│ Code         │ Name                   │ Email                     │ Active │ License │ Employees│ Expires    │");
+                Console.WriteLine("├──────────────┼────────────────────────┼───────────────────────────┼────────┼─────────┼──────────┼────────────┤");
 
+                var hasResults = false;
                 while (await reader.ReadAsync())
                 {
-                    var id = reader.GetString("Id");
-                    var companyName = reader.GetString("CompanyName");
-                    var adminEmail = reader.GetString("AdminEmail");
-                    var createdAt = reader.GetDateTime("CreatedAt");
-                    var isActive = reader.GetBoolean("IsActive");
+                    hasResults = true;
+                    var code = reader.GetString(0).PadRight(12);
+                    var name = reader.GetString(1).Length > 22 ? reader.GetString(1).Substring(0, 19) + "..." : reader.GetString(1).PadRight(22);
+                    var email = reader.GetString(2).Length > 25 ? reader.GetString(2).Substring(0, 22) + "..." : reader.GetString(2).PadRight(25);
+                    var active = (reader.GetBoolean(3) ? "✅" : "❌").PadRight(6);
+                    var license = (!reader.IsDBNull(4) ? ((LicenseType)reader.GetInt32(4)).ToString() : "N/A").PadRight(7);
+                    var employees = (!reader.IsDBNull(5) ? reader.GetInt32(5).ToString() : "N/A").PadRight(8);
+                    var expires = (!reader.IsDBNull(6) ? reader.GetDateTime(6).ToString("yyyy-MM-dd") : "N/A").PadRight(10);
 
-                    var status = isActive ? "🟢 Activo" : "🔴 Inactivo";
-                    
-                    Console.WriteLine($"ID: {id}");
-                    Console.WriteLine($"   Empresa: {companyName}");
-                    Console.WriteLine($"   Admin: {adminEmail}");
-                    Console.WriteLine($"   Estado: {status}");
-                    Console.WriteLine($"   Creado: {createdAt:yyyy-MM-dd HH:mm}");
-                    Console.WriteLine($"   URL: https://{id}.tudominio.com");
-                    Console.WriteLine();
+                    Console.WriteLine($"│ {code} │ {name} │ {email} │ {active} │ {license} │ {employees} │ {expires} │");
+                }
+
+                Console.WriteLine("└──────────────┴────────────────────────┴───────────────────────────┴────────┴─────────┴──────────┴────────────┘");
+
+                if (!hasResults)
+                {
+                    Console.WriteLine("│                                    No hay tenants registrados                                    │");
+                    Console.WriteLine("└──────────────────────────────────────────────────────────────────────────────────────────────┘");
                 }
             }
-            catch (Exception ex)
+            catch (NpgsqlException ex) when (ex.SqlState == "3D000")
             {
-                Console.WriteLine($"❌ Error al listar tenants: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Sanitiza el ID del tenant
-        /// </summary>
-        private string SanitizeTenantId(string tenantId)
-        {
-            return tenantId.ToLower()
-                          .Replace(" ", "")
-                          .Replace("-", "")
-                          .Replace("_", "");
-        }
-
-        /// <summary>
-        /// Valida que el tenant no exista ya
-        /// </summary>
-        private async Task ValidateTenantNotExistsAsync(string tenantId)
-        {
-            var centralConnectionString = GetCentralConnectionString();
-
-            using var connection = new NpgsqlConnection(centralConnectionString);
-            await connection.OpenAsync();
-
-            var command = new NpgsqlCommand(
-                "SELECT COUNT(*) FROM Tenants WHERE Id = @tenantId", 
-                connection);
-            command.Parameters.AddWithValue("tenantId", tenantId);
-
-            var count = Convert.ToInt32(await command.ExecuteScalarAsync());
-
-            if (count > 0)
-            {
-                throw new InvalidOperationException($"El tenant '{tenantId}' ya existe");
-            }
-        }
-
-        /// <summary>
-        /// Crea el registro del tenant en la BD central
-        /// </summary>
-        private async Task CreateTenantRecordAsync(string tenantId, string companyName, string adminEmail)
-        {
-            Console.WriteLine("📝 Registrando tenant en la BD central...");
-
-            var centralConnectionString = GetCentralConnectionString();
-
-            using var connection = new NpgsqlConnection(centralConnectionString);
-            await connection.OpenAsync();
-
-            var command = new NpgsqlCommand(@"
-                INSERT INTO Tenants (Id, CompanyName, AdminEmail, DatabaseName, IsActive, CreatedAt, LicenseType)
-                VALUES (@tenantId, @companyName, @adminEmail, @databaseName, @isActive, @createdAt, @licenseType)", 
-                connection);
-
-            command.Parameters.AddWithValue("tenantId", tenantId);
-            command.Parameters.AddWithValue("companyName", companyName);
-            command.Parameters.AddWithValue("adminEmail", adminEmail);
-            command.Parameters.AddWithValue("databaseName", $"SphereTimeControl_{tenantId}");
-            command.Parameters.AddWithValue("isActive", true);
-            command.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
-            command.Parameters.AddWithValue("licenseType", "Trial"); // Licencia de prueba por defecto
-
-            await command.ExecuteNonQueryAsync();
-
-            Console.WriteLine("✅ Tenant registrado en BD central");
-        }
-
-        /// <summary>
-        /// Crea la base de datos física del tenant
-        /// </summary>
-        private async Task CreateTenantDatabaseAsync(string databaseName)
-        {
-            Console.WriteLine($"📦 Creando base de datos: {databaseName}");
-
-            var masterConnectionString = GetMasterConnectionString();
-
-            using var connection = new NpgsqlConnection(masterConnectionString);
-            await connection.OpenAsync();
-
-            // Verificar si ya existe
-            var checkCommand = new NpgsqlCommand(
-                "SELECT 1 FROM pg_database WHERE datname = @dbname", 
-                connection);
-            checkCommand.Parameters.AddWithValue("dbname", databaseName);
-
-            var exists = await checkCommand.ExecuteScalarAsync();
-
-            if (exists != null)
-            {
-                throw new InvalidOperationException($"La base de datos {databaseName} ya existe");
-            }
-
-            // Crear la base de datos
-            var createCommand = new NpgsqlCommand($@"
-                CREATE DATABASE ""{databaseName}""
-                WITH OWNER = postgres
-                ENCODING = 'UTF8'
-                LC_COLLATE = 'en_US.utf8'
-                LC_CTYPE = 'en_US.utf8'
-                TABLESPACE = pg_default
-                CONNECTION LIMIT = -1", 
-                connection);
-
-            await createCommand.ExecuteNonQueryAsync();
-
-            Console.WriteLine($"✅ Base de datos {databaseName} creada");
-        }
-
-        /// <summary>
-        /// Crea la estructura de tablas del tenant
-        /// </summary>
-        private async Task CreateTenantStructureAsync(string databaseName)
-        {
-            Console.WriteLine($"🏗️  Creando estructura de tablas...");
-
-            var scriptPath = Path.Combine(_scriptsPath, "02-CreateTenantTemplate.sql");
-            if (!File.Exists(scriptPath))
-            {
-                throw new FileNotFoundException($"Script no encontrado: {scriptPath}");
-            }
-
-            var script = await File.ReadAllTextAsync(scriptPath);
-            var tenantConnectionString = GetTenantConnectionString(databaseName);
-
-            using var connection = new NpgsqlConnection(tenantConnectionString);
-            await connection.OpenAsync();
-
-            using var command = new NpgsqlCommand(script, connection);
-            command.CommandTimeout = 300;
-
-            await command.ExecuteNonQueryAsync();
-
-            Console.WriteLine("✅ Estructura de tablas creada");
-        }
-
-        /// <summary>
-        /// Inserta datos iniciales del tenant
-        /// </summary>
-        private async Task SeedTenantDataAsync(string databaseName, string tenantId, string companyName, string adminEmail, string adminPassword)
-        {
-            Console.WriteLine("🌱 Insertando datos iniciales...");
-
-            var tenantConnectionString = GetTenantConnectionString(databaseName);
-
-            using var connection = new NpgsqlConnection(tenantConnectionString);
-            await connection.OpenAsync();
-
-            // 1. Crear la empresa
-            var createCompanyCommand = new NpgsqlCommand(@"
-                INSERT INTO Companies (Id, Name, TenantId, CreatedAt)
-                VALUES (@id, @name, @tenantId, @createdAt)", connection);
-
-            createCompanyCommand.Parameters.AddWithValue("id", Guid.NewGuid());
-            createCompanyCommand.Parameters.AddWithValue("name", companyName);
-            createCompanyCommand.Parameters.AddWithValue("tenantId", tenantId);
-            createCompanyCommand.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
-
-            await createCompanyCommand.ExecuteNonQueryAsync();
-
-            // 2. Crear departamento por defecto
-            var departmentId = Guid.NewGuid();
-            var createDepartmentCommand = new NpgsqlCommand(@"
-                INSERT INTO Departments (Id, Name, Description, CreatedAt)
-                VALUES (@id, @name, @description, @createdAt)", connection);
-
-            createDepartmentCommand.Parameters.AddWithValue("id", departmentId);
-            createDepartmentCommand.Parameters.AddWithValue("name", "Administración");
-            createDepartmentCommand.Parameters.AddWithValue("description", "Departamento administrativo");
-            createDepartmentCommand.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
-
-            await createDepartmentCommand.ExecuteNonQueryAsync();
-
-            // 3. Crear horario por defecto
-            var scheduleId = Guid.NewGuid();
-            var createScheduleCommand = new NpgsqlCommand(@"
-                INSERT INTO WorkSchedules (Id, Name, StartTime, EndTime, BreakDuration, IsDefault, CreatedAt)
-                VALUES (@id, @name, @startTime, @endTime, @breakDuration, @isDefault, @createdAt)", connection);
-
-            createScheduleCommand.Parameters.AddWithValue("id", scheduleId);
-            createScheduleCommand.Parameters.AddWithValue("name", "Horario Estándar");
-            createScheduleCommand.Parameters.AddWithValue("startTime", new TimeSpan(8, 0, 0)); // 8:00 AM
-            createScheduleCommand.Parameters.AddWithValue("endTime", new TimeSpan(17, 0, 0)); // 5:00 PM
-            createScheduleCommand.Parameters.AddWithValue("breakDuration", 60); // 60 minutos
-            createScheduleCommand.Parameters.AddWithValue("isDefault", true);
-            createScheduleCommand.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
-
-            await createScheduleCommand.ExecuteNonQueryAsync();
-
-            // 4. Crear administrador
-            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(adminPassword);
-            var adminId = Guid.NewGuid();
-
-            var createAdminCommand = new NpgsqlCommand(@"
-                INSERT INTO Employees (Id, FirstName, LastName, Email, PasswordHash, Role, DepartmentId, WorkScheduleId, IsActive, CreatedAt)
-                VALUES (@id, @firstName, @lastName, @email, @passwordHash, @role, @departmentId, @workScheduleId, @isActive, @createdAt)", connection);
-
-            createAdminCommand.Parameters.AddWithValue("id", adminId);
-            createAdminCommand.Parameters.AddWithValue("firstName", "Administrador");
-            createAdminCommand.Parameters.AddWithValue("lastName", "Principal");
-            createAdminCommand.Parameters.AddWithValue("email", adminEmail);
-            createAdminCommand.Parameters.AddWithValue("passwordHash", hashedPassword);
-            createAdminCommand.Parameters.AddWithValue("role", "CompanyAdmin");
-            createAdminCommand.Parameters.AddWithValue("departmentId", departmentId);
-            createAdminCommand.Parameters.AddWithValue("workScheduleId", scheduleId);
-            createAdminCommand.Parameters.AddWithValue("isActive", true);
-            createAdminCommand.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
-
-            await createAdminCommand.ExecuteNonQueryAsync();
-
-            // 5. Crear empleados de ejemplo
-            await CreateSampleEmployeesAsync(connection, departmentId, scheduleId);
-
-            Console.WriteLine("✅ Datos iniciales insertados");
-        }
-
-        /// <summary>
-        /// Crea empleados de ejemplo para el tenant
-        /// </summary>
-        private async Task CreateSampleEmployeesAsync(NpgsqlConnection connection, Guid departmentId, Guid scheduleId)
-        {
-            var sampleEmployees = new[]
-            {
-                new { FirstName = "Juan", LastName = "Pérez", Email = "juan.perez@empresa.com" },
-                new { FirstName = "María", LastName = "García", Email = "maria.garcia@empresa.com" },
-                new { FirstName = "Carlos", LastName = "López", Email = "carlos.lopez@empresa.com" },
-                new { FirstName = "Ana", LastName = "Martínez", Email = "ana.martinez@empresa.com" }
-            };
-
-            foreach (var emp in sampleEmployees)
-            {
-                var hashedPassword = BCrypt.Net.BCrypt.HashPassword("123456"); // Contraseña temporal
-
-                var createEmployeeCommand = new NpgsqlCommand(@"
-                    INSERT INTO Employees (Id, FirstName, LastName, Email, PasswordHash, Role, DepartmentId, WorkScheduleId, IsActive, CreatedAt)
-                    VALUES (@id, @firstName, @lastName, @email, @passwordHash, @role, @departmentId, @workScheduleId, @isActive, @createdAt)", connection);
-
-                createEmployeeCommand.Parameters.AddWithValue("id", Guid.NewGuid());
-                createEmployeeCommand.Parameters.AddWithValue("firstName", emp.FirstName);
-                createEmployeeCommand.Parameters.AddWithValue("lastName", emp.LastName);
-                createEmployeeCommand.Parameters.AddWithValue("email", emp.Email);
-                createEmployeeCommand.Parameters.AddWithValue("passwordHash", hashedPassword);
-                createEmployeeCommand.Parameters.AddWithValue("role", "Employee");
-                createEmployeeCommand.Parameters.AddWithValue("departmentId", departmentId);
-                createEmployeeCommand.Parameters.AddWithValue("workScheduleId", scheduleId);
-                createEmployeeCommand.Parameters.AddWithValue("isActive", true);
-                createEmployeeCommand.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
-
-                await createEmployeeCommand.ExecuteNonQueryAsync();
-            }
-
-            Console.WriteLine("✅ Empleados de ejemplo creados");
-        }
-
-        /// <summary>
-        /// Elimina la base de datos del tenant
-        /// </summary>
-        private async Task DropTenantDatabaseAsync(string databaseName)
-        {
-            Console.WriteLine($"🗑️  Eliminando base de datos: {databaseName}");
-
-            var masterConnectionString = GetMasterConnectionString();
-
-            using var connection = new NpgsqlConnection(masterConnectionString);
-            await connection.OpenAsync();
-
-            // Terminar conexiones activas
-            var killConnectionsCommand = new NpgsqlCommand($@"
-                SELECT pg_terminate_backend(pid)
-                FROM pg_stat_activity
-                WHERE datname = '{databaseName}'
-                AND pid <> pg_backend_pid()", connection);
-
-            await killConnectionsCommand.ExecuteNonQueryAsync();
-
-            // Eliminar la base de datos
-            var dropCommand = new NpgsqlCommand($@"DROP DATABASE IF EXISTS ""{databaseName}""", connection);
-            await dropCommand.ExecuteNonQueryAsync();
-
-            Console.WriteLine($"✅ Base de datos {databaseName} eliminada");
-        }
-
-        /// <summary>
-        /// Elimina el registro del tenant de la BD central
-        /// </summary>
-        private async Task DeleteTenantRecordAsync(string tenantId)
-        {
-            Console.WriteLine("🗑️  Eliminando registro del tenant...");
-
-            var centralConnectionString = GetCentralConnectionString();
-
-            using var connection = new NpgsqlConnection(centralConnectionString);
-            await connection.OpenAsync();
-
-            var command = new NpgsqlCommand(
-                "DELETE FROM Tenants WHERE Id = @tenantId", 
-                connection);
-            command.Parameters.AddWithValue("tenantId", tenantId);
-
-            await command.ExecuteNonQueryAsync();
-
-            Console.WriteLine("✅ Registro del tenant eliminado");
-        }
-
-        /// <summary>
-        /// Limpia un tenant que falló durante la creación
-        /// </summary>
-        private async Task CleanupFailedTenantAsync(string tenantId)
-        {
-            Console.WriteLine($"🧹 Limpiando tenant fallido: {tenantId}");
-
-            try
-            {
-                // Intentar eliminar BD del tenant
-                var tenantDbName = $"SphereTimeControl_{tenantId}";
-                await DropTenantDatabaseAsync(tenantDbName);
+                Console.WriteLine("⚠️ La base de datos central no existe. Ejecuta 'setup' primero.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠️  No se pudo limpiar BD del tenant: {ex.Message}");
+                Console.WriteLine($"❌ Error listando tenants: {ex.Message}");
+                _logger?.LogError(ex, "Error listando tenants");
+                throw;
             }
-
-            try
-            {
-                // Intentar eliminar registro central
-                await DeleteTenantRecordAsync(tenantId);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"⚠️  No se pudo limpiar registro central: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Obtiene la cadena de conexión para la BD central
-        /// </summary>
-        private string GetCentralConnectionString()
-        {
-            var builder = new NpgsqlConnectionStringBuilder(_connectionString)
-            {
-                Database = "SphereTimeControl"
-            };
-            return builder.ToString();
-        }
-
-        /// <summary>
-        /// Obtiene la cadena de conexión master (postgres)
-        /// </summary>
-        private string GetMasterConnectionString()
-        {
-            var builder = new NpgsqlConnectionStringBuilder(_connectionString)
-            {
-                Database = "postgres"
-            };
-            return builder.ToString();
-        }
-
-        /// <summary>
-        /// Obtiene la cadena de conexión para un tenant específico
-        /// </summary>
-        private string GetTenantConnectionString(string databaseName)
-        {
-            var builder = new NpgsqlConnectionStringBuilder(_connectionString)
-            {
-                Database = databaseName
-            };
-            return builder.ToString();
         }
     }
 }

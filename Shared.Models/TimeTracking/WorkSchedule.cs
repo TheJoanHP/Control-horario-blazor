@@ -1,54 +1,42 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Shared.Models.Core;
 
 namespace Shared.Models.TimeTracking
 {
+    /// <summary>
+    /// Horario de trabajo de un empleado
+    /// </summary>
+    [Table("WorkSchedules")]
     public class WorkSchedule
     {
+        [Key]
         public int Id { get; set; }
-        
+
+        [Required]
         public int EmployeeId { get; set; }
-        
-        [Required, MaxLength(100)]
-        public string Name { get; set; } = string.Empty;
-        
-        // Horarios por día de la semana (0 = Domingo, 6 = Sábado)
-        public bool MondayEnabled { get; set; } = true;
-        public TimeSpan? MondayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? MondayEnd { get; set; } = new TimeSpan(17, 0, 0);
-        
-        public bool TuesdayEnabled { get; set; } = true;
-        public TimeSpan? TuesdayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? TuesdayEnd { get; set; } = new TimeSpan(17, 0, 0);
-        
-        public bool WednesdayEnabled { get; set; } = true;
-        public TimeSpan? WednesdayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? WednesdayEnd { get; set; } = new TimeSpan(17, 0, 0);
-        
-        public bool ThursdayEnabled { get; set; } = true;
-        public TimeSpan? ThursdayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? ThursdayEnd { get; set; } = new TimeSpan(17, 0, 0);
-        
-        public bool FridayEnabled { get; set; } = true;
-        public TimeSpan? FridayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? FridayEnd { get; set; } = new TimeSpan(17, 0, 0);
-        
-        public bool SaturdayEnabled { get; set; } = false;
-        public TimeSpan? SaturdayStart { get; set; }
-        public TimeSpan? SaturdayEnd { get; set; }
-        
-        public bool SundayEnabled { get; set; } = false;
-        public TimeSpan? SundayStart { get; set; }
-        public TimeSpan? SundayEnd { get; set; }
-        
-        public bool Active { get; set; } = true;
-        
-        public DateTime EffectiveFrom { get; set; } = DateTime.UtcNow;
-        public DateTime? EffectiveTo { get; set; }
-        
+
+        [Required]
+        public DayOfWeek DayOfWeek { get; set; }
+
+        [Required]
+        public TimeSpan StartTime { get; set; }
+
+        [Required]
+        public TimeSpan EndTime { get; set; }
+
+        public bool IsWorkingDay { get; set; } = true;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        
+
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
         // Navegación
-        public Employee Employee { get; set; } = null!;
+        [ForeignKey("EmployeeId")]
+        public virtual Employee? Employee { get; set; }
+
+        // Propiedades calculadas
+        [NotMapped]
+        public TimeSpan WorkingHours => IsWorkingDay ? EndTime - StartTime : TimeSpan.Zero;
     }
 }

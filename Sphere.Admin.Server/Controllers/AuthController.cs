@@ -1,32 +1,34 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Sphere.Admin.Server.Data;
+using Shared.Models.Core;
 using Shared.Models.DTOs.Auth;
+using Shared.Models.Enums;
 using Shared.Services.Security;
-using Shared.Models.Core;  // Para SphereAdmin
-using System.Security.Claims;
+using Sphere.Admin.Server.Data;
 
 namespace Sphere.Admin.Server.Controllers
 {
+    /// <summary>
+    /// Controlador de autenticación para Sphere Admin
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
         private readonly SphereDbContext _context;
-        private readonly IJwtService _jwtService;
         private readonly IPasswordService _passwordService;
+        private readonly IJwtService _jwtService;
         private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             SphereDbContext context,
-            IJwtService jwtService,
             IPasswordService passwordService,
+            IJwtService jwtService,
             ILogger<AuthController> logger)
         {
             _context = context;
-            _jwtService = jwtService;
             _passwordService = passwordService;
+            _jwtService = jwtService;
             _logger = logger;
         }
 
@@ -40,170 +42,124 @@ namespace Sphere.Admin.Server.Controllers
             {
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(new LoginResponse
-                    {
-                        Success = false,
-                        Message = "Datos de entrada no válidos"
-                    });
+                    return BadRequest(ModelState);
                 }
 
-                // Buscar el super administrador usando el namespace completo para evitar ambigüedad
-                var sphereAdmin = await _context.SphereAdmins
-                    .FirstOrDefaultAsync(sa => sa.Email == request.Email && sa.Active);
+                // Buscar admin por email
+                var admin = await _context.SphereAdmins
+                    .FirstOrDefaultAsync(a => a.Email == request.Email && a.Active);
 
-                if (sphereAdmin == null)
+                if (admin == null)
                 {
-                    _logger.LogWarning("Intento de login fallido para super admin {Email}", request.Email);
-                    return Unauthorized(new LoginResponse
-                    {
-                        Success = false,
-                        Message = "Credenciales inválidas"
-                    });
+                    _logger.LogWarning("Intento de login fallido para email: {Email}", request.Email);
+                    return Unauthorized(new { message = "Credenciales inválidas" });
                 }
 
-                // Verificar la contraseña
-                if (!_passwordService.VerifyPassword(request.Password, sphereAdmin.PasswordHash))
+                // Verificar contraseña
+                if (!_passwordService.VerifyPassword(request.Password, admin.PasswordHash))
                 {
-                    _logger.LogWarning("Contraseña incorrecta para super admin {Email}", request.Email);
-                    return Unauthorized(new LoginResponse
-                    {
-                        Success = false,
-                        Message = "Credenciales inválidas"
-                    });
+                    _logger.LogWarning("Contraseña incorrecta para admin: {Email}", request.Email);
+                    return Unauthorized(new { message = "Credenciales inválidas" });
                 }
 
                 // Actualizar último login
-                sphereAdmin.LastLogin = DateTime.UtcNow;
+                admin.LastLogin = DateTime.UtcNow;
+                admin.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
-                // Generar JWT token
-                var claims = new Dictionary<string, string>
+                // Generar token JWT
+                var token = _jwtService.GenerateToken(
+                    admin.Id, 
+                    admin.Email, 
+                    UserRole.SuperAdmin,
+                    new Dictionary<string, string>
+                    {
+                        { "FirstName", admin.FirstName },
+                        { "LastName", admin.LastName }
+                    });
+
+                // Crear respuesta
+                var userInfo = new UserInfo
                 {
-                    ["user_id"] = sphereAdmin.Id.ToString(),
-                    ["email"] = sphereAdmin.Email,
-                    ["role"] = "SuperAdmin",
-                    ["first_name"] = sphereAdmin.FirstName,
-                    ["last_name"] = sphereAdmin.LastName,
-                    ["sphere_admin"] = "true"
+                    Id = admin.Id,
+                    FirstName = admin.FirstName,
+                    LastName = admin.LastName,
+                    Email = admin.Email,
+                    Role = UserRole.SuperAdmin,
+                    LastLogin = admin.LastLogin
                 };
 
-                var token = _jwtService.GenerateToken(sphereAdmin.Email, claims);
-
-                _logger.LogInformation("Login exitoso para super admin {Email}", request.Email);
-
-                return Ok(new LoginResponse
+                var response = new LoginResponse
                 {
                     Success = true,
-                    Message = "Login exitoso",
                     Token = token,
-                    User = new UserInfo
-                    {
-                        Id = sphereAdmin.Id,
-                        Email = sphereAdmin.Email,
-                        FirstName = sphereAdmin.FirstName,
-                        LastName = sphereAdmin.LastName,
-                        Role = "SuperAdmin"
-                    }
-                });
+                    User = userInfo,
+                    Message = "Login exitoso"
+                };
+
+                _logger.LogInformation("Login exitoso para super admin: {Email}", admin.Email);
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error durante el login para {Email}", request.Email);
-                return StatusCode(500, new LoginResponse
-                {
-                    Success = false,
-                    Message = "Error interno del servidor"
-                });
+                _logger.LogError(ex, "Error durante el login");
+                return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }
 
         /// <summary>
-        /// Obtener información del usuario autenticado
+        /// Verificar validez del token
         /// </summary>
-        [HttpGet("me")]
-        [Authorize]
-        public async Task<ActionResult<UserInfo>> GetCurrentUser()
+        [HttpPost("verify")]
+        public async Task<ActionResult<UserInfo>> VerifyToken([FromBody] TokenRequest request)
         {
             try
             {
-                var userIdClaim = User.FindFirst("user_id");
-                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+                if (string.IsNullOrEmpty(request.Token))
                 {
-                    return Unauthorized("Token inválido");
+                    return BadRequest(new { message = "Token requerido" });
                 }
 
-                var sphereAdmin = await _context.SphereAdmins
-                    .FirstOrDefaultAsync(sa => sa.Id == userId && sa.Active);
-
-                if (sphereAdmin == null)
+                // Validar token
+                var claims = _jwtService.ValidateToken(request.Token);
+                if (claims == null)
                 {
-                    return NotFound("Usuario no encontrado");
+                    return Unauthorized(new { message = "Token inválido" });
                 }
 
-                return Ok(new UserInfo
+                // Obtener ID del usuario del token
+                var userId = _jwtService.GetUserIdFromToken(request.Token);
+                if (userId == null)
                 {
-                    Id = sphereAdmin.Id,
-                    Email = sphereAdmin.Email,
-                    FirstName = sphereAdmin.FirstName,
-                    LastName = sphereAdmin.LastName,
-                    Role = "SuperAdmin"
-                });
+                    return Unauthorized(new { message = "Token inválido" });
+                }
+
+                // Buscar admin en la base de datos
+                var admin = await _context.SphereAdmins
+                    .FirstOrDefaultAsync(a => a.Id == userId && a.Active);
+
+                if (admin == null)
+                {
+                    return Unauthorized(new { message = "Usuario no encontrado o inactivo" });
+                }
+
+                // Crear respuesta con información del usuario
+                var userInfo = new UserInfo
+                {
+                    Id = admin.Id,
+                    FirstName = admin.FirstName,
+                    LastName = admin.LastName,
+                    Email = admin.Email,
+                    Role = UserRole.SuperAdmin,
+                    LastLogin = admin.LastLogin
+                };
+
+                return Ok(userInfo);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo información del usuario");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Cambiar contraseña del super administrador
-        /// </summary>
-        [HttpPost("change-password")]
-        [Authorize]
-        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest("Datos de entrada no válidos");
-                }
-
-                var userIdClaim = User.FindFirst("user_id");
-                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
-                {
-                    return Unauthorized("Token inválido");
-                }
-
-                var sphereAdmin = await _context.SphereAdmins
-                    .FirstOrDefaultAsync(sa => sa.Id == userId && sa.Active);
-
-                if (sphereAdmin == null)
-                {
-                    return NotFound("Usuario no encontrado");
-                }
-
-                // Verificar contraseña actual
-                if (!_passwordService.VerifyPassword(request.CurrentPassword, sphereAdmin.PasswordHash))
-                {
-                    return BadRequest("Contraseña actual incorrecta");
-                }
-
-                // Actualizar contraseña
-                sphereAdmin.PasswordHash = _passwordService.HashPassword(request.NewPassword);
-                sphereAdmin.UpdatedAt = DateTime.UtcNow;
-
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Contraseña cambiada para super admin {Email}", sphereAdmin.Email);
-
-                return Ok(new { Message = "Contraseña actualizada correctamente" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error cambiando contraseña");
-                return StatusCode(500, "Error interno del servidor");
+                _logger.LogError(ex, "Error verificando token");
+                return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }
 
@@ -211,22 +167,134 @@ namespace Sphere.Admin.Server.Controllers
         /// Logout (invalidar token del lado del cliente)
         /// </summary>
         [HttpPost("logout")]
-        [Authorize]
-        public IActionResult Logout()
+        public async Task<ActionResult> Logout()
         {
-            // En una implementación más completa, aquí se podría agregar el token a una blacklist
-            // Por ahora, simplemente informamos que el logout debe manejarse del lado del cliente
-            
-            _logger.LogInformation("Logout para usuario {UserId}", User.FindFirst("user_id")?.Value);
-            
-            return Ok(new { Message = "Logout exitoso" });
-        }
-    }
+            try
+            {
+                // En este caso simple, el logout es manejado del lado del cliente
+                // eliminando el token del almacenamiento local.
+                // En implementaciones más avanzadas, se podría mantener una lista
+                // de tokens revocados en Redis o base de datos.
 
-    // DTOs específicos para cambio de contraseña
-    public class ChangePasswordRequest
-    {
-        public string CurrentPassword { get; set; } = string.Empty;
-        public string NewPassword { get; set; } = string.Empty;
+                _logger.LogInformation("Logout ejecutado");
+                return Ok(new { message = "Logout exitoso" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error durante logout");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        /// <summary>
+        /// Cambiar contraseña del admin actual
+        /// </summary>
+        [HttpPost("change-password")]
+        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                // Obtener el token del header Authorization
+                var authHeader = Request.Headers["Authorization"].FirstOrDefault();
+                if (authHeader == null || !authHeader.StartsWith("Bearer "))
+                {
+                    return Unauthorized(new { message = "Token requerido" });
+                }
+
+                var token = authHeader.Substring("Bearer ".Length).Trim();
+                var userId = _jwtService.GetUserIdFromToken(token);
+
+                if (userId == null)
+                {
+                    return Unauthorized(new { message = "Token inválido" });
+                }
+
+                // Buscar admin
+                var admin = await _context.SphereAdmins
+                    .FirstOrDefaultAsync(a => a.Id == userId && a.Active);
+
+                if (admin == null)
+                {
+                    return NotFound(new { message = "Usuario no encontrado" });
+                }
+
+                // Verificar contraseña actual
+                if (!_passwordService.VerifyPassword(request.CurrentPassword, admin.PasswordHash))
+                {
+                    return BadRequest(new { message = "Contraseña actual incorrecta" });
+                }
+
+                // Actualizar contraseña
+                admin.PasswordHash = _passwordService.HashPassword(request.NewPassword);
+                admin.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Contraseña cambiada para admin: {Email}", admin.Email);
+                return Ok(new { message = "Contraseña actualizada exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cambiando contraseña");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        /// <summary>
+        /// Obtener información del usuario actual
+        /// </summary>
+        [HttpGet("me")]
+        public async Task<ActionResult<UserInfo>> GetCurrentUser()
+        {
+            try
+            {
+                // Obtener el token del header Authorization
+                var authHeader = Request.Headers["Authorization"].FirstOrDefault();
+                if (authHeader == null || !authHeader.StartsWith("Bearer "))
+                {
+                    return Unauthorized(new { message = "Token requerido" });
+                }
+
+                var token = authHeader.Substring("Bearer ".Length).Trim();
+                var userId = _jwtService.GetUserIdFromToken(token);
+
+                if (userId == null)
+                {
+                    return Unauthorized(new { message = "Token inválido" });
+                }
+
+                // Buscar admin
+                var admin = await _context.SphereAdmins
+                    .FirstOrDefaultAsync(a => a.Id == userId && a.Active);
+
+                if (admin == null)
+                {
+                    return NotFound(new { message = "Usuario no encontrado" });
+                }
+
+                // Crear respuesta
+                var userInfo = new UserInfo
+                {
+                    Id = admin.Id,
+                    FirstName = admin.FirstName,
+                    LastName = admin.LastName,
+                    Email = admin.Email,
+                    Role = UserRole.SuperAdmin,
+                    LastLogin = admin.LastLogin
+                };
+
+                return Ok(userInfo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo información del usuario");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
     }
 }

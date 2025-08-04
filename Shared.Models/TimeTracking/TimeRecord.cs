@@ -1,10 +1,14 @@
-using Shared.Models.Core;
-using Shared.Models.Enums;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Shared.Models.Core;
+using Shared.Models.Enums;
 
 namespace Shared.Models.TimeTracking
 {
+    /// <summary>
+    /// Registro de tiempo de un empleado
+    /// </summary>
+    [Table("TimeRecords")]
     public class TimeRecord
     {
         [Key]
@@ -14,20 +18,12 @@ namespace Shared.Models.TimeTracking
         public int EmployeeId { get; set; }
 
         [Required]
-        [Column(TypeName = "date")]
-        public DateTime Date { get; set; }
-
-        public DateTime? CheckIn { get; set; }
-
-        public DateTime? CheckOut { get; set; }
-
-        [Column(TypeName = "decimal(5,2)")]
-        public double? TotalHours { get; set; }
+        public RecordType RecordType { get; set; }
 
         [Required]
-        public RecordType RecordType { get; set; } = RecordType.CheckIn;
+        public DateTime RecordDateTime { get; set; }
 
-        [StringLength(200)]
+        [StringLength(255)]
         public string? Location { get; set; }
 
         [StringLength(500)]
@@ -35,21 +31,51 @@ namespace Shared.Models.TimeTracking
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        public DateTime? UpdatedAt { get; set; }
-
-        // Navigation properties
+        // Navegación
         [ForeignKey("EmployeeId")]
         public virtual Employee? Employee { get; set; }
 
-        // Computed properties
+        // Propiedades calculadas para compatibilidad
         [NotMapped]
-        public bool IsComplete => CheckIn.HasValue && CheckOut.HasValue;
+        public DateTime Timestamp
+        {
+            get => RecordDateTime;
+            set => RecordDateTime = value;
+        }
 
         [NotMapped]
-        public TimeSpan? Duration => IsComplete ? CheckOut!.Value - CheckIn!.Value : null;
+        public RecordType Type
+        {
+            get => RecordType;
+            set => RecordType = value;
+        }
 
         [NotMapped]
-        public bool IsActive => CheckIn.HasValue && !CheckOut.HasValue;
+        public TimeSpan Time => RecordDateTime.TimeOfDay;
+
+        [NotMapped]
+        public DateTime Date 
+        { 
+            get => RecordDateTime.Date; 
+            set => RecordDateTime = value.Date + RecordDateTime.TimeOfDay;
+        }
+
+        [NotMapped]
+        public string? DeviceInfo { get; set; }
+
+        [NotMapped]
+        public string? IpAddress { get; set; }
+
+        [NotMapped]
+        public DateTime? UpdatedAt { get; set; }
+
+        [NotMapped]
+        public DateTime? CheckIn { get; set; }
+
+        [NotMapped]
+        public DateTime? CheckOut { get; set; }
+
+        [NotMapped]
+        public TimeSpan? TotalHours { get; set; }
     }
-
 }

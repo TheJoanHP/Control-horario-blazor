@@ -5,6 +5,10 @@ using Shared.Models.Enums;
 
 namespace Shared.Models.Vacations
 {
+    /// <summary>
+    /// Solicitud de vacaciones de un empleado
+    /// </summary>
+    [Table("VacationRequests")]
     public class VacationRequest
     {
         [Key]
@@ -20,51 +24,29 @@ namespace Shared.Models.Vacations
         public DateTime EndDate { get; set; }
 
         [Required]
-        [Column(TypeName = "decimal(5,2)")]
-        public decimal DaysRequested { get; set; }
+        public int DaysRequested { get; set; }
 
-        [Required]
         [StringLength(500)]
-        public string Reason { get; set; } = string.Empty;
+        public string? Reason { get; set; }
 
-        [Required]
         public VacationStatus Status { get; set; } = VacationStatus.Pending;
+
+        public int? ApprovedById { get; set; }
+
+        public DateTime? ApprovedAt { get; set; }
 
         [StringLength(500)]
         public string? Comments { get; set; }
-
-        public int? ReviewedBy { get; set; }
-
-        [StringLength(500)]
-        public string? ResponseComments { get; set; }
-
-        public DateTime? ReviewedAt { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // Navigation Properties
+        // Navegación
         [ForeignKey("EmployeeId")]
         public virtual Employee? Employee { get; set; }
 
-        [ForeignKey("ReviewedBy")]
-        public virtual Employee? ReviewedByEmployee { get; set; }
-
-        // Computed Properties
-        [NotMapped]
-        public bool IsPending => Status == VacationStatus.Pending;
-
-        [NotMapped]
-        public bool IsApproved => Status == VacationStatus.Approved;
-
-        [NotMapped]
-        public bool IsRejected => Status == VacationStatus.Rejected;
-
-        [NotMapped]
-        public bool IsCancelled => Status == VacationStatus.Cancelled;
-
-        [NotMapped]
-        public int TotalDays => (int)Math.Ceiling((EndDate - StartDate).TotalDays) + 1;
+        [ForeignKey("ApprovedById")]
+        public virtual Employee? ApprovedByEmployee { get; set; }
     }
 }

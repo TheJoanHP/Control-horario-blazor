@@ -1,11 +1,15 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Shared.Models.Enums;
 using Shared.Models.TimeTracking;
 using Shared.Models.Vacations;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Shared.Models.Core
 {
+    /// <summary>
+    /// Representa un empleado en el sistema
+    /// </summary>
+    [Table("Employees")]
     public class Employee
     {
         [Key]
@@ -17,11 +21,11 @@ namespace Shared.Models.Core
         public int? DepartmentId { get; set; }
 
         [Required]
-        [StringLength(100)]
+        [StringLength(50)]
         public string FirstName { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(100)]
+        [StringLength(50)]
         public string LastName { get; set; } = string.Empty;
 
         [Required]
@@ -33,29 +37,32 @@ namespace Shared.Models.Core
         public string? Phone { get; set; }
 
         [Required]
-        [StringLength(50)]
+        [StringLength(20)]
         public string EmployeeCode { get; set; } = string.Empty;
 
-        [Required]
+        [StringLength(100)]
+        public string? Position { get; set; }
+
         public UserRole Role { get; set; } = UserRole.Employee;
 
         [Required]
         [StringLength(255)]
         public string PasswordHash { get; set; } = string.Empty;
 
-        public bool Active { get; set; } = true;
+        public DateTime? HireDate { get; set; }
 
-        public DateTime? HiredAt { get; set; }
-
-        public DateTime? TerminatedAt { get; set; }
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? Salary { get; set; }
 
         public DateTime? LastLoginAt { get; set; }
+
+        public bool Active { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // Navigation properties
+        // Navegación
         [ForeignKey("CompanyId")]
         public virtual Company? Company { get; set; }
 
@@ -63,14 +70,32 @@ namespace Shared.Models.Core
         public virtual Department? Department { get; set; }
 
         public virtual ICollection<TimeRecord> TimeRecords { get; set; } = new List<TimeRecord>();
-
+        public virtual ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
         public virtual ICollection<VacationRequest> VacationRequests { get; set; } = new List<VacationRequest>();
+        public virtual ICollection<VacationBalance> VacationBalances { get; set; } = new List<VacationBalance>();
 
-        // Computed properties
+        // Propiedades calculadas
         [NotMapped]
         public string FullName => $"{FirstName} {LastName}";
 
         [NotMapped]
-        public bool IsActive => Active && TerminatedAt == null;
+        public int? YearsOfService => HireDate.HasValue 
+            ? (DateTime.UtcNow - HireDate.Value).Days / 365 
+            : null;
+
+        // Alias para compatibilidad
+        [NotMapped]
+        public DateTime? HiredAt
+        {
+            get => HireDate;
+            set => HireDate = value;
+        }
+
+        [NotMapped]
+        public DateTime? LastLogin
+        {
+            get => LastLoginAt;
+            set => LastLoginAt = value;
+        }
     }
 }

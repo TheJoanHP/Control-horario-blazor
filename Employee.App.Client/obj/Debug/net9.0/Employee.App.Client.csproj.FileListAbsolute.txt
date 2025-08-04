@@ -214,8 +214,6 @@ C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\icudt_CJK.tjcz0u77k5.dat
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\icudt_EFIGS.tptq2av103.dat
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\icudt_no_CJK.lfu7j35m59.dat
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\Employee.App.Client.3h13sz7r80.wasm
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\Employee.App.Client.nmagzbof76.pdb
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\blazor.boot.json
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\service-worker.js
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\service-worker-assets.js
@@ -435,8 +433,6 @@ C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\icudt_CJK.tjcz0u77k5.dat.gz
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\icudt_EFIGS.tptq2av103.dat.gz
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\icudt_no_CJK.lfu7j35m59.dat.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\Employee.App.Client.3h13sz7r80.wasm.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\Employee.App.Client.nmagzbof76.pdb.gz
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\blazor.boot.json.gz
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\service-worker.js.gz
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\service-worker-assets.js.gz
@@ -1154,11 +1150,6 @@ C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\b6djmkk8s5-tjcz0u77k5.gz
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\w8g85723rj-tptq2av103.gz
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\z09xuol2rd-lfu7j35m59.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\38446ytm36-3h13sz7r80.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\5ki68e57y7-nmagzbof76.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\h001435t96-kntv06ic95.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\6nnldkdk7e-srob945tw4.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\aepwalhavo-bk3bmj5zhg.gz
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\staticwebassets.build.json
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\staticwebassets.build.json.cache
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\staticwebassets.development.json
@@ -1168,3 +1159,12 @@ C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\refint\Employee.App.Client.dll
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\Employee.App.Client.pdb
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\ref\Employee.App.Client.dll
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\Employee.App.Client.de3xushg26.wasm
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\Employee.App.Client.d99gygi11w.pdb
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\Employee.App.Client.de3xushg26.wasm.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\bin\Debug\net9.0\wwwroot\_framework\Employee.App.Client.d99gygi11w.pdb.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\38446ytm36-de3xushg26.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\5ki68e57y7-d99gygi11w.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\h001435t96-wiji5i7vzh.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\6nnldkdk7e-z5jk265do9.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Employee.App.Client\obj\Debug\net9.0\compressed\aepwalhavo-2uhxfh5g5e.gz

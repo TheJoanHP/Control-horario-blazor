@@ -2,20 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Shared.Models.DTOs.Auth
 {
-    public class ChangePasswordRequest
-    {
-        [Required(ErrorMessage = "La contraseña actual es requerida")]
-        public string CurrentPassword { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "La nueva contraseña es requerida")]
-        [MinLength(6, ErrorMessage = "La contraseña debe tener al menos 6 caracteres")]
-        public string NewPassword { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "La confirmación de contraseña es requerida")]
-        [Compare("NewPassword", ErrorMessage = "Las contraseñas no coinciden")]
-        public string ConfirmPassword { get; set; } = string.Empty;
-    }
-
     public class ForgotPasswordRequest
     {
         [Required(ErrorMessage = "El email es requerido")]

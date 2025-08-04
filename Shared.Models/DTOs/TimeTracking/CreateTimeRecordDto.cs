@@ -3,6 +3,9 @@ using Shared.Models.Enums;
 
 namespace Shared.Models.DTOs.TimeTracking
 {
+    /// <summary>
+    /// DTO para crear registros de tiempo
+    /// </summary>
     public class CreateTimeRecordDto
     {
         [Required]
@@ -11,9 +14,8 @@ namespace Shared.Models.DTOs.TimeTracking
         [Required]
         public RecordType Type { get; set; }
 
-        public DateTime? Date { get; set; }
-
-        public DateTime? Time { get; set; }
+        [Required]
+        public DateTime Timestamp { get; set; }
 
         [StringLength(255)]
         public string? Location { get; set; }
@@ -21,8 +23,10 @@ namespace Shared.Models.DTOs.TimeTracking
         [StringLength(500)]
         public string? Notes { get; set; }
 
-        public double? Latitude { get; set; }
+        [StringLength(500)]
+        public string? DeviceInfo { get; set; }
 
-        public double? Longitude { get; set; }
+        [StringLength(50)]
+        public string? IpAddress { get; set; }
     }
 }

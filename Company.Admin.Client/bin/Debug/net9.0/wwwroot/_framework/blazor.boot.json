@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "Company.Admin.Client",
   "resources": {
-    "hash": "sha256-KRATm8FWJZGAjbTOSQArvj44grInvF9LeIPox7Ohxuk=",
+    "hash": "sha256-v2Ckf4QedSSrfUEpYX0vejhA1bwxSU/npkb2eqUttzc=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Microsoft.AspNetCore.Authorization.bvu82j4ad3.wasm": "Microsoft.AspNetCore.Authorization.wasm",
@@ -207,8 +207,8 @@
       "icudt_CJK.tjcz0u77k5.dat": "icudt_CJK.dat",
       "icudt_EFIGS.tptq2av103.dat": "icudt_EFIGS.dat",
       "icudt_no_CJK.lfu7j35m59.dat": "icudt_no_CJK.dat",
-      "Company.Admin.Client.mdfq7f0lhe.wasm": "Company.Admin.Client.wasm",
-      "Company.Admin.Client.lmr552cuon.pdb": "Company.Admin.Client.pdb"
+      "Company.Admin.Client.ibh4419azl.wasm": "Company.Admin.Client.wasm",
+      "Company.Admin.Client.kpsbkfu4ip.pdb": "Company.Admin.Client.pdb"
     },
     "jsModuleNative": {
       "dotnet.native.st0ovrfdhi.js": "sha256-MBW/zayfv+YU6mhH7y4b8NNU4D1EYd7nf9gYrFshnnY="
@@ -424,10 +424,10 @@
       "WindowsBase.pg3o6xzigg.wasm": "sha256-dz62CHynC+zqTkbMOf3vm7YAhiRA8/pIoAwuqHfBL5M=",
       "mscorlib.jl2pswegra.wasm": "sha256-mSoCIDTdCQKTipW8VmFCypW/4AopZauaYRa8LoZdHvY=",
       "netstandard.uriri6ambh.wasm": "sha256-yuH/cvPd6r8N9nfPWihyckFD7hPFP+VQtQQxEqi7HIQ=",
-      "Company.Admin.Client.mdfq7f0lhe.wasm": "sha256-WhOqACd3l/UsS5FL0ZwGt0i/Iyn5drCunxrMdeEgNqw="
+      "Company.Admin.Client.ibh4419azl.wasm": "sha256-UpcO4ebwWZjwcAEErRnGhfLAxYggYJQRuy76nN8WzyM="
     },
     "pdb": {
-      "Company.Admin.Client.lmr552cuon.pdb": "sha256-HciteGJqid9apRDl0INjojOu8neKCPEgc9g3s36i2yo="
+      "Company.Admin.Client.kpsbkfu4ip.pdb": "sha256-GHYLhhfycrZXb/ZxNUqaW0ZRC7aEgFaF5hVK/VoOL54="
     }
   },
   "cacheBootResources": true,
