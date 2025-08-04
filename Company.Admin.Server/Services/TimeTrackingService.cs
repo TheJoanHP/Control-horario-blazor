@@ -7,23 +7,6 @@ using Shared.Models.Enums;
 
 namespace Company.Admin.Server.Services
 {
-    public interface ITimeTrackingService
-    {
-        Task<TimeRecordDto> CheckInAsync(int employeeId, CheckInDto checkInDto);
-        Task<TimeRecordDto> CheckOutAsync(int employeeId, CheckOutDto checkOutDto);
-        Task<TimeRecordDto> StartBreakAsync(int employeeId, string? reason = null);
-        Task<TimeRecordDto> EndBreakAsync(int employeeId);
-        Task<bool> IsEmployeeCheckedInAsync(int employeeId);
-        Task<bool> IsEmployeeOnBreakAsync(int employeeId);
-        Task<EmployeeStatusDto> GetEmployeeStatusAsync(int employeeId);
-        Task<IEnumerable<TimeRecordDto>> GetEmployeeTimeRecordsAsync(int employeeId, DateTime? startDate = null, DateTime? endDate = null);
-        Task<IEnumerable<TimeRecordDto>> GetTimeRecordsAsync(DateTime? startDate = null, DateTime? endDate = null, int? employeeId = null, int? departmentId = null);
-        Task<TimeRecordDto?> GetActiveTimeRecordAsync(int employeeId);
-        Task<DailyHoursSummaryDto> GetDailyHoursSummaryAsync(int employeeId, DateTime date);
-        Task<WeeklyHoursSummaryDto> GetWeeklyHoursSummaryAsync(int employeeId, DateTime weekStart);
-        Task<MonthlyHoursSummaryDto> GetMonthlyHoursSummaryAsync(int employeeId, int year, int month);
-    }
-
     public class TimeTrackingService : ITimeTrackingService
     {
         private readonly CompanyDbContext _context;
@@ -40,7 +23,37 @@ namespace Company.Admin.Server.Services
             _logger = logger;
         }
 
-        public async Task<TimeRecordDto> CheckInAsync(int employeeId, CheckInDto checkInDto)
+        public async Task<TimeRecord> CreateTimeRecordAsync(int employeeId, RecordType type, CheckInDto checkInDto)
+        {
+            try
+            {
+                var timeRecord = new TimeRecord
+                {
+                    EmployeeId = employeeId,
+                    Type = type,
+                    Date = checkInDto.Date ?? DateTime.Today,
+                    Time = checkInDto.Time ?? DateTime.Now,
+                    Location = checkInDto.Location,
+                    Notes = checkInDto.Notes,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.TimeRecords.Add(timeRecord);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Registro de tiempo creado: {RecordId} - Empleado {EmployeeId} - Tipo {Type}", 
+                    timeRecord.Id, employeeId, type);
+
+                return timeRecord;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creando registro de tiempo para empleado {EmployeeId}", employeeId);
+                throw;
+            }
+        }
+
+        public async Task<TimeRecord> CheckInAsync(int employeeId, CheckInDto checkInDto)
         {
             try
             {
@@ -50,24 +63,7 @@ namespace Company.Admin.Server.Services
                     throw new InvalidOperationException("El empleado ya está fichado de entrada");
                 }
 
-                var timeRecord = new TimeRecord
-                {
-                    EmployeeId = employeeId,
-                    Date = checkInDto.Timestamp.Date,
-                    CheckIn = checkInDto.Timestamp,
-                    RecordType = RecordType.CheckIn,
-                    Location = checkInDto.Location,
-                    Notes = checkInDto.Notes,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.TimeRecords.Add(timeRecord);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Check-in registrado para empleado {EmployeeId} a las {Time}", 
-                    employeeId, checkInDto.Timestamp);
-
-                return _mapper.Map<TimeRecordDto>(timeRecord);
+                return await CreateTimeRecordAsync(employeeId, RecordType.CheckIn, checkInDto);
             }
             catch (Exception ex)
             {
@@ -76,48 +72,25 @@ namespace Company.Admin.Server.Services
             }
         }
 
-        public async Task<TimeRecordDto> CheckOutAsync(int employeeId, CheckOutDto checkOutDto)
+        public async Task<TimeRecord> CheckOutAsync(int employeeId, CheckOutDto checkOutDto)
         {
             try
             {
-                // Obtener el registro activo de entrada
-                var activeRecord = await GetActiveTimeRecordAsync(employeeId);
-                if (activeRecord == null)
+                // Verificar que el empleado esté fichado
+                if (!await IsEmployeeCheckedInAsync(employeeId))
                 {
-                    throw new InvalidOperationException("No hay un registro de entrada activo para el empleado");
+                    throw new InvalidOperationException("El empleado no está fichado de entrada");
                 }
 
-                var timeRecord = await _context.TimeRecords
-                    .FirstOrDefaultAsync(tr => tr.Id == activeRecord.Id);
-
-                if (timeRecord == null)
+                var checkInDto = new CheckInDto
                 {
-                    throw new InvalidOperationException("Registro de tiempo no encontrado");
-                }
+                    Date = checkOutDto.Date,
+                    Time = checkOutDto.Time,
+                    Location = checkOutDto.Location,
+                    Notes = checkOutDto.Notes
+                };
 
-                // Finalizar cualquier pausa activa
-                if (await IsEmployeeOnBreakAsync(employeeId))
-                {
-                    await EndBreakAsync(employeeId);
-                }
-
-                timeRecord.CheckOut = checkOutDto.Timestamp;
-                timeRecord.UpdatedAt = DateTime.UtcNow;
-                
-                if (!string.IsNullOrEmpty(checkOutDto.Notes))
-                {
-                    timeRecord.Notes = timeRecord.Notes + " | " + checkOutDto.Notes;
-                }
-
-                // Calcular horas trabajadas
-                timeRecord.TotalHours = CalculateWorkedHours(timeRecord);
-
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Check-out registrado para empleado {EmployeeId} a las {Time}, Total horas: {Hours}", 
-                    employeeId, checkOutDto.Timestamp, timeRecord.TotalHours);
-
-                return _mapper.Map<TimeRecordDto>(timeRecord);
+                return await CreateTimeRecordAsync(employeeId, RecordType.CheckOut, checkInDto);
             }
             catch (Exception ex)
             {
@@ -126,384 +99,220 @@ namespace Company.Admin.Server.Services
             }
         }
 
-        public async Task<TimeRecordDto> StartBreakAsync(int employeeId, string? reason = null)
+        public async Task<TimeRecord> StartBreakAsync(int employeeId, CheckInDto breakDto)
         {
             try
             {
-                // Verificar que el empleado esté fichado
+                // Verificar que el empleado esté fichado y no esté en descanso
                 if (!await IsEmployeeCheckedInAsync(employeeId))
                 {
-                    throw new InvalidOperationException("El empleado debe estar fichado para iniciar una pausa");
+                    throw new InvalidOperationException("El empleado debe estar fichado para iniciar un descanso");
                 }
 
-                // Verificar que no esté ya en pausa
                 if (await IsEmployeeOnBreakAsync(employeeId))
                 {
-                    throw new InvalidOperationException("El empleado ya está en pausa");
+                    throw new InvalidOperationException("El empleado ya está en descanso");
                 }
 
-                var breakRecord = new TimeRecord
-                {
-                    EmployeeId = employeeId,
-                    Date = DateTime.Today,
-                    CheckIn = DateTime.UtcNow,
-                    RecordType = RecordType.Break,
-                    Notes = reason,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.TimeRecords.Add(breakRecord);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Pausa iniciada para empleado {EmployeeId} a las {Time}", 
-                    employeeId, DateTime.UtcNow);
-
-                return _mapper.Map<TimeRecordDto>(breakRecord);
+                return await CreateTimeRecordAsync(employeeId, RecordType.BreakStart, breakDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error iniciando pausa para empleado {EmployeeId}", employeeId);
+                _logger.LogError(ex, "Error iniciando descanso para empleado {EmployeeId}", employeeId);
                 throw;
             }
         }
 
-        public async Task<TimeRecordDto> EndBreakAsync(int employeeId)
+        public async Task<TimeRecord> EndBreakAsync(int employeeId, CheckOutDto breakDto)
         {
             try
             {
-                var activeBreak = await _context.TimeRecords
-                    .FirstOrDefaultAsync(tr => tr.EmployeeId == employeeId && 
-                                             tr.RecordType == RecordType.Break && 
-                                             tr.CheckOut == null &&
-                                             tr.Date == DateTime.Today);
-
-                if (activeBreak == null)
+                // Verificar que el empleado esté en descanso
+                if (!await IsEmployeeOnBreakAsync(employeeId))
                 {
-                    throw new InvalidOperationException("No hay una pausa activa para el empleado");
+                    throw new InvalidOperationException("El empleado no está en descanso");
                 }
 
-                activeBreak.CheckOut = DateTime.UtcNow;
-                activeBreak.TotalHours = CalculateBreakTime(activeBreak);
-                activeBreak.UpdatedAt = DateTime.UtcNow;
+                var checkInDto = new CheckInDto
+                {
+                    Date = breakDto.Date,
+                    Time = breakDto.Time,
+                    Location = breakDto.Location,
+                    Notes = breakDto.Notes
+                };
 
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Pausa finalizada para empleado {EmployeeId} a las {Time}, Duración: {Minutes} minutos", 
-                    employeeId, DateTime.UtcNow, activeBreak.TotalHours * 60);
-
-                return _mapper.Map<TimeRecordDto>(activeBreak);
+                return await CreateTimeRecordAsync(employeeId, RecordType.BreakEnd, checkInDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error finalizando pausa para empleado {EmployeeId}", employeeId);
+                _logger.LogError(ex, "Error finalizando descanso para empleado {EmployeeId}", employeeId);
                 throw;
             }
+        }
+
+        public async Task<TimeRecord?> GetLastOpenRecordAsync(int employeeId)
+        {
+            return await _context.TimeRecords
+                .Where(tr => tr.EmployeeId == employeeId)
+                .OrderByDescending(tr => tr.CreatedAt)
+                .FirstOrDefaultAsync(tr => tr.Type == RecordType.CheckIn || tr.Type == RecordType.BreakStart);
+        }
+
+        public async Task<TimeRecord?> GetLastRecordAsync(int employeeId)
+        {
+            return await _context.TimeRecords
+                .Where(tr => tr.EmployeeId == employeeId)
+                .OrderByDescending(tr => tr.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<IEnumerable<TimeRecord>> GetTimeRecordsAsync(int? employeeId = null, DateTime? from = null, DateTime? to = null)
+        {
+            var query = _context.TimeRecords
+                .Include(tr => tr.Employee)
+                .AsQueryable();
+
+            if (employeeId.HasValue)
+            {
+                query = query.Where(tr => tr.EmployeeId == employeeId);
+            }
+
+            if (from.HasValue)
+            {
+                query = query.Where(tr => tr.Date >= from);
+            }
+
+            if (to.HasValue)
+            {
+                query = query.Where(tr => tr.Date <= to);
+            }
+
+            return await query
+                .OrderByDescending(tr => tr.Date)
+                .ThenByDescending(tr => tr.Time)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<TimeRecord>> GetDailyRecordsAsync(int employeeId, DateTime date)
+        {
+            return await _context.TimeRecords
+                .Where(tr => tr.EmployeeId == employeeId && tr.Date.Date == date.Date)
+                .OrderBy(tr => tr.Time)
+                .ToListAsync();
+        }
+
+        public async Task<bool> HasOpenRecordAsync(int employeeId)
+        {
+            var lastRecord = await GetLastRecordAsync(employeeId);
+            if (lastRecord == null) return false;
+
+            return lastRecord.Type == RecordType.CheckIn || lastRecord.Type == RecordType.BreakStart;
         }
 
         public async Task<bool> IsEmployeeCheckedInAsync(int employeeId)
         {
-            try
-            {
-                return await _context.TimeRecords
-                    .AnyAsync(tr => tr.EmployeeId == employeeId && 
-                                   tr.RecordType == RecordType.CheckIn && 
-                                   tr.CheckOut == null &&
-                                   tr.Date == DateTime.Today);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error verificando check-in para empleado {EmployeeId}", employeeId);
-                throw;
-            }
+            var today = DateTime.Today;
+            var todayRecords = await GetDailyRecordsAsync(employeeId, today);
+
+            if (!todayRecords.Any()) return false;
+
+            var lastRecord = todayRecords.OrderByDescending(r => r.Time).First();
+            return lastRecord.Type == RecordType.CheckIn || lastRecord.Type == RecordType.BreakEnd;
         }
 
         public async Task<bool> IsEmployeeOnBreakAsync(int employeeId)
         {
-            try
-            {
-                return await _context.TimeRecords
-                    .AnyAsync(tr => tr.EmployeeId == employeeId && 
-                                   tr.RecordType == RecordType.Break && 
-                                   tr.CheckOut == null &&
-                                   tr.Date == DateTime.Today);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error verificando pausa para empleado {EmployeeId}", employeeId);
-                throw;
-            }
+            var today = DateTime.Today;
+            var todayRecords = await GetDailyRecordsAsync(employeeId, today);
+
+            if (!todayRecords.Any()) return false;
+
+            var lastRecord = todayRecords.OrderByDescending(r => r.Time).First();
+            return lastRecord.Type == RecordType.BreakStart;
         }
 
-        public async Task<EmployeeStatusDto> GetEmployeeStatusAsync(int employeeId)
+        public async Task<TimeSpan> CalculateWorkedHoursAsync(int employeeId, DateTime date)
         {
-            try
-            {
-                var isCheckedIn = await IsEmployeeCheckedInAsync(employeeId);
-                var isOnBreak = await IsEmployeeOnBreakAsync(employeeId);
-                var activeRecord = await GetActiveTimeRecordAsync(employeeId);
-
-                return new EmployeeStatusDto
-                {
-                    EmployeeId = employeeId,
-                    IsCheckedIn = isCheckedIn,
-                    IsOnBreak = isOnBreak,
-                    CheckInTime = activeRecord?.CheckIn,
-                    CurrentBreakStart = isOnBreak ? await GetCurrentBreakStartAsync(employeeId) : null,
-                    WorkedHoursToday = await GetWorkedHoursTodayAsync(employeeId),
-                    LastUpdate = DateTime.UtcNow
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo estado para empleado {EmployeeId}", employeeId);
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<TimeRecordDto>> GetEmployeeTimeRecordsAsync(int employeeId, DateTime? startDate = null, DateTime? endDate = null)
-        {
-            try
-            {
-                var query = _context.TimeRecords
-                    .Where(tr => tr.EmployeeId == employeeId)
-                    .AsQueryable();
-
-                if (startDate.HasValue)
-                {
-                    query = query.Where(tr => tr.Date >= startDate.Value.Date);
-                }
-
-                if (endDate.HasValue)
-                {
-                    query = query.Where(tr => tr.Date <= endDate.Value.Date);
-                }
-
-                var records = await query
-                    .OrderByDescending(tr => tr.Date)
-                    .ThenByDescending(tr => tr.CheckIn)
-                    .ToListAsync();
-
-                return _mapper.Map<IEnumerable<TimeRecordDto>>(records);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo registros para empleado {EmployeeId}", employeeId);
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<TimeRecordDto>> GetTimeRecordsAsync(DateTime? startDate = null, DateTime? endDate = null, int? employeeId = null, int? departmentId = null)
-        {
-            try
-            {
-                var query = _context.TimeRecords
-                    .Include(tr => tr.Employee)
-                    .ThenInclude(e => e.Department)
-                    .AsQueryable();
-
-                if (startDate.HasValue)
-                {
-                    query = query.Where(tr => tr.Date >= startDate.Value.Date);
-                }
-
-                if (endDate.HasValue)
-                {
-                    query = query.Where(tr => tr.Date <= endDate.Value.Date);
-                }
-
-                if (employeeId.HasValue)
-                {
-                    query = query.Where(tr => tr.EmployeeId == employeeId);
-                }
-
-                if (departmentId.HasValue)
-                {
-                    query = query.Where(tr => tr.Employee.DepartmentId == departmentId);
-                }
-
-                var records = await query
-                    .OrderByDescending(tr => tr.Date)
-                    .ThenByDescending(tr => tr.CheckIn)
-                    .ToListAsync();
-
-                return _mapper.Map<IEnumerable<TimeRecordDto>>(records);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo registros de tiempo");
-                throw;
-            }
-        }
-
-        public async Task<TimeRecordDto?> GetActiveTimeRecordAsync(int employeeId)
-        {
-            try
-            {
-                var activeRecord = await _context.TimeRecords
-                    .FirstOrDefaultAsync(tr => tr.EmployeeId == employeeId && 
-                                             tr.RecordType == RecordType.CheckIn && 
-                                             tr.CheckOut == null &&
-                                             tr.Date == DateTime.Today);
-
-                return activeRecord != null ? _mapper.Map<TimeRecordDto>(activeRecord) : null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo registro activo para empleado {EmployeeId}", employeeId);
-                throw;
-            }
-        }
-
-        public async Task<DailyHoursSummaryDto> GetDailyHoursSummaryAsync(int employeeId, DateTime date)
-        {
-            try
-            {
-                var records = await _context.TimeRecords
-                    .Where(tr => tr.EmployeeId == employeeId && tr.Date == date.Date)
-                    .ToListAsync();
-
-                var workRecords = records.Where(r => r.RecordType == RecordType.CheckIn).ToList();
-                var breakRecords = records.Where(r => r.RecordType == RecordType.Break).ToList();
-
-                var totalWorkedHours = workRecords.Sum(r => r.TotalHours ?? 0);
-                var totalBreakHours = breakRecords.Sum(r => r.TotalHours ?? 0);
-
-                return new DailyHoursSummaryDto
-                {
-                    Date = date.Date,
-                    EmployeeId = employeeId,
-                    TotalWorkedHours = totalWorkedHours,
-                    TotalBreakHours = totalBreakHours,
-                    CheckInTime = workRecords.FirstOrDefault()?.CheckIn,
-                    CheckOutTime = workRecords.FirstOrDefault()?.CheckOut,
-                    IsComplete = workRecords.Any() && workRecords.All(r => r.CheckOut.HasValue)
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo resumen diario para empleado {EmployeeId}", employeeId);
-                throw;
-            }
-        }
-
-        public async Task<WeeklyHoursSummaryDto> GetWeeklyHoursSummaryAsync(int employeeId, DateTime weekStart)
-        {
-            try
-            {
-                var weekEnd = weekStart.AddDays(6);
-                var records = await _context.TimeRecords
-                    .Where(tr => tr.EmployeeId == employeeId && 
-                               tr.Date >= weekStart.Date && 
-                               tr.Date <= weekEnd.Date &&
-                               tr.RecordType == RecordType.CheckIn)
-                    .ToListAsync();
-
-                var totalHours = records.Sum(r => r.TotalHours ?? 0);
-                var daysWorked = records.Select(r => r.Date).Distinct().Count();
-
-                return new WeeklyHoursSummaryDto
-                {
-                    WeekStart = weekStart.Date,
-                    WeekEnd = weekEnd.Date,
-                    EmployeeId = employeeId,
-                    TotalHours = totalHours,
-                    DaysWorked = daysWorked,
-                    AverageHoursPerDay = daysWorked > 0 ? totalHours / daysWorked : 0
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo resumen semanal para empleado {EmployeeId}", employeeId);
-                throw;
-            }
-        }
-
-        public async Task<MonthlyHoursSummaryDto> GetMonthlyHoursSummaryAsync(int employeeId, int year, int month)
-        {
-            try
-            {
-                var monthStart = new DateTime(year, month, 1);
-                var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-
-                var records = await _context.TimeRecords
-                    .Where(tr => tr.EmployeeId == employeeId && 
-                               tr.Date >= monthStart && 
-                               tr.Date <= monthEnd &&
-                               tr.RecordType == RecordType.CheckIn)
-                    .ToListAsync();
-
-                var totalHours = records.Sum(r => r.TotalHours ?? 0);
-                var daysWorked = records.Select(r => r.Date).Distinct().Count();
-
-                return new MonthlyHoursSummaryDto
-                {
-                    Year = year,
-                    Month = month,
-                    EmployeeId = employeeId,
-                    TotalHours = totalHours,
-                    DaysWorked = daysWorked,
-                    AverageHoursPerDay = daysWorked > 0 ? totalHours / daysWorked : 0
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo resumen mensual para empleado {EmployeeId}", employeeId);
-                throw;
-            }
-        }
-
-        #region Private Methods
-
-        private double CalculateWorkedHours(TimeRecord timeRecord)
-        {
-            if (timeRecord.CheckIn == null || timeRecord.CheckOut == null)
-                return 0;
-
-            var totalMinutes = (timeRecord.CheckOut.Value - timeRecord.CheckIn.Value).TotalMinutes;
+            var records = await GetDailyRecordsAsync(employeeId, date);
             
-            // Restar tiempo de pausas del mismo día
-            var breakTime = _context.TimeRecords
-                .Where(tr => tr.EmployeeId == timeRecord.EmployeeId && 
-                           tr.Date == timeRecord.Date &&
-                           tr.RecordType == RecordType.Break &&
-                           tr.CheckOut != null)
-                .Sum(tr => tr.TotalHours ?? 0);
-
-            var workedHours = (totalMinutes / 60) - breakTime;
-            return Math.Max(0, workedHours); // No permitir horas negativas
+            // TODO: Implementar lógica de cálculo de horas trabajadas
+            // Por ahora, retorna un placeholder
+            return TimeSpan.FromHours(8);
         }
 
-        private double CalculateBreakTime(TimeRecord breakRecord)
+        public async Task<TimeSpan> CalculateBreakTimeAsync(int employeeId, DateTime date)
         {
-            if (breakRecord.CheckIn == null || breakRecord.CheckOut == null)
-                return 0;
-
-            var totalMinutes = (breakRecord.CheckOut.Value - breakRecord.CheckIn.Value).TotalMinutes;
-            return totalMinutes / 60;
+            var records = await GetDailyRecordsAsync(employeeId, date);
+            
+            // TODO: Implementar lógica de cálculo de tiempo de descanso
+            // Por ahora, retorna un placeholder
+            return TimeSpan.FromHours(1);
         }
 
-        private async Task<DateTime?> GetCurrentBreakStartAsync(int employeeId)
+        public async Task<bool> ValidateCheckInAsync(int employeeId)
         {
-            var currentBreak = await _context.TimeRecords
-                .FirstOrDefaultAsync(tr => tr.EmployeeId == employeeId && 
-                                         tr.RecordType == RecordType.Break && 
-                                         tr.CheckOut == null &&
-                                         tr.Date == DateTime.Today);
+            try
+            {
+                // Verificar que el empleado existe y está activo
+                var employee = await _context.Employees.FindAsync(employeeId);
+                if (employee == null || !employee.Active)
+                {
+                    return false;
+                }
 
-            return currentBreak?.CheckIn;
+                // Verificar que no esté ya fichado
+                return !await IsEmployeeCheckedInAsync(employeeId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validando check-in para empleado {EmployeeId}", employeeId);
+                return false;
+            }
         }
 
-        private async Task<double> GetWorkedHoursTodayAsync(int employeeId)
+        public async Task<bool> ValidateCheckOutAsync(int employeeId)
         {
-            var todayRecords = await _context.TimeRecords
-                .Where(tr => tr.EmployeeId == employeeId && 
-                           tr.Date == DateTime.Today &&
-                           tr.RecordType == RecordType.CheckIn)
-                .ToListAsync();
+            try
+            {
+                // Verificar que el empleado existe y está activo
+                var employee = await _context.Employees.FindAsync(employeeId);
+                if (employee == null || !employee.Active)
+                {
+                    return false;
+                }
 
-            return todayRecords.Sum(r => r.TotalHours ?? 0);
+                // Verificar que esté fichado
+                return await IsEmployeeCheckedInAsync(employeeId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validando check-out para empleado {EmployeeId}", employeeId);
+                return false;
+            }
         }
 
-        #endregion
+        public async Task<string> GetEmployeeStatusAsync(int employeeId)
+        {
+            try
+            {
+                if (await IsEmployeeOnBreakAsync(employeeId))
+                {
+                    return "En descanso";
+                }
+                else if (await IsEmployeeCheckedInAsync(employeeId))
+                {
+                    return "Trabajando";
+                }
+                else
+                {
+                    return "Fuera de trabajo";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo estado del empleado {EmployeeId}", employeeId);
+                return "Desconocido";
+            }
+        }
     }
 }

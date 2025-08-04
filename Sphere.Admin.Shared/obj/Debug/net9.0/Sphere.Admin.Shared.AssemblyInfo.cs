@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Sphere.Admin.Shared")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+84518025ad385f245d5c18f5a958e8c206f97a8f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+caf5ba13089044368bad1729538c3bb4e4371791")]
 [assembly: System.Reflection.AssemblyProductAttribute("Sphere.Admin.Shared")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Sphere.Admin.Shared")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

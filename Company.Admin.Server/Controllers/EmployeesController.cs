@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Company.Admin.Server.Services;
 using Shared.Models.Core;
 using Shared.Models.DTOs.Employee;
-using Shared.Services.Tenant;
+using Shared.Services.Database;
 using AutoMapper;
 using System.ComponentModel.DataAnnotations;
 
@@ -47,7 +47,7 @@ namespace Company.Admin.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al obtener empleados");
+                _logger.LogError(ex, "Error obteniendo empleados");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
@@ -61,7 +61,6 @@ namespace Company.Admin.Server.Controllers
             try
             {
                 var employee = await _employeeService.GetEmployeeByIdAsync(id);
-                
                 if (employee == null)
                 {
                     return NotFound($"Empleado con ID {id} no encontrado");
@@ -71,7 +70,7 @@ namespace Company.Admin.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al obtener empleado {EmployeeId}", id);
+                _logger.LogError(ex, "Error obteniendo empleado {EmployeeId}", id);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
@@ -80,7 +79,7 @@ namespace Company.Admin.Server.Controllers
         /// Crear nuevo empleado
         /// </summary>
         [HttpPost]
-        public async Task<ActionResult<EmployeeDto>> CreateEmployee([FromBody] CreateEmployeeDto createEmployeeDto)
+        public async Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createDto, int companyId)
         {
             try
             {
@@ -89,22 +88,13 @@ namespace Company.Admin.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var companyId = _tenantResolver.GetCompanyId();
-                var employee = await _employeeService.CreateEmployeeAsync(createEmployeeDto, companyId);
+                var employee = await _employeeService.CreateEmployeeAsync(createDto);
 
-                return CreatedAtAction(nameof(GetEmployee), new { id = employee.Id }, employee);
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(ex.Message);
+                return CreatedAtAction(nameof(GetEmployee), new { id = employee.Id }, _mapper.Map<EmployeeDto>(employee));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al crear empleado");
+                _logger.LogError(ex, "Error creando empleado");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
@@ -113,7 +103,7 @@ namespace Company.Admin.Server.Controllers
         /// Actualizar empleado existente
         /// </summary>
         [HttpPut("{id}")]
-        public async Task<ActionResult<EmployeeDto>> UpdateEmployee(int id, [FromBody] UpdateEmployeeDto updateEmployeeDto)
+        public async Task<ActionResult<EmployeeDto>> UpdateEmployee(int id, [FromBody] UpdateEmployeeDto updateDto)
         {
             try
             {
@@ -122,26 +112,17 @@ namespace Company.Admin.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var updatedEmployee = await _employeeService.UpdateEmployeeAsync(id, updateEmployeeDto);
-                
-                if (updatedEmployee == null)
+                var employee = await _employeeService.UpdateEmployeeAsync(id, updateDto);
+                if (employee == null)
                 {
                     return NotFound($"Empleado con ID {id} no encontrado");
                 }
 
-                return Ok(updatedEmployee);
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(ex.Message);
+                return Ok(employee);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al actualizar empleado {EmployeeId}", id);
+                _logger.LogError(ex, "Error actualizando empleado {EmployeeId}", id);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
@@ -154,217 +135,19 @@ namespace Company.Admin.Server.Controllers
         {
             try
             {
-                var deleted = await _employeeService.DeleteEmployeeAsync(id);
-                
-                if (!deleted)
+                var result = await _employeeService.DeleteEmployeeAsync(id);
+                if (!result)
                 {
                     return NotFound($"Empleado con ID {id} no encontrado");
                 }
 
-                return Ok(new { message = "Empleado eliminado correctamente" });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
+                return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al eliminar empleado {EmployeeId}", id);
+                _logger.LogError(ex, "Error eliminando empleado {EmployeeId}", id);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
-
-        /// <summary>
-        /// Activar empleado
-        /// </summary>
-        [HttpPost("{id}/activate")]
-        public async Task<ActionResult> ActivateEmployee(int id)
-        {
-            try
-            {
-                var activated = await _employeeService.ActivateEmployeeAsync(id);
-                
-                if (!activated)
-                {
-                    return NotFound($"Empleado con ID {id} no encontrado");
-                }
-
-                return Ok(new { message = "Empleado activado correctamente" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al activar empleado {EmployeeId}", id);
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Desactivar empleado
-        /// </summary>
-        [HttpPost("{id}/deactivate")]
-        public async Task<ActionResult> DeactivateEmployee(int id)
-        {
-            try
-            {
-                var deactivated = await _employeeService.DeactivateEmployeeAsync(id);
-                
-                if (!deactivated)
-                {
-                    return NotFound($"Empleado con ID {id} no encontrado");
-                }
-
-                return Ok(new { message = "Empleado desactivado correctamente" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al desactivar empleado {EmployeeId}", id);
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Cambiar contraseña de empleado
-        /// </summary>
-        [HttpPost("{id}/change-password")]
-        public async Task<ActionResult> ChangePassword(int id, [FromBody] ChangeEmployeePasswordDto changePasswordDto)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest(ModelState);
-                }
-
-                var changed = await _employeeService.ChangePasswordAsync(id, changePasswordDto.NewPassword);
-                
-                if (!changed)
-                {
-                    return NotFound($"Empleado con ID {id} no encontrado");
-                }
-
-                return Ok(new { message = "Contraseña cambiada correctamente" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al cambiar contraseña del empleado {EmployeeId}", id);
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Verificar si un email está disponible
-        /// </summary>
-        [HttpGet("check-email")]
-        public async Task<ActionResult> CheckEmailAvailability([FromQuery] string email, [FromQuery] int? excludeId = null)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(email))
-                {
-                    return BadRequest("El email es requerido");
-                }
-
-                var isUnique = await _employeeService.IsEmailUniqueAsync(email, excludeId);
-                
-                return Ok(new
-                {
-                    available = isUnique,
-                    email = email.Trim().ToLower()
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al verificar disponibilidad de email");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Verificar si un código de empleado está disponible
-        /// </summary>
-        [HttpGet("check-employee-code")]
-        public async Task<ActionResult> CheckEmployeeCodeAvailability([FromQuery] string employeeCode, [FromQuery] int? excludeId = null)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(employeeCode))
-                {
-                    return BadRequest("El código de empleado es requerido");
-                }
-
-                var isUnique = await _employeeService.IsEmployeeCodeUniqueAsync(employeeCode, excludeId);
-                
-                return Ok(new
-                {
-                    available = isUnique,
-                    employeeCode = employeeCode.Trim().ToUpper()
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al verificar disponibilidad de código de empleado");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Generar código de empleado único
-        /// </summary>
-        [HttpGet("generate-employee-code")]
-        public async Task<ActionResult> GenerateEmployeeCode()
-        {
-            try
-            {
-                var employeeCode = await _employeeService.GenerateUniqueEmployeeCodeAsync();
-                
-                return Ok(new
-                {
-                    employeeCode,
-                    generated = true
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al generar código de empleado");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Obtener estadísticas de empleados
-        /// </summary>
-        [HttpGet("stats")]
-        public async Task<ActionResult> GetEmployeeStats()
-        {
-            try
-            {
-                var totalEmployees = await _employeeService.GetTotalEmployeesAsync();
-                var activeEmployees = await _employeeService.GetActiveEmployeesAsync();
-                var inactiveEmployees = totalEmployees - activeEmployees;
-
-                return Ok(new
-                {
-                    totalEmployees,
-                    activeEmployees,
-                    inactiveEmployees,
-                    activePercentage = totalEmployees > 0 ? Math.Round((double)activeEmployees / totalEmployees * 100, 1) : 0
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al obtener estadísticas de empleados");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-    }
-
-    /// <summary>
-    /// DTO para cambiar contraseña de empleado
-    /// </summary>
-    public class ChangeEmployeePasswordDto
-    {
-        [Required(ErrorMessage = "La nueva contraseña es requerida")]
-        [MinLength(6, ErrorMessage = "La contraseña debe tener al menos 6 caracteres")]
-        public string NewPassword { get; set; } = string.Empty;
     }
 }

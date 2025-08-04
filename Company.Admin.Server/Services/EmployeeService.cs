@@ -8,26 +8,6 @@ using Shared.Services.Security;
 
 namespace Company.Admin.Server.Services
 {
-    public interface IEmployeeService
-    {
-        Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createDto, int companyId);
-        Task<EmployeeDto?> UpdateEmployeeAsync(int id, UpdateEmployeeDto updateDto);
-        Task<bool> DeleteEmployeeAsync(int id);
-        Task<EmployeeDto?> GetEmployeeByIdAsync(int id);
-        Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(string? search = null, int? departmentId = null, bool? active = null);
-        Task<Employee?> GetEmployeeByEmailAsync(string email);
-        Task<bool> IsEmailUniqueAsync(string email, int? excludeId = null);
-        Task<bool> IsEmployeeCodeUniqueAsync(string employeeCode, int? excludeId = null);
-        Task<bool> ActivateEmployeeAsync(int id);
-        Task<bool> DeactivateEmployeeAsync(int id);
-        Task<bool> ChangePasswordAsync(int id, string newPassword);
-        Task<bool> UpdateLastLoginAsync(int id);
-        Task<string> GenerateUniqueEmployeeCodeAsync();
-        Task<int> GetTotalEmployeesAsync();
-        Task<int> GetActiveEmployeesAsync();
-        Task<int> GetEmployeeCountAsync(int? departmentId = null, bool? active = null);
-    }
-
     public class EmployeeService : IEmployeeService
     {
         private readonly CompanyDbContext _context;
@@ -47,102 +27,100 @@ namespace Company.Admin.Server.Services
             _logger = logger;
         }
 
-        public async Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createDto, int companyId)
+        public async Task<Employee> CreateEmployeeAsync(CreateEmployeeDto createEmployeeDto)
         {
             try
             {
-                // Validaciones
-                if (string.IsNullOrWhiteSpace(createDto.Email))
-                    throw new ArgumentException("El email es requerido");
-
-                if (string.IsNullOrWhiteSpace(createDto.EmployeeCode))
-                    throw new ArgumentException("El código de empleado es requerido");
-
-                if (!await IsEmailUniqueAsync(createDto.Email))
-                    throw new InvalidOperationException($"El email {createDto.Email} ya está en uso");
-
-                if (!await IsEmployeeCodeUniqueAsync(createDto.EmployeeCode))
-                    throw new InvalidOperationException($"El código {createDto.EmployeeCode} ya está en uso");
-
-                // Verificar que el departamento existe y pertenece a la empresa
-                if (createDto.DepartmentId.HasValue)
+                // Validar que el email no exista
+                var existingEmployee = await _context.Employees
+                    .FirstOrDefaultAsync(e => e.Email == createEmployeeDto.Email);
+                
+                if (existingEmployee != null)
                 {
-                    var department = await _context.Departments
-                        .FirstOrDefaultAsync(d => d.Id == createDto.DepartmentId && d.CompanyId == companyId);
-                    if (department == null)
-                        throw new ArgumentException("Departamento no válido");
+                    throw new InvalidOperationException("Ya existe un empleado con este email");
                 }
 
-                // Crear empleado
-                var employee = _mapper.Map<Employee>(createDto);
-                employee.CompanyId = companyId;
-                employee.PasswordHash = _passwordService.HashPassword(createDto.Password);
-                employee.Role = createDto.Role ?? UserRole.Employee;
-                employee.Active = true;
-                employee.HiredAt = createDto.HiredAt ?? DateTime.UtcNow;
-                employee.CreatedAt = DateTime.UtcNow;
-                employee.UpdatedAt = DateTime.UtcNow;
+                // Generar código único de empleado si no se proporciona
+                var employeeCode = string.IsNullOrEmpty(createEmployeeDto.EmployeeCode) 
+                    ? await GenerateUniqueEmployeeCodeAsync()
+                    : createEmployeeDto.EmployeeCode;
+
+                // Validar que el código de empleado no exista
+                var existingCode = await _context.Employees
+                    .FirstOrDefaultAsync(e => e.EmployeeCode == employeeCode);
+                
+                if (existingCode != null)
+                {
+                    throw new InvalidOperationException("Ya existe un empleado con este código");
+                }
+
+                var employee = new Employee
+                {
+                    FirstName = createEmployeeDto.FirstName,
+                    LastName = createEmployeeDto.LastName,
+                    Email = createEmployeeDto.Email,
+                    EmployeeCode = employeeCode,
+                    Phone = createEmployeeDto.Phone,
+                    DepartmentId = createEmployeeDto.DepartmentId,
+                    Position = createEmployeeDto.Position,
+                    Role = createEmployeeDto.Role,
+                    HireDate = createEmployeeDto.HireDate,
+                    Salary = createEmployeeDto.Salary,
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow,
+                    PasswordHash = _passwordService.HashPassword(createEmployeeDto.Password ?? "123456") // Password temporal
+                };
 
                 _context.Employees.Add(employee);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Empleado creado: {EmployeeCode} - {Email}", employee.EmployeeCode, employee.Email);
-
-                return _mapper.Map<EmployeeDto>(employee);
+                _logger.LogInformation("Empleado creado: {EmployeeId} - {Email}", employee.Id, employee.Email);
+                return employee;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creando empleado con email {Email}", createDto.Email);
+                _logger.LogError(ex, "Error creando empleado");
                 throw;
             }
         }
 
-        public async Task<EmployeeDto?> UpdateEmployeeAsync(int id, UpdateEmployeeDto updateDto)
+        public async Task<Employee> UpdateEmployeeAsync(int id, UpdateEmployeeDto updateEmployeeDto)
         {
             try
             {
-                var employee = await _context.Employees
-                    .Include(e => e.Department)
-                    .Include(e => e.Company)
-                    .FirstOrDefaultAsync(e => e.Id == id);
-
+                var employee = await _context.Employees.FindAsync(id);
                 if (employee == null)
-                    return null;
+                {
+                    throw new InvalidOperationException("Empleado no encontrado");
+                }
 
                 // Validar email único (excluyendo el empleado actual)
-                if (!string.IsNullOrWhiteSpace(updateDto.Email) && 
-                    updateDto.Email != employee.Email &&
-                    !await IsEmailUniqueAsync(updateDto.Email, id))
+                if (!string.IsNullOrEmpty(updateEmployeeDto.Email) && updateEmployeeDto.Email != employee.Email)
                 {
-                    throw new InvalidOperationException($"El email {updateDto.Email} ya está en uso");
-                }
-
-                // Validar código único (excluyendo el empleado actual)
-                if (!string.IsNullOrWhiteSpace(updateDto.EmployeeCode) && 
-                    updateDto.EmployeeCode != employee.EmployeeCode &&
-                    !await IsEmployeeCodeUniqueAsync(updateDto.EmployeeCode, id))
-                {
-                    throw new InvalidOperationException($"El código {updateDto.EmployeeCode} ya está en uso");
-                }
-
-                // Verificar departamento si se proporciona
-                if (updateDto.DepartmentId.HasValue)
-                {
-                    var department = await _context.Departments
-                        .FirstOrDefaultAsync(d => d.Id == updateDto.DepartmentId && d.CompanyId == employee.CompanyId);
-                    if (department == null)
-                        throw new ArgumentException("Departamento no válido");
+                    var existingEmail = await _context.Employees
+                        .FirstOrDefaultAsync(e => e.Email == updateEmployeeDto.Email && e.Id != id);
+                    
+                    if (existingEmail != null)
+                    {
+                        throw new InvalidOperationException("Ya existe un empleado con este email");
+                    }
+                    employee.Email = updateEmployeeDto.Email;
                 }
 
                 // Actualizar campos
-                _mapper.Map(updateDto, employee);
+                employee.FirstName = updateEmployeeDto.FirstName ?? employee.FirstName;
+                employee.LastName = updateEmployeeDto.LastName ?? employee.LastName;
+                employee.Phone = updateEmployeeDto.Phone ?? employee.Phone;
+                employee.DepartmentId = updateEmployeeDto.DepartmentId ?? employee.DepartmentId;
+                employee.Position = updateEmployeeDto.Position ?? employee.Position;
+                employee.Role = updateEmployeeDto.Role ?? employee.Role;
+                employee.Salary = updateEmployeeDto.Salary ?? employee.Salary;
                 employee.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Empleado actualizado: {EmployeeId} - {EmployeeCode}", id, employee.EmployeeCode);
-
-                return _mapper.Map<EmployeeDto>(employee);
+                _logger.LogInformation("Empleado actualizado: {EmployeeId}", employee.Id);
+                return employee;
             }
             catch (Exception ex)
             {
@@ -151,26 +129,65 @@ namespace Company.Admin.Server.Services
             }
         }
 
+        public async Task<Employee?> GetEmployeeByIdAsync(int id)
+        {
+            return await _context.Employees
+                .Include(e => e.Department)
+                .FirstOrDefaultAsync(e => e.Id == id);
+        }
+
+        public async Task<Employee?> GetEmployeeByEmailAsync(string email)
+        {
+            return await _context.Employees
+                .Include(e => e.Department)
+                .FirstOrDefaultAsync(e => e.Email == email);
+        }
+
+        public async Task<IEnumerable<Employee>> GetEmployeesAsync(string? search = null, int? departmentId = null, bool? active = null)
+        {
+            var query = _context.Employees
+                .Include(e => e.Department)
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(e => 
+                    e.FirstName.Contains(search) || 
+                    e.LastName.Contains(search) || 
+                    e.Email.Contains(search) ||
+                    e.EmployeeCode.Contains(search));
+            }
+
+            if (departmentId.HasValue)
+            {
+                query = query.Where(e => e.DepartmentId == departmentId);
+            }
+
+            if (active.HasValue)
+            {
+                query = query.Where(e => e.Active == active);
+            }
+
+            return await query
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
+                .ToListAsync();
+        }
+
         public async Task<bool> DeleteEmployeeAsync(int id)
         {
             try
             {
                 var employee = await _context.Employees.FindAsync(id);
-                if (employee == null)
-                    return false;
+                if (employee == null) return false;
 
-                // Verificar si el empleado tiene registros de tiempo
-                var hasTimeRecords = await _context.TimeRecords.AnyAsync(tr => tr.EmployeeId == id);
-                if (hasTimeRecords)
-                {
-                    throw new InvalidOperationException("No se puede eliminar un empleado que tiene registros de tiempo. Use la desactivación en su lugar.");
-                }
+                // Soft delete
+                employee.Active = false;
+                employee.UpdatedAt = DateTime.UtcNow;
 
-                _context.Employees.Remove(employee);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Empleado eliminado: {EmployeeId} - {EmployeeCode}", id, employee.EmployeeCode);
-
+                _logger.LogInformation("Empleado eliminado (soft): {EmployeeId}", employee.Id);
                 return true;
             }
             catch (Exception ex)
@@ -180,136 +197,17 @@ namespace Company.Admin.Server.Services
             }
         }
 
-        public async Task<EmployeeDto?> GetEmployeeByIdAsync(int id)
-        {
-            try
-            {
-                var employee = await _context.Employees
-                    .Include(e => e.Department)
-                    .Include(e => e.Company)
-                    .FirstOrDefaultAsync(e => e.Id == id);
-
-                return employee != null ? _mapper.Map<EmployeeDto>(employee) : null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo empleado {EmployeeId}", id);
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(string? search = null, int? departmentId = null, bool? active = null)
-        {
-            try
-            {
-                var query = _context.Employees
-                    .Include(e => e.Department)
-                    .Include(e => e.Company)
-                    .AsQueryable();
-
-                // Filtro por búsqueda
-                if (!string.IsNullOrWhiteSpace(search))
-                {
-                    search = search.ToLower();
-                    query = query.Where(e => 
-                        e.FirstName.ToLower().Contains(search) ||
-                        e.LastName.ToLower().Contains(search) ||
-                        e.Email.ToLower().Contains(search) ||
-                        e.EmployeeCode.ToLower().Contains(search));
-                }
-
-                // Filtro por departamento
-                if (departmentId.HasValue)
-                {
-                    query = query.Where(e => e.DepartmentId == departmentId);
-                }
-
-                // Filtro por estado activo
-                if (active.HasValue)
-                {
-                    query = query.Where(e => e.Active == active);
-                }
-
-                var employees = await query
-                    .OrderBy(e => e.LastName)
-                    .ThenBy(e => e.FirstName)
-                    .ToListAsync();
-
-                return _mapper.Map<IEnumerable<EmployeeDto>>(employees);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo empleados");
-                throw;
-            }
-        }
-
-        public async Task<Employee?> GetEmployeeByEmailAsync(string email)
-        {
-            try
-            {
-                return await _context.Employees
-                    .Include(e => e.Department)
-                    .Include(e => e.Company)
-                    .FirstOrDefaultAsync(e => e.Email == email);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo empleado por email {Email}", email);
-                throw;
-            }
-        }
-
-        public async Task<bool> IsEmailUniqueAsync(string email, int? excludeId = null)
-        {
-            try
-            {
-                var query = _context.Employees.Where(e => e.Email == email);
-
-                if (excludeId.HasValue)
-                    query = query.Where(e => e.Id != excludeId);
-
-                return !await query.AnyAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error verificando unicidad de email {Email}", email);
-                throw;
-            }
-        }
-
-        public async Task<bool> IsEmployeeCodeUniqueAsync(string employeeCode, int? excludeId = null)
-        {
-            try
-            {
-                var query = _context.Employees.Where(e => e.EmployeeCode == employeeCode);
-
-                if (excludeId.HasValue)
-                    query = query.Where(e => e.Id != excludeId);
-
-                return !await query.AnyAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error verificando unicidad de código {Code}", employeeCode);
-                throw;
-            }
-        }
-
         public async Task<bool> ActivateEmployeeAsync(int id)
         {
             try
             {
                 var employee = await _context.Employees.FindAsync(id);
-                if (employee == null)
-                    return false;
+                if (employee == null) return false;
 
                 employee.Active = true;
                 employee.UpdatedAt = DateTime.UtcNow;
+
                 await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Empleado activado: {EmployeeId} - {EmployeeCode}", id, employee.EmployeeCode);
-
                 return true;
             }
             catch (Exception ex)
@@ -324,15 +222,12 @@ namespace Company.Admin.Server.Services
             try
             {
                 var employee = await _context.Employees.FindAsync(id);
-                if (employee == null)
-                    return false;
+                if (employee == null) return false;
 
                 employee.Active = false;
                 employee.UpdatedAt = DateTime.UtcNow;
+
                 await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Empleado desactivado: {EmployeeId} - {EmployeeCode}", id, employee.EmployeeCode);
-
                 return true;
             }
             catch (Exception ex)
@@ -347,120 +242,126 @@ namespace Company.Admin.Server.Services
             try
             {
                 var employee = await _context.Employees.FindAsync(id);
-                if (employee == null)
-                    return false;
+                if (employee == null) return false;
 
                 employee.PasswordHash = _passwordService.HashPassword(newPassword);
                 employee.UpdatedAt = DateTime.UtcNow;
+
                 await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Contraseña cambiada para empleado: {EmployeeId}", id);
-
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error cambiando contraseña del empleado {Id}", id);
+                _logger.LogError(ex, "Error cambiando contraseña de empleado {EmployeeId}", id);
                 throw;
             }
         }
 
-        public async Task<bool> UpdateLastLoginAsync(int id)
+        public async Task<bool> ValidateEmployeeCredentialsAsync(string email, string password)
         {
             try
             {
-                var employee = await _context.Employees.FindAsync(id);
-                if (employee == null)
+                var employee = await GetEmployeeByEmailAsync(email);
+                if (employee == null || !employee.Active)
                     return false;
 
-                employee.LastLoginAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
-
-                return true;
+                return _passwordService.VerifyPassword(password, employee.PasswordHash);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error actualizando último login del empleado {Id}", id);
-                throw;
+                _logger.LogError(ex, "Error validando credenciales para {Email}", email);
+                return false;
             }
         }
 
-        public async Task<string> GenerateUniqueEmployeeCodeAsync()
+        public async Task<Employee?> AuthenticateEmployeeAsync(string email, string password)
         {
             try
             {
-                string code;
-                bool isUnique;
-                int attempts = 0;
-                const int maxAttempts = 100;
+                var employee = await GetEmployeeByEmailAsync(email);
+                if (employee == null || !employee.Active)
+                    return null;
 
-                do
-                {
-                    attempts++;
-                    if (attempts > maxAttempts)
-                        throw new InvalidOperationException("No se pudo generar un código único después de múltiples intentos");
+                var isValid = _passwordService.VerifyPassword(password, employee.PasswordHash);
+                if (!isValid)
+                    return null;
 
-                    // Generar código en formato EMP + 4 dígitos
-                    var number = Random.Shared.Next(1000, 9999);
-                    code = $"EMP{number}";
-                    
-                    isUnique = await IsEmployeeCodeUniqueAsync(code);
-                } 
-                while (!isUnique);
+                // Actualizar último login
+                await UpdateLastLoginAsync(employee.Id);
 
-                return code;
+                return employee;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generando código único de empleado");
-                throw;
+                _logger.LogError(ex, "Error autenticando empleado {Email}", email);
+                return null;
             }
         }
 
         public async Task<int> GetTotalEmployeesAsync()
         {
-            try
-            {
-                return await _context.Employees.CountAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo total de empleados");
-                throw;
-            }
+            return await _context.Employees.CountAsync();
         }
 
         public async Task<int> GetActiveEmployeesAsync()
         {
-            try
-            {
-                return await _context.Employees.CountAsync(e => e.Active);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error obteniendo empleados activos");
-                throw;
-            }
+            return await _context.Employees.CountAsync(e => e.Active);
         }
 
-        public async Task<int> GetEmployeeCountAsync(int? departmentId = null, bool? active = null)
+        public async Task<bool> IsEmailUniqueAsync(string email, int? excludeId = null)
+        {
+            var query = _context.Employees.Where(e => e.Email == email);
+            
+            if (excludeId.HasValue)
+            {
+                query = query.Where(e => e.Id != excludeId);
+            }
+
+            return !await query.AnyAsync();
+        }
+
+        public async Task<bool> IsEmployeeCodeUniqueAsync(string employeeCode, int? excludeId = null)
+        {
+            var query = _context.Employees.Where(e => e.EmployeeCode == employeeCode);
+            
+            if (excludeId.HasValue)
+            {
+                query = query.Where(e => e.Id != excludeId);
+            }
+
+            return !await query.AnyAsync();
+        }
+
+        public async Task<string> GenerateUniqueEmployeeCodeAsync()
+        {
+            string code;
+            bool isUnique;
+            
+            do 
+            {
+                code = $"EMP{DateTime.Now:yyyyMMdd}{Random.Shared.Next(1000, 9999)}";
+                isUnique = await IsEmployeeCodeUniqueAsync(code);
+            } 
+            while (!isUnique);
+
+            return code;
+        }
+
+        private async Task<bool> UpdateLastLoginAsync(int id)
         {
             try
             {
-                var query = _context.Employees.AsQueryable();
+                var employee = await _context.Employees.FindAsync(id);
+                if (employee == null) return false;
 
-                if (departmentId.HasValue)
-                    query = query.Where(e => e.DepartmentId == departmentId);
-
-                if (active.HasValue)
-                    query = query.Where(e => e.Active == active);
-
-                return await query.CountAsync();
+                employee.LastLogin = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo conteo de empleados con filtros");
-                throw;
+                _logger.LogError(ex, "Error actualizando último login de empleado {EmployeeId}", id);
+                return false;
             }
         }
     }

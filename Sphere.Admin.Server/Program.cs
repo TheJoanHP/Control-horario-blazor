@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Sphere.Admin.Server.Data;
-using Sphere.Admin.Server.Services;
 using Shared.Services.Security;
-using Shared.Services.Communication;
+using Shared.Services.Database;
+using AutoMapper;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +17,7 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new() { Title = "Sphere Admin API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new()
     {
-        Description = "JWT Authorization header using the Bearer scheme",
+        Description = "JWT Authorization header using the Bearer scheme. Ejemplo: \"Authorization: Bearer {token}\"",
         Name = "Authorization",
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
@@ -38,7 +38,7 @@ builder.Services.AddSwaggerGen(c =>
 // Configuración de CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowSphereAdmin", policy =>
+    options.AddPolicy("AllowSphereClients", policy =>
     {
         policy.WithOrigins(
                 "https://localhost:7001", // Sphere.Admin.Client
@@ -50,22 +50,24 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Configuración de Entity Framework para base de datos central
+// Configuración de Entity Framework - Base de datos central
 builder.Services.AddDbContext<SphereDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
+        throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+    
     options.UseNpgsql(connectionString);
     
     if (builder.Environment.IsDevelopment())
     {
         options.EnableSensitiveDataLogging();
-        options.EnableDetailedErrors();
     }
 });
 
 // Configuración de autenticación JWT
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey no está configurada");
+var secretKey = jwtSettings["SecretKey"] ??
+    throw new InvalidOperationException("JWT SecretKey not configured");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -83,23 +85,30 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("SphereAdmin", policy => 
-        policy.RequireRole("SphereAdmin"));
-});
+builder.Services.AddAuthorization();
 
 // AutoMapper
 builder.Services.AddAutoMapper(typeof(Program));
 
-// Servicios
-builder.Services.AddScoped<IJwtService, JwtService>();
+// Servicios compartidos
 builder.Services.AddScoped<IPasswordService, PasswordService>();
-builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddScoped<ITenantService, TenantService>();
-builder.Services.AddScoped<ILicenseService, LicenseService>();
-builder.Services.AddScoped<ISystemService, SystemService>();
-builder.Services.AddScoped<ISphereAdminService, SphereAdminService>();
+builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<ITenantResolver, TenantResolver>();
+
+// TODO: Servicios específicos de Sphere Admin (crear cuando sea necesario)
+// builder.Services.AddScoped<ITenantService, TenantService>();
+// builder.Services.AddScoped<ILicenseService, LicenseService>();
+// builder.Services.AddScoped<IBillingService, BillingService>();
+
+// Configuración de logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Logging.SetMinimumLevel(LogLevel.Debug);
+}
 
 var app = builder.Build();
 
@@ -110,7 +119,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Sphere Admin API v1");
-        c.RoutePrefix = string.Empty;
+        c.RoutePrefix = string.Empty; // Para que Swagger esté en la raíz
     });
     app.UseDeveloperExceptionPage();
 }
@@ -121,42 +130,26 @@ else
 }
 
 app.UseHttpsRedirection();
-
-app.UseCors("AllowSphereAdmin");
+app.UseCors("AllowSphereClients");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
-// Health check
-app.MapGet("/health", () => new { 
-    Status = "Healthy", 
-    App = "Sphere Admin",
-    Timestamp = DateTime.UtcNow 
-});
-
-// Información del sistema
-app.MapGet("/system-info", () => new
-{
-    Name = "Sphere Time Control - Admin Central",
-    Version = "1.0.0",
-    Environment = app.Environment.EnvironmentName
-});
-
-// Ejecutar migraciones automáticamente
+// Migración automática en desarrollo
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<SphereDbContext>();
     try
     {
-        var context = scope.ServiceProvider.GetRequiredService<SphereDbContext>();
-        await context.Database.EnsureCreatedAsync();
+        await context.Database.MigrateAsync();
+        app.Logger.LogInformation("Base de datos migrada correctamente");
     }
     catch (Exception ex)
     {
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Error al inicializar la base de datos central");
+        app.Logger.LogError(ex, "Error durante la migración de la base de datos");
     }
 }
 

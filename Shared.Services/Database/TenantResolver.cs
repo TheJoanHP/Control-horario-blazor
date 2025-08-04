@@ -1,19 +1,14 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 
-namespace Shared.Services.Tenant
+namespace Shared.Services.Database  // ← Cambié el namespace para ser consistente
 {
-    public interface ITenantResolver
-    {
-        string GetTenantId();
-        int GetCompanyId();
-        string GetConnectionString();
-    }
-
     public class TenantResolver : ITenantResolver
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IConfiguration _configuration;
+        private string? _currentTenantId;
 
         public TenantResolver(IHttpContextAccessor httpContextAccessor, IConfiguration configuration)
         {
@@ -23,6 +18,10 @@ namespace Shared.Services.Tenant
 
         public string GetTenantId()
         {
+            // Si ya se estableció manualmente (por middleware), usar ese
+            if (!string.IsNullOrEmpty(_currentTenantId))
+                return _currentTenantId;
+
             var context = _httpContextAccessor.HttpContext;
             
             // Intentar obtener del header
@@ -48,24 +47,22 @@ namespace Shared.Services.Tenant
             {
                 // Si es un subdominio como empresa1.tudominio.com
                 var parts = host.Split('.');
-                if (parts.Length > 2)
+                if (parts.Length > 2 && !string.Equals(parts[0], "www", StringComparison.OrdinalIgnoreCase))
                 {
-                    var subdomain = parts[0];
-                    if (subdomain != "www" && subdomain != "api")
-                        return subdomain;
+                    return parts[0];
                 }
             }
 
-            // Por defecto devolver "default" para desarrollo
-            return "default";
+            // Por defecto en desarrollo
+            return "demo";
         }
 
         public int GetCompanyId()
         {
+            // Obtener company_id del JWT claim
             var context = _httpContextAccessor.HttpContext;
-            
-            // Intentar obtener del claim del JWT
             var claimsPrincipal = context?.User;
+            
             if (claimsPrincipal?.Identity?.IsAuthenticated == true)
             {
                 var companyClaim = claimsPrincipal.FindFirst("company_id");
@@ -73,28 +70,49 @@ namespace Shared.Services.Tenant
                     return companyId;
             }
 
-            // Si no hay company_id en los claims, lanzar excepción
-            throw new InvalidOperationException("No se pudo determinar el Company ID del usuario actual");
+            // Por defecto devolver 1 (primera empresa)
+            return 1;
+        }
+
+        public bool HasTenant()
+        {
+            return !string.IsNullOrEmpty(GetTenantId());
         }
 
         public string GetConnectionString()
         {
             var tenantId = GetTenantId();
             
-            // Para desarrollo, usar la misma conexión
-            if (tenantId == "default")
-            {
-                return _configuration.GetConnectionString("DefaultConnection") 
-                    ?? throw new InvalidOperationException("ConnectionString no configurado");
-            }
-
-            // En producción, cada tenant tendría su propia BD
-            var tenantConnectionString = _configuration.GetConnectionString($"Tenant_{tenantId}");
+            // Construir string de conexión específico del tenant
+            var baseConnectionString = _configuration.GetConnectionString("DefaultConnection") ?? "";
             
-            // Si no existe conexión específica, usar la por defecto
-            return tenantConnectionString 
-                ?? _configuration.GetConnectionString("DefaultConnection") 
-                ?? throw new InvalidOperationException("ConnectionString no configurado");
+            // Reemplazar el nombre de la base de datos con el tenant
+            if (baseConnectionString.Contains("Database="))
+            {
+                var parts = baseConnectionString.Split(';');
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    if (parts[i].Trim().StartsWith("Database=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        parts[i] = $"Database=SphereTime_{tenantId}";
+                        break;
+                    }
+                }
+                return string.Join(";", parts);
+            }
+            
+            // Si no encuentra Database=, agregar el nombre de BD
+            return baseConnectionString + $";Database=SphereTime_{tenantId}";
+        }
+
+        public void SetTenantId(string tenantId)
+        {
+            _currentTenantId = tenantId;
+        }
+
+        public void SetTenant(string tenantId)
+        {
+            _currentTenantId = tenantId;
         }
     }
 }
