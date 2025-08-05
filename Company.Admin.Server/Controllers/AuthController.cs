@@ -1,37 +1,39 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
-using Company.Admin.Server.Services;
+using Microsoft.EntityFrameworkCore;
+using Shared.Models.Core;
 using Shared.Models.DTOs.Auth;
-using Shared.Services.Security;
-using Shared.Services.Database;
 using Shared.Models.Enums;
-using System.Security.Claims;
+using Shared.Services.Security;
+using Company.Admin.Server.Data;
 
 namespace Company.Admin.Server.Controllers
 {
+    /// <summary>
+    /// Controlador de autenticación para Company Admin
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly IEmployeeService _employeeService;
+        private readonly CompanyDbContext _context;
+        private readonly IPasswordService _passwordService;
         private readonly IJwtService _jwtService;
-        private readonly ITenantResolver _tenantResolver;
         private readonly ILogger<AuthController> _logger;
 
         public AuthController(
-            IEmployeeService employeeService,
+            CompanyDbContext context,
+            IPasswordService passwordService,
             IJwtService jwtService,
-            ITenantResolver tenantResolver,
             ILogger<AuthController> logger)
         {
-            _employeeService = employeeService;
+            _context = context;
+            _passwordService = passwordService;
             _jwtService = jwtService;
-            _tenantResolver = tenantResolver;
             _logger = logger;
         }
 
         /// <summary>
-        /// Login para administradores y supervisores de empresa
+        /// Login para administradores de empresa y empleados
         /// </summary>
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
@@ -40,155 +42,102 @@ namespace Company.Admin.Server.Controllers
             {
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(new LoginResponse
-                    {
-                        Success = false,
-                        Message = "Datos de entrada no válidos"
-                    });
+                    return BadRequest(ModelState);
                 }
 
-                var employee = await _employeeService.AuthenticateEmployeeAsync(request.Email, request.Password);
-                
-                if (employee == null)
+                // Buscar usuario por email
+                var user = await _context.Users
+                    .Include(u => u.Employee)
+                        .ThenInclude(e => e!.Department)
+                    .Include(u => u.Company)
+                    .FirstOrDefaultAsync(u => u.Email == request.Email && u.Active);
+
+                if (user == null)
                 {
-                    _logger.LogWarning("Intento de login fallido para {Email}", request.Email);
-                    return Unauthorized(new LoginResponse
-                    {
-                        Success = false,
-                        Message = "Credenciales inválidas"
-                    });
+                    _logger.LogWarning("Intento de login fallido para email: {Email}", request.Email);
+                    return Unauthorized("Credenciales inválidas");
                 }
 
-                // Verificar que tenga permisos de administrador o supervisor
-                if (employee.Role != UserRole.CompanyAdmin && employee.Role != UserRole.Supervisor)
+                // Verificar contraseña
+                if (!_passwordService.VerifyPassword(request.Password, user.PasswordHash))
                 {
-                    _logger.LogWarning("Acceso denegado para {Email} - Rol: {Role}", request.Email, employee.Role);
-                    return StatusCode(403, new LoginResponse
-                    {
-                        Success = false,
-                        Message = "No tiene permisos para acceder al panel de administración"
-                    });
+                    _logger.LogWarning("Contraseña incorrecta para usuario: {Email}", request.Email);
+                    return Unauthorized("Credenciales inválidas");
                 }
 
-                var tenantId = _tenantResolver.GetTenantId();
-                var additionalClaims = new Dictionary<string, string>
+                // Actualizar último login
+                user.LastLogin = DateTime.UtcNow;
+                user.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                // Generar token JWT
+                var token = _jwtService.GenerateToken(user.Id, user.Email, user.Role);
+
+                var userInfo = new UserInfo
                 {
-                    ["employee_id"] = employee.Id.ToString(),
-                    ["company_id"] = employee.CompanyId.ToString(),
-                    ["department_id"] = employee.DepartmentId?.ToString() ?? "",
-                    ["tenant_id"] = tenantId
+                    Id = user.Id,
+                    Username = user.Username,
+                    Email = user.Email,
+                    FullName = user.FullName,
+                    Role = user.Role,
+                    Active = user.Active,
+                    DepartmentName = user.Employee?.Department?.Name,
+                    LastLogin = user.LastLogin
                 };
 
-                var token = _jwtService.GenerateToken(employee.Id, employee.Email, employee.Role.ToString(), additionalClaims);
-                var expiresAt = DateTime.UtcNow.AddHours(8); // Ajustar según configuración
+                // Información del empleado si aplica
+                if (user.Employee != null)
+                {
+                    userInfo.Employee = new EmployeeInfo
+                    {
+                        Id = user.Employee.Id,
+                        EmployeeNumber = user.Employee.EmployeeNumber,
+                        Position = user.Employee.Position,
+                        DepartmentId = user.Employee.DepartmentId,
+                        DepartmentName = user.Employee.Department?.Name,
+                        HireDate = user.Employee.HireDate,
+                        Active = user.Employee.Active
+                    };
+                }
+
+                // Información de la empresa
+                if (user.Company != null)
+                {
+                    userInfo.Company = new CompanyInfo
+                    {
+                        Id = user.Company.Id,
+                        Name = user.Company.Name,
+                        Subdomain = user.Company.Subdomain,
+                        Email = user.Company.Email,
+                        Phone = user.Company.Phone,
+                        Address = user.Company.Address,
+                        Active = user.Company.Active
+                    };
+                }
 
                 var response = new LoginResponse
                 {
-                    Success = true,
-                    Token = token,
-                    ExpiresAt = expiresAt,
-                    Message = "Login exitoso",
-                    User = new UserInfo
-                    {
-                        Id = employee.Id,
-                        Name = employee.FirstName,
-                        FullName = employee.FullName,
-                        Email = employee.Email,
-                        Role = employee.Role,
-                        Active = employee.Active,
-                        LastLogin = employee.LastLoginAt,
-                        DepartmentName = employee.Department?.Name,
-                        CompanyName = employee.Company?.Name,
-                        Employee = new EmployeeInfo
-                        {
-                            Id = employee.Id,
-                            EmployeeCode = employee.EmployeeCode,
-                            DepartmentName = employee.Department?.Name,
-                            HiredAt = employee.HiredAt,
-                            Company = new CompanyInfo
-                            {
-                                Id = employee.CompanyId,
-                                Name = employee.Company?.Name ?? ""
-                            }
-                        }
-                    }
+                    Token = token.Token,
+                    RefreshToken = token.RefreshToken,
+                    ExpiresAt = token.ExpiresAt,
+                    User = userInfo
                 };
 
-                _logger.LogInformation("Login exitoso para {Email}", request.Email);
+                _logger.LogInformation("Login exitoso para usuario: {Email}", request.Email);
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error durante el login");
-                return StatusCode(500, new LoginResponse
-                {
-                    Success = false,
-                    Message = "Error interno del servidor"
-                });
-            }
-        }
-
-        /// <summary>
-        /// Obtener información del usuario actual
-        /// </summary>
-        [HttpGet("me")]
-        [Authorize]
-        public async Task<ActionResult<UserInfo>> GetCurrentUser()
-        {
-            try
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (!int.TryParse(userIdClaim, out var userId))
-                {
-                    return Unauthorized("Token inválido");
-                }
-
-                var employee = await _employeeService.GetEmployeeByIdAsync(userId);
-                if (employee == null)
-                {
-                    return NotFound("Usuario no encontrado");
-                }
-
-                var userInfo = new UserInfo
-                {
-                    Id = employee.Id,
-                    Name = employee.FirstName,
-                    FullName = employee.FullName,
-                    Email = employee.Email,
-                    Role = employee.Role,
-                    Active = employee.Active,
-                    LastLogin = employee.LastLoginAt,
-                    DepartmentName = employee.Department?.Name,
-                    CompanyName = employee.Company?.Name,
-                    Employee = new EmployeeInfo
-                    {
-                        Id = employee.Id,
-                        EmployeeCode = employee.EmployeeCode,
-                        DepartmentName = employee.Department?.Name,
-                        HiredAt = employee.HiredAt,
-                        Company = new CompanyInfo
-                        {
-                            Id = employee.CompanyId,
-                            Name = employee.Company?.Name ?? ""
-                        }
-                    }
-                };
-
-                return Ok(userInfo);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al obtener usuario actual");
+                _logger.LogError(ex, "Error durante el login para email: {Email}", request.Email);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
         /// <summary>
-        /// Cambiar contraseña del usuario actual
+        /// Renovar token de acceso
         /// </summary>
-        [HttpPost("change-password")]
-        [Authorize]
-        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        [HttpPost("refresh")]
+        public async Task<ActionResult<LoginResponse>> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             try
             {
@@ -197,29 +146,144 @@ namespace Company.Admin.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                // Validar refresh token
+                var principal = _jwtService.ValidateRefreshToken(request.RefreshToken);
+                if (principal == null)
+                {
+                    return Unauthorized("Token de actualización inválido");
+                }
+
+                var userIdClaim = principal.FindFirst("userId")?.Value;
                 if (!int.TryParse(userIdClaim, out var userId))
                 {
                     return Unauthorized("Token inválido");
                 }
 
-                var employee = await _employeeService.GetEmployeeByIdAsync(userId);
-                if (employee == null)
+                // Buscar usuario
+                var user = await _context.Users
+                    .Include(u => u.Employee)
+                        .ThenInclude(e => e!.Department)
+                    .Include(u => u.Company)
+                    .FirstOrDefaultAsync(u => u.Id == userId && u.Active);
+
+                if (user == null)
+                {
+                    return Unauthorized("Usuario no encontrado o inactivo");
+                }
+
+                // Generar nuevo token
+                var newToken = _jwtService.GenerateToken(user.Id, user.Email, user.Role);
+
+                var userInfo = new UserInfo
+                {
+                    Id = user.Id,
+                    Username = user.Username,
+                    Email = user.Email,
+                    FullName = user.FullName,
+                    Role = user.Role,
+                    Active = user.Active,
+                    DepartmentName = user.Employee?.Department?.Name,
+                    LastLogin = user.LastLogin
+                };
+
+                // Información del empleado si aplica
+                if (user.Employee != null)
+                {
+                    userInfo.Employee = new EmployeeInfo
+                    {
+                        Id = user.Employee.Id,
+                        EmployeeNumber = user.Employee.EmployeeNumber,
+                        Position = user.Employee.Position,
+                        DepartmentId = user.Employee.DepartmentId,
+                        DepartmentName = user.Employee.Department?.Name,
+                        HireDate = user.Employee.HireDate,
+                        Active = user.Employee.Active
+                    };
+                }
+
+                // Información de la empresa
+                if (user.Company != null)
+                {
+                    userInfo.Company = new CompanyInfo
+                    {
+                        Id = user.Company.Id,
+                        Name = user.Company.Name,
+                        Subdomain = user.Company.Subdomain,
+                        Email = user.Company.Email,
+                        Phone = user.Company.Phone,
+                        Address = user.Company.Address,
+                        Active = user.Company.Active
+                    };
+                }
+
+                var response = new LoginResponse
+                {
+                    Token = newToken.Token,
+                    RefreshToken = newToken.RefreshToken,
+                    ExpiresAt = newToken.ExpiresAt,
+                    User = userInfo
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al renovar token");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Logout - Invalidar token
+        /// </summary>
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            // En una implementación completa, aquí invalidarías el token en una blacklist
+            // Por ahora, simplemente retornamos OK
+            await Task.CompletedTask;
+            return Ok(new { message = "Sesión cerrada exitosamente" });
+        }
+
+        /// <summary>
+        /// Cambiar contraseña
+        /// </summary>
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                var userIdClaim = User.FindFirst("userId")?.Value;
+                if (!int.TryParse(userIdClaim, out var userId))
+                {
+                    return Unauthorized("Token inválido");
+                }
+
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null)
                 {
                     return NotFound("Usuario no encontrado");
                 }
 
                 // Verificar contraseña actual
-                if (!await _employeeService.ValidateEmployeeCredentialsAsync(employee.Email, request.CurrentPassword))
+                if (!_passwordService.VerifyPassword(request.CurrentPassword, user.PasswordHash))
                 {
-                    return BadRequest("La contraseña actual es incorrecta");
+                    return BadRequest("Contraseña actual incorrecta");
                 }
 
-                // Cambiar contraseña
-                await _employeeService.ChangePasswordAsync(userId, request.NewPassword);
+                // Actualizar contraseña
+                user.PasswordHash = _passwordService.HashPassword(request.NewPassword);
+                user.UpdatedAt = DateTime.UtcNow;
 
-                _logger.LogInformation("Contraseña cambiada para usuario {UserId}", userId);
-                return Ok(new { message = "Contraseña cambiada exitosamente" });
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Contraseña cambiada para usuario: {UserId}", userId);
+                return Ok(new { message = "Contraseña actualizada exitosamente" });
             }
             catch (Exception ex)
             {
@@ -229,37 +293,38 @@ namespace Company.Admin.Server.Controllers
         }
 
         /// <summary>
-        /// Verificar si el token es válido
+        /// Recuperar contraseña
         /// </summary>
-        [HttpPost("verify-token")]
-        public ActionResult VerifyToken([FromBody] VerifyTokenRequest request)
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
         {
             try
             {
-                var principal = _jwtService.ValidateToken(request.Token);
-                
-                return Ok(new
+                if (!ModelState.IsValid)
                 {
-                    valid = principal != null,
-                    expired = _jwtService.IsTokenExpired(request.Token)
-                });
+                    return BadRequest(ModelState);
+                }
+
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.Active);
+                
+                // Por seguridad, siempre retornamos OK aunque el usuario no exista
+                if (user == null)
+                {
+                    _logger.LogWarning("Solicitud de recuperación de contraseña para email inexistente: {Email}", request.Email);
+                    return Ok(new { message = "Si el email existe, se enviará un enlace de recuperación" });
+                }
+
+                // Aquí implementarías el envío del email de recuperación
+                // Por ahora, solo logueamos la acción
+                _logger.LogInformation("Solicitud de recuperación de contraseña para usuario: {Email}", request.Email);
+
+                return Ok(new { message = "Si el email existe, se enviará un enlace de recuperación" });
             }
-            catch
+            catch (Exception ex)
             {
-                return Ok(new { valid = false, expired = true });
+                _logger.LogError(ex, "Error en recuperación de contraseña");
+                return StatusCode(500, "Error interno del servidor");
             }
         }
-    }
-
-    // DTOs adicionales para el controlador
-    public class ChangePasswordRequest
-    {
-        public string CurrentPassword { get; set; } = string.Empty;
-        public string NewPassword { get; set; } = string.Empty;
-    }
-
-    public class VerifyTokenRequest
-    {
-        public string Token { get; set; } = string.Empty;
     }
 }

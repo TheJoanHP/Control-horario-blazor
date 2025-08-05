@@ -1,81 +1,61 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Shared.Models.Core;
 using Shared.Models.Enums;
+using Shared.Models.Core;
 
 namespace Shared.Models.TimeTracking
 {
-    /// <summary>
-    /// Registro de tiempo de un empleado
-    /// </summary>
-    [Table("TimeRecords")]
+    [Table("time_records")]
     public class TimeRecord
     {
         [Key]
         public int Id { get; set; }
 
-        [Required]
         public int EmployeeId { get; set; }
 
-        [Required]
-        public RecordType RecordType { get; set; }
+        public RecordType Type { get; set; }
 
-        [Required]
-        public DateTime RecordDateTime { get; set; }
+        public DateTime Date { get; set; }
 
-        [StringLength(255)]
-        public string? Location { get; set; }
+        public TimeSpan Time { get; set; }
 
         [StringLength(500)]
         public string? Notes { get; set; }
 
+        [StringLength(100)]
+        public string? Location { get; set; }
+
+        public double? Latitude { get; set; }
+
+        public double? Longitude { get; set; }
+
+        public bool IsManualEntry { get; set; } = false;
+
+        public int? CreatedByUserId { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        // Navegación
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        // Relaciones
         [ForeignKey("EmployeeId")]
-        public virtual Employee? Employee { get; set; }
+        public virtual Employee Employee { get; set; } = null!;
 
-        // Propiedades calculadas para compatibilidad
+        [ForeignKey("CreatedByUserId")]
+        public virtual User? CreatedByUser { get; set; }
+
+        // Propiedades calculadas
         [NotMapped]
-        public DateTime Timestamp
+        public DateTime DateTime => Date.Date + Time;
+
+        [NotMapped]
+        public string TypeDisplay => Type switch
         {
-            get => RecordDateTime;
-            set => RecordDateTime = value;
-        }
-
-        [NotMapped]
-        public RecordType Type
-        {
-            get => RecordType;
-            set => RecordType = value;
-        }
-
-        [NotMapped]
-        public TimeSpan Time => RecordDateTime.TimeOfDay;
-
-        [NotMapped]
-        public DateTime Date 
-        { 
-            get => RecordDateTime.Date; 
-            set => RecordDateTime = value.Date + RecordDateTime.TimeOfDay;
-        }
-
-        [NotMapped]
-        public string? DeviceInfo { get; set; }
-
-        [NotMapped]
-        public string? IpAddress { get; set; }
-
-        [NotMapped]
-        public DateTime? UpdatedAt { get; set; }
-
-        [NotMapped]
-        public DateTime? CheckIn { get; set; }
-
-        [NotMapped]
-        public DateTime? CheckOut { get; set; }
-
-        [NotMapped]
-        public TimeSpan? TotalHours { get; set; }
+            RecordType.CheckIn => "Entrada",
+            RecordType.CheckOut => "Salida",
+            RecordType.BreakStart => "Inicio Descanso",
+            RecordType.BreakEnd => "Fin Descanso",
+            _ => Type.ToString()
+        };
     }
 }

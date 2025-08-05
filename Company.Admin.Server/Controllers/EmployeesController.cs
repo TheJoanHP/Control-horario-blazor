@@ -1,11 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Company.Admin.Server.Services;
-using Shared.Models.Core;
 using Shared.Models.DTOs.Employee;
-using Shared.Services.Database;
-using AutoMapper;
-using System.ComponentModel.DataAnnotations;
 
 namespace Company.Admin.Server.Controllers
 {
@@ -15,39 +11,32 @@ namespace Company.Admin.Server.Controllers
     public class EmployeesController : ControllerBase
     {
         private readonly IEmployeeService _employeeService;
-        private readonly IMapper _mapper;
-        private readonly ITenantResolver _tenantResolver;
         private readonly ILogger<EmployeesController> _logger;
 
         public EmployeesController(
             IEmployeeService employeeService,
-            IMapper mapper,
-            ITenantResolver tenantResolver,
             ILogger<EmployeesController> logger)
         {
             _employeeService = employeeService;
-            _mapper = mapper;
-            _tenantResolver = tenantResolver;
             _logger = logger;
         }
 
         /// <summary>
-        /// Obtener todos los empleados con filtros opcionales
+        /// Obtener todos los empleados
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetEmployees(
-            [FromQuery] string? search = null,
             [FromQuery] int? departmentId = null,
             [FromQuery] bool? active = null)
         {
             try
             {
-                var employees = await _employeeService.GetEmployeesAsync(search, departmentId, active);
+                var employees = await _employeeService.GetAllAsync(departmentId, active);
                 return Ok(employees);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo empleados");
+                _logger.LogError(ex, "Error al obtener empleados");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
@@ -60,17 +49,36 @@ namespace Company.Admin.Server.Controllers
         {
             try
             {
-                var employee = await _employeeService.GetEmployeeByIdAsync(id);
+                var employee = await _employeeService.GetByIdAsync(id);
                 if (employee == null)
-                {
-                    return NotFound($"Empleado con ID {id} no encontrado");
-                }
+                    return NotFound();
 
                 return Ok(employee);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo empleado {EmployeeId}", id);
+                _logger.LogError(ex, "Error al obtener empleado {Id}", id);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Obtener empleado por número de empleado
+        /// </summary>
+        [HttpGet("by-number/{employeeNumber}")]
+        public async Task<ActionResult<EmployeeDto>> GetEmployeeByNumber(string employeeNumber)
+        {
+            try
+            {
+                var employee = await _employeeService.GetByEmployeeNumberAsync(employeeNumber);
+                if (employee == null)
+                    return NotFound();
+
+                return Ok(employee);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener empleado por número {EmployeeNumber}", employeeNumber);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
@@ -79,7 +87,7 @@ namespace Company.Admin.Server.Controllers
         /// Crear nuevo empleado
         /// </summary>
         [HttpPost]
-        public async Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createDto, int companyId)
+        public async Task<ActionResult<EmployeeDto>> CreateEmployee([FromBody] CreateEmployeeDto createDto)
         {
             try
             {
@@ -88,19 +96,22 @@ namespace Company.Admin.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var employee = await _employeeService.CreateEmployeeAsync(createDto);
-
-                return CreatedAtAction(nameof(GetEmployee), new { id = employee.Id }, _mapper.Map<EmployeeDto>(employee));
+                var employee = await _employeeService.CreateAsync(createDto);
+                return CreatedAtAction(nameof(GetEmployee), new { id = employee.Id }, employee);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creando empleado");
+                _logger.LogError(ex, "Error al crear empleado");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
         /// <summary>
-        /// Actualizar empleado existente
+        /// Actualizar empleado
         /// </summary>
         [HttpPut("{id}")]
         public async Task<ActionResult<EmployeeDto>> UpdateEmployee(int id, [FromBody] UpdateEmployeeDto updateDto)
@@ -112,40 +123,95 @@ namespace Company.Admin.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var employee = await _employeeService.UpdateEmployeeAsync(id, updateDto);
-                if (employee == null)
-                {
-                    return NotFound($"Empleado con ID {id} no encontrado");
-                }
-
+                var employee = await _employeeService.UpdateAsync(id, updateDto);
                 return Ok(employee);
+            }
+            catch (ArgumentException)
+            {
+                return NotFound();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error actualizando empleado {EmployeeId}", id);
+                _logger.LogError(ex, "Error al actualizar empleado {Id}", id);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
         /// <summary>
-        /// Eliminar empleado
+        /// Eliminar (desactivar) empleado
         /// </summary>
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteEmployee(int id)
+        public async Task<IActionResult> DeleteEmployee(int id)
         {
             try
             {
-                var result = await _employeeService.DeleteEmployeeAsync(id);
+                var result = await _employeeService.DeleteAsync(id);
                 if (!result)
-                {
-                    return NotFound($"Empleado con ID {id} no encontrado");
-                }
+                    return NotFound();
 
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error eliminando empleado {EmployeeId}", id);
+                _logger.LogError(ex, "Error al eliminar empleado {Id}", id);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Obtener empleados por departamento
+        /// </summary>
+        [HttpGet("by-department/{departmentId}")]
+        public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetEmployeesByDepartment(int departmentId)
+        {
+            try
+            {
+                var employees = await _employeeService.GetByDepartmentAsync(departmentId);
+                return Ok(employees);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener empleados del departamento {DepartmentId}", departmentId);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Verificar si existe un empleado
+        /// </summary>
+        [HttpHead("{id}")]
+        public async Task<IActionResult> EmployeeExists(int id)
+        {
+            try
+            {
+                var exists = await _employeeService.ExistsAsync(id);
+                return exists ? Ok() : NotFound();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al verificar existencia del empleado {Id}", id);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Verificar si existe un número de empleado
+        /// </summary>
+        [HttpHead("by-number/{employeeNumber}")]
+        public async Task<IActionResult> EmployeeNumberExists(string employeeNumber)
+        {
+            try
+            {
+                var exists = await _employeeService.ExistsByEmployeeNumberAsync(employeeNumber);
+                return exists ? Ok() : NotFound();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al verificar existencia del número de empleado {EmployeeNumber}", employeeNumber);
                 return StatusCode(500, "Error interno del servidor");
             }
         }

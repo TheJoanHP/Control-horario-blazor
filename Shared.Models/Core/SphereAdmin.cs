@@ -1,23 +1,21 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Shared.Models.Enums;
 
 namespace Shared.Models.Core
 {
-    /// <summary>
-    /// Super administrador del sistema Sphere
-    /// </summary>
-    [Table("SphereAdmins")]
+    [Table("sphere_admins")]
     public class SphereAdmin
     {
         [Key]
         public int Id { get; set; }
 
         [Required]
-        [StringLength(50)]
+        [StringLength(100)]
         public string FirstName { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(50)]
+        [StringLength(100)]
         public string LastName { get; set; } = string.Empty;
 
         [Required]
@@ -28,6 +26,8 @@ namespace Shared.Models.Core
         [Required]
         [StringLength(255)]
         public string PasswordHash { get; set; } = string.Empty;
+
+        public UserRole Role { get; set; } = UserRole.SuperAdmin;
 
         public bool Active { get; set; } = true;
 

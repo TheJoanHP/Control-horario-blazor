@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Company.Admin.Server.Data;
-using Shared.Models.TimeTracking;
+using Company.Admin.Server.Services;
 using Shared.Models.DTOs.TimeTracking;
+using Shared.Models.TimeTracking;
 using Shared.Models.Enums;
-using AutoMapper;
-using Microsoft.AspNetCore.Authorization;
 
 namespace Company.Admin.Server.Controllers
 {
@@ -15,86 +15,94 @@ namespace Company.Admin.Server.Controllers
     public class TimeRecordsController : ControllerBase
     {
         private readonly CompanyDbContext _context;
-        private readonly IMapper _mapper;
+        private readonly ITimeTrackingService _timeTrackingService;
+        private readonly IReportService _reportService;
         private readonly ILogger<TimeRecordsController> _logger;
 
         public TimeRecordsController(
-            CompanyDbContext context, 
-            IMapper mapper,
+            CompanyDbContext context,
+            ITimeTrackingService timeTrackingService,
+            IReportService reportService,
             ILogger<TimeRecordsController> logger)
         {
             _context = context;
-            _mapper = mapper;
+            _timeTrackingService = timeTrackingService;
+            _reportService = reportService;
             _logger = logger;
         }
 
-        // GET: api/timerecords
+        /// <summary>
+        /// Obtener registros de tiempo con filtros
+        /// </summary>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<TimeRecordDto>>> GetTimeRecords(
             [FromQuery] int? employeeId = null,
-            [FromQuery] DateTime? fromDate = null,
-            [FromQuery] DateTime? toDate = null,
-            [FromQuery] RecordType? recordType = null,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] DateTime? endDate = null,
+            [FromQuery] RecordType? type = null,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 50)
+            [FromQuery] int pageSize = 20)
         {
             try
             {
                 var query = _context.TimeRecords
                     .Include(tr => tr.Employee)
+                    .ThenInclude(e => e.User)
                     .AsQueryable();
 
-                // Filtros
                 if (employeeId.HasValue)
                     query = query.Where(tr => tr.EmployeeId == employeeId.Value);
 
-                if (fromDate.HasValue)
-                    query = query.Where(tr => tr.Timestamp.Date >= fromDate.Value.Date);
+                if (startDate.HasValue)
+                    query = query.Where(tr => tr.Date >= startDate.Value.Date);
 
-                if (toDate.HasValue)
-                    query = query.Where(tr => tr.Timestamp.Date <= toDate.Value.Date);
+                if (endDate.HasValue)
+                    query = query.Where(tr => tr.Date <= endDate.Value.Date);
 
-                if (recordType.HasValue)
-                    query = query.Where(tr => tr.Type == recordType.Value);
+                if (type.HasValue)
+                    query = query.Where(tr => tr.Type == type.Value);
 
-                // Paginación
-                var totalRecords = await query.CountAsync();
+                var totalCount = await query.CountAsync();
+
                 var records = await query
-                    .OrderByDescending(tr => tr.Timestamp)
+                    .OrderByDescending(tr => tr.Date)
+                    .ThenByDescending(tr => tr.Time)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
+                    .Select(tr => new TimeRecordDto
+                    {
+                        Id = tr.Id,
+                        EmployeeId = tr.EmployeeId,
+                        EmployeeName = tr.Employee != null ? tr.Employee.User.FullName : "",
+                        Type = tr.Type,
+                        Date = tr.Date,
+                        Time = tr.Time,
+                        DateTime = tr.Date.Add(tr.Time),
+                        Notes = tr.Notes,
+                        Location = tr.Location,
+                        Latitude = tr.Latitude,
+                        Longitude = tr.Longitude,
+                        IsManualEntry = tr.IsManualEntry,
+                        CreatedAt = tr.CreatedAt
+                    })
                     .ToListAsync();
 
-                var recordDtos = records.Select(record => new TimeRecordDto
-                {
-                    Id = record.Id,
-                    EmployeeId = record.EmployeeId,
-                    EmployeeName = $"{record.Employee.FirstName} {record.Employee.LastName}",
-                    EmployeeCode = record.Employee.EmployeeCode,
-                    Type = record.Type,
-                    Timestamp = record.Timestamp,
-                    Notes = record.Notes,
-                    Location = record.Location,
-                    DeviceInfo = record.DeviceInfo,
-                    IpAddress = record.IpAddress,
-                    CreatedAt = record.CreatedAt
-                }).ToList();
+                Response.Headers["X-Total-Count"] = totalCount.ToString();
+                Response.Headers["X-Page"] = page.ToString();
+                Response.Headers["X-Page-Size"] = pageSize.ToString();
 
-                // Agregar headers de paginación
-                Response.Headers.Add("X-Total-Count", totalRecords.ToString());
-                Response.Headers.Add("X-Page", page.ToString());
-                Response.Headers.Add("X-Page-Size", pageSize.ToString());
-
-                return Ok(recordDtos);
+                return Ok(records);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo registros de tiempo");
+                _logger.LogError(ex, "Error al obtener registros de tiempo");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        // GET: api/timerecords/{id}
+        /// <summary>
+        /// Obtener registro específico por ID
+        /// </summary>
         [HttpGet("{id}")]
         public async Task<ActionResult<TimeRecordDto>> GetTimeRecord(int id)
         {
@@ -102,294 +110,323 @@ namespace Company.Admin.Server.Controllers
             {
                 var record = await _context.TimeRecords
                     .Include(tr => tr.Employee)
-                    .FirstOrDefaultAsync(tr => tr.Id == id);
+                    .ThenInclude(e => e.User)
+                    .Where(tr => tr.Id == id)
+                    .Select(tr => new TimeRecordDto
+                    {
+                        Id = tr.Id,
+                        EmployeeId = tr.EmployeeId,
+                        EmployeeName = tr.Employee != null ? tr.Employee.User.FullName : "",
+                        Type = tr.Type,
+                        Date = tr.Date,
+                        Time = tr.Time,
+                        DateTime = tr.Date.Add(tr.Time),
+                        Notes = tr.Notes,
+                        Location = tr.Location,
+                        Latitude = tr.Latitude,
+                        Longitude = tr.Longitude,
+                        IsManualEntry = tr.IsManualEntry,
+                        CreatedAt = tr.CreatedAt
+                    })
+                    .FirstOrDefaultAsync();
 
                 if (record == null)
-                    return NotFound($"Registro de tiempo con ID {id} no encontrado");
+                    return NotFound();
 
-                var recordDto = new TimeRecordDto
-                {
-                    Id = record.Id,
-                    EmployeeId = record.EmployeeId,
-                    EmployeeName = $"{record.Employee.FirstName} {record.Employee.LastName}",
-                    EmployeeCode = record.Employee.EmployeeCode,
-                    Type = record.Type,
-                    Timestamp = record.Timestamp,
-                    Notes = record.Notes,
-                    Location = record.Location,
-                    DeviceInfo = record.DeviceInfo,
-                    IpAddress = record.IpAddress,
-                    CreatedAt = record.CreatedAt
-                };
-
-                return Ok(recordDto);
+                return Ok(record);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo registro de tiempo con ID {Id}", id);
+                _logger.LogError(ex, "Error al obtener registro {Id}", id);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        // POST: api/timerecords
+        /// <summary>
+        /// Crear registro manual de tiempo
+        /// </summary>
         [HttpPost]
-        public async Task<ActionResult<TimeRecordDto>> CreateTimeRecord(CreateTimeRecordDto createDto)
+        public async Task<ActionResult<TimeRecordDto>> CreateTimeRecord([FromBody] CreateTimeRecordDto dto)
         {
             try
             {
-                // Validar que el empleado existe
-                var employee = await _context.Employees
-                    .FirstOrDefaultAsync(e => e.Id == createDto.EmployeeId && e.Active);
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
 
+                var employee = await _context.Employees.FindAsync(dto.EmployeeId);
                 if (employee == null)
-                    return BadRequest("Empleado no encontrado o inactivo");
+                    return BadRequest("Empleado no encontrado");
 
-                // Validar lógica de negocio según el tipo de registro
-                var validationResult = await ValidateTimeRecord(createDto);
-                if (!validationResult.IsValid)
-                    return BadRequest(validationResult.ErrorMessage);
+                var currentTime = DateTime.Now;
+                var recordDateTime = dto.Date.Date.Add(dto.Time);
 
                 var timeRecord = new TimeRecord
                 {
-                    EmployeeId = createDto.EmployeeId,
-                    Type = createDto.Type,
-                    Timestamp = createDto.Timestamp ?? DateTime.UtcNow,
-                    Notes = createDto.Notes,
-                    Location = createDto.Location,
-                    DeviceInfo = createDto.DeviceInfo,
-                    IpAddress = GetClientIpAddress(),
-                    CreatedAt = DateTime.UtcNow
+                    EmployeeId = dto.EmployeeId,
+                    Type = dto.Type,
+                    Date = dto.Date.Date,
+                    Time = dto.Time,
+                    Notes = dto.Notes,
+                    Location = dto.Location,
+                    Latitude = dto.Latitude,
+                    Longitude = dto.Longitude,
+                    IsManualEntry = true,
+                    CreatedByUserId = GetCurrentUserId(),
+                    CreatedAt = currentTime,
+                    UpdatedAt = currentTime
                 };
 
                 _context.TimeRecords.Add(timeRecord);
                 await _context.SaveChangesAsync();
 
-                // Recargar con el empleado para el DTO
-                await _context.Entry(timeRecord)
-                    .Reference(tr => tr.Employee)
-                    .LoadAsync();
-
-                var recordDto = new TimeRecordDto
+                var result = new TimeRecordDto
                 {
                     Id = timeRecord.Id,
                     EmployeeId = timeRecord.EmployeeId,
-                    EmployeeName = $"{timeRecord.Employee.FirstName} {timeRecord.Employee.LastName}",
-                    EmployeeCode = timeRecord.Employee.EmployeeCode,
+                    EmployeeName = employee.User?.FullName ?? "",
                     Type = timeRecord.Type,
-                    Timestamp = timeRecord.Timestamp,
+                    Date = timeRecord.Date,
+                    Time = timeRecord.Time,
+                    DateTime = timeRecord.Date.Add(timeRecord.Time),
                     Notes = timeRecord.Notes,
                     Location = timeRecord.Location,
-                    DeviceInfo = timeRecord.DeviceInfo,
-                    IpAddress = timeRecord.IpAddress,
+                    Latitude = timeRecord.Latitude,
+                    Longitude = timeRecord.Longitude,
+                    IsManualEntry = timeRecord.IsManualEntry,
                     CreatedAt = timeRecord.CreatedAt
                 };
 
-                return CreatedAtAction(nameof(GetTimeRecord), new { id = timeRecord.Id }, recordDto);
+                return CreatedAtAction(nameof(GetTimeRecord), new { id = timeRecord.Id }, result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creando registro de tiempo");
+                _logger.LogError(ex, "Error al crear registro de tiempo");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        // PUT: api/timerecords/{id}
+        /// <summary>
+        /// Actualizar registro de tiempo
+        /// </summary>
         [HttpPut("{id}")]
-        public async Task<ActionResult<TimeRecordDto>> UpdateTimeRecord(int id, UpdateTimeRecordDto updateDto)
+        public async Task<ActionResult<TimeRecordDto>> UpdateTimeRecord(int id, [FromBody] UpdateTimeRecordDto dto)
         {
             try
             {
-                var record = await _context.TimeRecords
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var timeRecord = await _context.TimeRecords
                     .Include(tr => tr.Employee)
+                    .ThenInclude(e => e.User)
                     .FirstOrDefaultAsync(tr => tr.Id == id);
 
-                if (record == null)
-                    return NotFound($"Registro de tiempo con ID {id} no encontrado");
+                if (timeRecord == null)
+                    return NotFound();
 
-                // Solo permitir actualizar ciertos campos
-                if (!string.IsNullOrEmpty(updateDto.Notes))
-                    record.Notes = updateDto.Notes;
+                // Solo permitir editar registros manuales o con permisos especiales
+                if (!timeRecord.IsManualEntry && !HasAdminPermissions())
+                    return Forbid("Solo se pueden editar registros manuales");
 
-                if (!string.IsNullOrEmpty(updateDto.Location))
-                    record.Location = updateDto.Location;
+                if (dto.Date.HasValue)
+                    timeRecord.Date = dto.Date.Value.Date;
 
-                if (updateDto.Timestamp.HasValue)
-                {
-                    // Validar que la nueva fecha/hora es razonable
-                    var now = DateTime.UtcNow;
-                    if (updateDto.Timestamp.Value > now.AddMinutes(5) || 
-                        updateDto.Timestamp.Value < now.AddDays(-30))
-                    {
-                        return BadRequest("La fecha/hora no está en un rango válido");
-                    }
-                    record.Timestamp = updateDto.Timestamp.Value;
-                }
+                if (dto.Time.HasValue)
+                    timeRecord.Time = dto.Time.Value;
+
+                if (dto.Type.HasValue)
+                    timeRecord.Type = dto.Type.Value;
+
+                if (dto.Notes != null)
+                    timeRecord.Notes = dto.Notes;
+
+                if (dto.Location != null)
+                    timeRecord.Location = dto.Location;
+
+                if (dto.Latitude.HasValue)
+                    timeRecord.Latitude = dto.Latitude;
+
+                if (dto.Longitude.HasValue)
+                    timeRecord.Longitude = dto.Longitude;
+
+                timeRecord.UpdatedAt = DateTime.Now;
 
                 await _context.SaveChangesAsync();
 
-                var recordDto = new TimeRecordDto
+                var result = new TimeRecordDto
                 {
-                    Id = record.Id,
-                    EmployeeId = record.EmployeeId,
-                    EmployeeName = $"{record.Employee.FirstName} {record.Employee.LastName}",
-                    EmployeeCode = record.Employee.EmployeeCode,
-                    Type = record.Type,
-                    Timestamp = record.Timestamp,
-                    Notes = record.Notes,
-                    Location = record.Location,
-                    DeviceInfo = record.DeviceInfo,
-                    IpAddress = record.IpAddress,
-                    CreatedAt = record.CreatedAt
+                    Id = timeRecord.Id,
+                    EmployeeId = timeRecord.EmployeeId,
+                    EmployeeName = timeRecord.Employee?.User?.FullName ?? "",
+                    Type = timeRecord.Type,
+                    Date = timeRecord.Date,
+                    Time = timeRecord.Time,
+                    DateTime = timeRecord.Date.Add(timeRecord.Time),
+                    Notes = timeRecord.Notes,
+                    Location = timeRecord.Location,
+                    Latitude = timeRecord.Latitude,
+                    Longitude = timeRecord.Longitude,
+                    IsManualEntry = timeRecord.IsManualEntry,
+                    CreatedAt = timeRecord.CreatedAt
                 };
 
-                return Ok(recordDto);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error actualizando registro de tiempo con ID {Id}", id);
+                _logger.LogError(ex, "Error al actualizar registro {Id}", id);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        // DELETE: api/timerecords/{id}
+        /// <summary>
+        /// Eliminar registro de tiempo
+        /// </summary>
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTimeRecord(int id)
         {
             try
             {
-                var record = await _context.TimeRecords.FindAsync(id);
-                if (record == null)
-                    return NotFound($"Registro de tiempo con ID {id} no encontrado");
+                var timeRecord = await _context.TimeRecords.FindAsync(id);
+                if (timeRecord == null)
+                    return NotFound();
 
-                _context.TimeRecords.Remove(record);
+                // Solo permitir eliminar registros manuales o con permisos especiales
+                if (!timeRecord.IsManualEntry && !HasAdminPermissions())
+                    return Forbid("Solo se pueden eliminar registros manuales");
+
+                _context.TimeRecords.Remove(timeRecord);
                 await _context.SaveChangesAsync();
 
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error eliminando registro de tiempo con ID {Id}", id);
+                _logger.LogError(ex, "Error al eliminar registro {Id}", id);
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        // GET: api/timerecords/employee/{employeeId}/today
-        [HttpGet("employee/{employeeId}/today")]
-        public async Task<ActionResult<IEnumerable<TimeRecordDto>>> GetTodayRecords(int employeeId)
+        /// <summary>
+        /// Obtener estadísticas de un empleado para un período
+        /// </summary>
+        [HttpGet("employee/{employeeId}/stats")]
+        public async Task<ActionResult<object>> GetEmployeeStats(
+            int employeeId,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] DateTime? endDate = null)
         {
             try
             {
-                var today = DateTime.Today;
-                var records = await _context.TimeRecords
-                    .Include(tr => tr.Employee)
-                    .Where(tr => tr.EmployeeId == employeeId && 
-                                tr.Timestamp.Date == today)
-                    .OrderBy(tr => tr.Timestamp)
-                    .ToListAsync();
+                var fromDate = startDate ?? DateTime.Today.AddDays(-30);
+                var toDate = endDate ?? DateTime.Today;
 
-                var recordDtos = records.Select(record => new TimeRecordDto
+                var stats = await _reportService.GetEmployeeStatsAsync(employeeId, fromDate, toDate);
+                return Ok(stats);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener estadísticas del empleado {EmployeeId}", employeeId);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Check-in de empleado
+        /// </summary>
+        [HttpPost("checkin")]
+        public async Task<ActionResult<TimeRecordDto>> CheckIn([FromBody] CheckInDto dto)
+        {
+            try
+            {
+                var record = await _timeTrackingService.CheckInAsync(dto);
+                
+                var result = new TimeRecordDto
                 {
                     Id = record.Id,
                     EmployeeId = record.EmployeeId,
-                    EmployeeName = $"{record.Employee.FirstName} {record.Employee.LastName}",
-                    EmployeeCode = record.Employee.EmployeeCode,
                     Type = record.Type,
-                    Timestamp = record.Timestamp,
+                    Date = record.Date,
+                    Time = record.Time,
+                    DateTime = record.Date.Add(record.Time),
                     Notes = record.Notes,
                     Location = record.Location,
-                    DeviceInfo = record.DeviceInfo,
-                    IpAddress = record.IpAddress,
+                    Latitude = record.Latitude,
+                    Longitude = record.Longitude,
+                    IsManualEntry = record.IsManualEntry,
                     CreatedAt = record.CreatedAt
-                }).ToList();
+                };
 
-                return Ok(recordDtos);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo registros de hoy para empleado {EmployeeId}", employeeId);
+                _logger.LogError(ex, "Error en check-in");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        // GET: api/timerecords/employee/{employeeId}/status
-        [HttpGet("employee/{employeeId}/status")]
-        public async Task<ActionResult<object>> GetEmployeeStatus(int employeeId)
+        /// <summary>
+        /// Check-out de empleado
+        /// </summary>
+        [HttpPost("checkout")]
+        public async Task<ActionResult<TimeRecordDto>> CheckOut([FromBody] CheckOutDto dto)
         {
             try
             {
-                var today = DateTime.Today;
-                var lastRecord = await _context.TimeRecords
-                    .Where(tr => tr.EmployeeId == employeeId)
-                    .OrderByDescending(tr => tr.Timestamp)
-                    .FirstOrDefaultAsync();
-
-                var todayRecords = await _context.TimeRecords
-                    .Where(tr => tr.EmployeeId == employeeId && 
-                                tr.Timestamp.Date == today)
-                    .OrderBy(tr => tr.Timestamp)
-                    .ToListAsync();
-
-                var status = new
+                var record = await _timeTrackingService.CheckOutAsync(dto);
+                
+                var result = new TimeRecordDto
                 {
-                    IsWorking = lastRecord?.Type == RecordType.CheckIn || 
-                               lastRecord?.Type == RecordType.BreakEnd,
-                    LastRecord = lastRecord?.Type.ToString(),
-                    LastRecordTime = lastRecord?.Timestamp,
-                    TodayRecords = todayRecords.Count,
-                    CheckInTime = todayRecords.FirstOrDefault(r => r.Type == RecordType.CheckIn)?.Timestamp,
-                    CheckOutTime = todayRecords.LastOrDefault(r => r.Type == RecordType.CheckOut)?.Timestamp
+                    Id = record.Id,
+                    EmployeeId = record.EmployeeId,
+                    Type = record.Type,
+                    Date = record.Date,
+                    Time = record.Time,
+                    DateTime = record.Date.Add(record.Time),
+                    Notes = record.Notes,
+                    Location = record.Location,
+                    Latitude = record.Latitude,
+                    Longitude = record.Longitude,
+                    IsManualEntry = record.IsManualEntry,
+                    CreatedAt = record.CreatedAt
                 };
 
-                return Ok(status);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo estado del empleado {EmployeeId}", employeeId);
+                _logger.LogError(ex, "Error en check-out");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
 
-        #region Private Methods
-
-        private async Task<(bool IsValid, string ErrorMessage)> ValidateTimeRecord(CreateTimeRecordDto dto)
+        private int? GetCurrentUserId()
         {
-            var today = DateTime.Today;
-            var lastRecord = await _context.TimeRecords
-                .Where(tr => tr.EmployeeId == dto.EmployeeId)
-                .OrderByDescending(tr => tr.Timestamp)
-                .FirstOrDefaultAsync();
-
-            switch (dto.Type)
-            {
-                case RecordType.CheckIn:
-                    if (lastRecord?.Type == RecordType.CheckIn && lastRecord.Timestamp.Date == today)
-                        return (false, "Ya has fichado entrada hoy");
-                    break;
-
-                case RecordType.CheckOut:
-                    if (lastRecord?.Type != RecordType.CheckIn && lastRecord?.Type != RecordType.BreakEnd)
-                        return (false, "Debes fichar entrada antes de salir");
-                    break;
-
-                case RecordType.BreakStart:
-                    if (lastRecord?.Type != RecordType.CheckIn && lastRecord?.Type != RecordType.BreakEnd)
-                        return (false, "Debes estar trabajando para tomar un descanso");
-                    break;
-
-                case RecordType.BreakEnd:
-                    if (lastRecord?.Type != RecordType.BreakStart)
-                        return (false, "Debes estar en descanso para terminar el descanso");
-                    break;
-            }
-
-            return (true, string.Empty);
+            var userIdClaim = User.FindFirst("userId")?.Value;
+            return int.TryParse(userIdClaim, out var userId) ? userId : null;
         }
 
-        private string GetClientIpAddress()
+        private bool HasAdminPermissions()
         {
-            return HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+            var role = User.FindFirst("role")?.Value;
+            return role == UserRole.CompanyAdmin.ToString() || role == UserRole.SuperAdmin.ToString();
         }
-
-        #endregion
     }
 }

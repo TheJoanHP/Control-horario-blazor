@@ -7,30 +7,28 @@ namespace Company.Admin.Server.Data
 {
     public static class DbInitializer
     {
-        public static async Task Initialize(CompanyDbContext context, IPasswordService passwordService)
+        public static async Task InitializeAsync(CompanyDbContext context, IPasswordService passwordService)
         {
             try
             {
-                // Crear la base de datos si no existe
+                // Asegurar que la base de datos existe
                 await context.Database.EnsureCreatedAsync();
 
-                // Si ya hay datos, salir
+                // Si ya hay datos, no hacer nada
                 if (context.Companies.Any())
+                {
                     return;
+                }
 
-                // Crear empresa de demo
-                var company = new Company
+                // Crear empresa demo
+                var company = new Shared.Models.Core.Company
                 {
                     Name = "Empresa Demo",
-                    TaxId = "12345678-A",
-                    Address = "Calle Demo 123, Ciudad Demo",
-                    Phone = "+34 123 456 789",
-                    Email = "demo@empresa.com",
+                    Subdomain = "demo",
+                    Email = "admin@empresademo.com",
+                    Phone = "+34 666 777 888",
+                    Address = "Calle Principal 123, Madrid",
                     Active = true,
-                    WorkStartTime = new TimeSpan(9, 0, 0),
-                    WorkEndTime = new TimeSpan(17, 0, 0),
-                    ToleranceMinutes = 15,
-                    VacationDaysPerYear = 22,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -38,153 +36,154 @@ namespace Company.Admin.Server.Data
                 context.Companies.Add(company);
                 await context.SaveChangesAsync();
 
-                // Crear departamentos
-                var departments = new[]
+                // Crear departamento por defecto
+                var department = new Department
                 {
-                    new Department
-                    {
-                        CompanyId = company.Id,
-                        Name = "Recursos Humanos",
-                        Description = "Departamento de gestión de personal",
-                        Active = true,
-                        CreatedAt = DateTime.UtcNow
-                    },
-                    new Department
-                    {
-                        CompanyId = company.Id,
-                        Name = "Desarrollo",
-                        Description = "Departamento de desarrollo de software",
-                        Active = true,
-                        CreatedAt = DateTime.UtcNow
-                    },
-                    new Department
-                    {
-                        CompanyId = company.Id,
-                        Name = "Marketing",
-                        Description = "Departamento de marketing y ventas",
-                        Active = true,
-                        CreatedAt = DateTime.UtcNow
-                    },
-                    new Department
-                    {
-                        CompanyId = company.Id,
-                        Name = "Finanzas",
-                        Description = "Departamento de administración y finanzas",
-                        Active = true,
-                        CreatedAt = DateTime.UtcNow
-                    }
+                    CompanyId = company.Id,
+                    Name = "Administración",
+                    Description = "Departamento administrativo",
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 };
 
-                context.Departments.AddRange(departments);
+                context.Departments.Add(department);
                 await context.SaveChangesAsync();
 
-                // Crear empleados de demo
-                var employees = new List<Employee>();
+                // Crear usuario administrador
+                var adminUser = new User
+                {
+                    CompanyId = company.Id,
+                    Username = "admin",
+                    Email = "admin@empresademo.com",
+                    PasswordHash = passwordService.HashPassword("admin123"),
+                    FirstName = "Administrador",
+                    LastName = "Sistema",
+                    Role = UserRole.CompanyAdmin,
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
 
-                // Admin de la empresa
+                context.Users.Add(adminUser);
+                await context.SaveChangesAsync();
+
+                // Crear empleado para el admin
                 var adminEmployee = new Employee
                 {
+                    UserId = adminUser.Id,
                     CompanyId = company.Id,
-                    DepartmentId = departments[0].Id, // Recursos Humanos
-                    FirstName = "Admin",
-                    LastName = "Empresa",
-                    Email = "admin@empresa.com",
-                    Phone = "+34 123 456 700",
-                    EmployeeCode = "EMP001",
-                    Role = UserRole.CompanyAdmin,
-                    PasswordHash = passwordService.HashPassword("admin123"),
+                    DepartmentId = department.Id,
+                    EmployeeNumber = "EMP001",
+                    Position = "Administrador del Sistema",
+                    HireDate = DateTime.Today,
                     Active = true,
-                    HiredAt = DateTime.UtcNow.AddYears(-2),
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-                employees.Add(adminEmployee);
 
-                // Empleado de Desarrollo
-                var devEmployee = new Employee
+                context.Employees.Add(adminEmployee);
+
+                // Crear horario de trabajo por defecto
+                var defaultSchedule = new Shared.Models.TimeTracking.WorkSchedule
                 {
-                    CompanyId = company.Id,
-                    DepartmentId = departments[1].Id, // Desarrollo
-                    FirstName = "Juan",
-                    LastName = "Pérez",
-                    Email = "juan.perez@empresa.com",
-                    Phone = "+34 123 456 701",
-                    EmployeeCode = "EMP002",
-                    Role = UserRole.Employee,
-                    PasswordHash = passwordService.HashPassword("empleado123"),
+                    Name = "Horario Estándar",
+                    Description = "Horario de trabajo estándar de oficina",
+                    MondayEnabled = true,
+                    MondayStart = new TimeSpan(9, 0, 0),
+                    MondayEnd = new TimeSpan(17, 0, 0),
+                    TuesdayEnabled = true,
+                    TuesdayStart = new TimeSpan(9, 0, 0),
+                    TuesdayEnd = new TimeSpan(17, 0, 0),
+                    WednesdayEnabled = true,
+                    WednesdayStart = new TimeSpan(9, 0, 0),
+                    WednesdayEnd = new TimeSpan(17, 0, 0),
+                    ThursdayEnabled = true,
+                    ThursdayStart = new TimeSpan(9, 0, 0),
+                    ThursdayEnd = new TimeSpan(17, 0, 0),
+                    FridayEnabled = true,
+                    FridayStart = new TimeSpan(9, 0, 0),
+                    FridayEnd = new TimeSpan(17, 0, 0),
+                    SaturdayEnabled = false,
+                    SundayEnabled = false,
+                    BreakDuration = new TimeSpan(1, 0, 0),
+                    FlexibleHours = false,
+                    MaxFlexMinutes = 30,
                     Active = true,
-                    HiredAt = DateTime.UtcNow.AddYears(-1),
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-                employees.Add(devEmployee);
 
-                // Empleado de Marketing
-                var marketingEmployee = new Employee
+                context.WorkSchedules.Add(defaultSchedule);
+
+                // Crear empleados de ejemplo
+                var employees = new List<Employee>();
+                var users = new List<User>();
+
+                for (int i = 1; i <= 5; i++)
                 {
-                    CompanyId = company.Id,
-                    DepartmentId = departments[2].Id, // Marketing
-                    FirstName = "María",
-                    LastName = "García",
-                    Email = "maria.garcia@empresa.com",
-                    Phone = "+34 123 456 702",
-                    EmployeeCode = "EMP003",
-                    Role = UserRole.Employee,
-                    PasswordHash = passwordService.HashPassword("empleado123"),
-                    Active = true,
-                    HiredAt = DateTime.UtcNow.AddMonths(-8),
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                employees.Add(marketingEmployee);
+                    var user = new User
+                    {
+                        CompanyId = company.Id,
+                        Username = $"empleado{i}",
+                        Email = $"empleado{i}@empresademo.com",
+                        PasswordHash = passwordService.HashPassword("empleado123"),
+                        FirstName = $"Empleado",
+                        LastName = $"Número {i}",
+                        Role = UserRole.Employee,
+                        Active = true,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
 
-                // Empleado de Finanzas
-                var financeEmployee = new Employee
-                {
-                    CompanyId = company.Id,
-                    DepartmentId = departments[3].Id, // Finanzas
-                    FirstName = "Carlos",
-                    LastName = "López",
-                    Email = "carlos.lopez@empresa.com",
-                    Phone = "+34 123 456 703",
-                    EmployeeCode = "EMP004",
-                    Role = UserRole.Employee,
-                    PasswordHash = passwordService.HashPassword("empleado123"),
-                    Active = true,
-                    HiredAt = DateTime.UtcNow.AddMonths(-6),
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                employees.Add(financeEmployee);
+                    users.Add(user);
+                }
 
-                // Supervisor de Desarrollo
-                var supervisorEmployee = new Employee
-                {
-                    CompanyId = company.Id,
-                    DepartmentId = departments[1].Id, // Desarrollo
-                    FirstName = "Ana",
-                    LastName = "Martínez",
-                    Email = "ana.martinez@empresa.com",
-                    Phone = "+34 123 456 704",
-                    EmployeeCode = "EMP005",
-                    Role = UserRole.Supervisor,
-                    PasswordHash = passwordService.HashPassword("supervisor123"),
-                    Active = true,
-                    HiredAt = DateTime.UtcNow.AddYears(-3),
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                employees.Add(supervisorEmployee);
-
-                context.Employees.AddRange(employees);
+                context.Users.AddRange(users);
                 await context.SaveChangesAsync();
 
-                Console.WriteLine("Base de datos inicializada correctamente con datos de demo.");
+                for (int i = 0; i < users.Count; i++)
+                {
+                    var employee = new Employee
+                    {
+                        UserId = users[i].Id,
+                        CompanyId = company.Id,
+                        DepartmentId = department.Id,
+                        EmployeeNumber = $"EMP{(i + 2):D3}",
+                        Position = i % 2 == 0 ? "Desarrollador" : "Analista",
+                        HireDate = DateTime.Today.AddDays(-30 * (i + 1)),
+                        WorkScheduleId = defaultSchedule.Id,
+                        Active = true,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    employees.Add(employee);
+                }
+
+                context.Employees.AddRange(employees);
+
+                // Crear política de vacaciones por defecto
+                var vacationPolicy = new Shared.Models.Vacations.VacationPolicy
+                {
+                    CompanyId = company.Id,
+                    Name = "Política Estándar",
+                    DaysPerYear = 22,
+                    MaxCarryOver = 5,
+                    RequireApproval = true,
+                    MinAdvanceNoticeDays = 7,
+                    Active = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                context.VacationPolicies.Add(vacationPolicy);
+
+                await context.SaveChangesAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error al inicializar la base de datos: {ex.Message}");
-                throw;
+                throw new Exception($"Error al inicializar la base de datos: {ex.Message}", ex);
             }
         }
     }
