@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Shared.Models.Enums;
 
 namespace Shared.Models.Core
 {
@@ -10,41 +11,50 @@ namespace Shared.Models.Core
         public int Id { get; set; }
 
         [Required]
+        [StringLength(50)]
+        public string Code { get; set; } = string.Empty;
+
+        [Required]
         [StringLength(100)]
         public string Name { get; set; } = string.Empty;
+
+        [StringLength(500)]
+        public string? Description { get; set; }
 
         [Required]
         [StringLength(50)]
         public string Subdomain { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(255)]
-        [EmailAddress]
-        public string Email { get; set; } = string.Empty;
-
-        [StringLength(20)]
-        public string? Phone { get; set; }
-
-        [StringLength(500)]
-        public string? Address { get; set; }
-
-        public bool Active { get; set; } = true;
-
-        public int MaxEmployees { get; set; } = 50;
-
-        [Required]
-        [StringLength(255)]
+        [StringLength(200)]
         public string DatabaseName { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(500)]
-        public string ConnectionString { get; set; } = string.Empty;
+        [StringLength(255)]
+        [EmailAddress]
+        public string ContactEmail { get; set; } = string.Empty;
+
+        [StringLength(20)]
+        public string? ContactPhone { get; set; }
+
+        public LicenseType LicenseType { get; set; } = LicenseType.Trial;
+
+        public int MaxEmployees { get; set; } = 10;
+
+        public bool Active { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // Relaciones
-        public virtual ICollection<License> Licenses { get; set; } = new List<License>();
+        // Navegación
+        public virtual License? License { get; set; }
+
+        // Propiedades calculadas
+        [NotMapped]
+        public string DisplayName => $"{Name} ({Code})";
+
+        [NotMapped]
+        public string FullUrl => $"https://{Subdomain}.tudominio.com";
     }
 }
