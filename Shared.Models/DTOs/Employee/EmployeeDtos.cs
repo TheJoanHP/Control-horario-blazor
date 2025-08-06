@@ -19,8 +19,22 @@ namespace Shared.Models.DTOs.Employee
         public decimal? Salary { get; set; }
         public DateTime HireDate { get; set; }
         public bool Active { get; set; }
+
+        // AGREGADAS las propiedades que faltan
         public string? DepartmentName { get; set; }
         public string? CompanyName { get; set; }
+
+        // Para compatibilidad con código existente
+        public DepartmentInfo? Department { get; set; }
+        public CompanyInfo? Company { get; set; }
+
+        // Propiedades de horario de trabajo
+        public TimeSpan? WorkStartTime { get; set; } = new TimeSpan(9, 0, 0);
+        public TimeSpan? WorkEndTime { get; set; } = new TimeSpan(17, 0, 0);
+
+        // Fecha de contratación (alias)
+        public DateTime? HiredAt { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 
@@ -28,6 +42,40 @@ namespace Shared.Models.DTOs.Employee
         public string FullName => $"{FirstName} {LastName}".Trim();
         public string DisplayName => !string.IsNullOrEmpty(FullName) ? FullName : Email;
         public int? YearsOfService { get; set; }
+
+        // Sincronizar propiedades
+        public void SyncProperties()
+        {
+            HiredAt = HireDate;
+            
+            if (Department != null)
+            {
+                DepartmentName = Department.Name;
+            }
+            
+            if (Company != null)
+            {
+                CompanyName = Company.Name;
+            }
+        }
+    }
+
+    // Clases auxiliares para compatibilidad
+    public class DepartmentInfo
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+    }
+
+    public class CompanyInfo
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Code { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
     }
 
     public class CreateEmployeeDto

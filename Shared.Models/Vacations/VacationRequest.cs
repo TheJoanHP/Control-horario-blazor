@@ -26,12 +26,23 @@ namespace Shared.Models.Vacations
         [StringLength(1000)]
         public string? Reason { get; set; }
 
+        // AGREGADAS las propiedades que faltan según la BD
         [StringLength(1000)]
-        public string? AdminComments { get; set; }
+        public string? Comments { get; set; } // Para comentarios del empleado
+
+        [StringLength(1000)]
+        public string? AdminComments { get; set; } // Para comentarios del admin
+
+        [StringLength(1000)]
+        public string? ResponseComments { get; set; } // Alias para AdminComments
 
         public int? ApprovedByUserId { get; set; }
 
+        public int? ReviewedById { get; set; } // Alias para ApprovedByUserId
+
         public DateTime? ApprovedAt { get; set; }
+
+        public DateTime? ReviewedAt { get; set; } // Alias para ApprovedAt
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -43,6 +54,9 @@ namespace Shared.Models.Vacations
 
         [ForeignKey("ApprovedByUserId")]
         public virtual User? ApprovedByUser { get; set; }
+
+        [ForeignKey("ReviewedById")]
+        public virtual Employee? ReviewedBy { get; set; } // Para compatibilidad con Employee
 
         // Propiedades calculadas
         [NotMapped]
@@ -79,9 +93,12 @@ namespace Shared.Models.Vacations
         }
 
         // Sincronizar propiedades alias
-        public void SyncTotalDays()
+        public void SyncProperties()
         {
             TotalDays = DaysRequested;
+            ResponseComments = AdminComments;
+            ReviewedById = ApprovedByUserId;
+            ReviewedAt = ApprovedAt;
         }
     }
 }

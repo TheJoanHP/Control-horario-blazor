@@ -18,6 +18,9 @@ namespace Shared.Models.DTOs.Auth
         public string? DepartmentName { get; set; }
         public string? Position { get; set; }
         public string? EmployeeCode { get; set; }
+
+        // AGREGADA la propiedad que falta
+        public string? CompanyName { get; set; }
         
         // Navegación 
         public EmployeeInfo? Employee { get; set; }

@@ -25,6 +25,9 @@ namespace Shared.Models.Vacations
 
         public int PendingDays { get; set; } = 0;
 
+        // AGREGADA la propiedad que falta
+        public int CarriedOverDays { get; set; } = 0; // Días arrastrados del año anterior
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -35,6 +38,9 @@ namespace Shared.Models.Vacations
 
         // Propiedades calculadas
         [NotMapped]
-        public int RemainingDays => TotalDays - UsedDays - PendingDays;
+        public int RemainingDays => TotalDays + CarriedOverDays - UsedDays - PendingDays;
+
+        [NotMapped]
+        public int AvailableDays => TotalDays + CarriedOverDays - PendingDays;
     }
 }
