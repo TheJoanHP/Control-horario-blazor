@@ -10,6 +10,10 @@ namespace Shared.Models.TimeTracking
         [Key]
         public int Id { get; set; }
 
+        public int? CompanyId { get; set; }
+
+        public int? EmployeeId { get; set; }
+
         [Required]
         [StringLength(100)]
         public string Name { get; set; } = string.Empty;
@@ -17,78 +21,80 @@ namespace Shared.Models.TimeTracking
         [StringLength(500)]
         public string? Description { get; set; }
 
-        // Lunes
+        public TimeSpan StartTime { get; set; } = new TimeSpan(9, 0, 0);
+
+        public TimeSpan EndTime { get; set; } = new TimeSpan(18, 0, 0);
+
+        // Configuración por día de la semana
         public bool MondayEnabled { get; set; } = true;
-        public TimeSpan? MondayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? MondayEnd { get; set; } = new TimeSpan(17, 0, 0);
+        public TimeSpan? MondayStart { get; set; }
+        public TimeSpan? MondayEnd { get; set; }
 
-        // Martes
         public bool TuesdayEnabled { get; set; } = true;
-        public TimeSpan? TuesdayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? TuesdayEnd { get; set; } = new TimeSpan(17, 0, 0);
+        public TimeSpan? TuesdayStart { get; set; }
+        public TimeSpan? TuesdayEnd { get; set; }
 
-        // Miércoles
         public bool WednesdayEnabled { get; set; } = true;
-        public TimeSpan? WednesdayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? WednesdayEnd { get; set; } = new TimeSpan(17, 0, 0);
+        public TimeSpan? WednesdayStart { get; set; }
+        public TimeSpan? WednesdayEnd { get; set; }
 
-        // Jueves
         public bool ThursdayEnabled { get; set; } = true;
-        public TimeSpan? ThursdayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? ThursdayEnd { get; set; } = new TimeSpan(17, 0, 0);
+        public TimeSpan? ThursdayStart { get; set; }
+        public TimeSpan? ThursdayEnd { get; set; }
 
-        // Viernes
         public bool FridayEnabled { get; set; } = true;
-        public TimeSpan? FridayStart { get; set; } = new TimeSpan(9, 0, 0);
-        public TimeSpan? FridayEnd { get; set; } = new TimeSpan(17, 0, 0);
+        public TimeSpan? FridayStart { get; set; }
+        public TimeSpan? FridayEnd { get; set; }
 
-        // Sábado
         public bool SaturdayEnabled { get; set; } = false;
         public TimeSpan? SaturdayStart { get; set; }
         public TimeSpan? SaturdayEnd { get; set; }
 
-        // Domingo
         public bool SundayEnabled { get; set; } = false;
         public TimeSpan? SundayStart { get; set; }
         public TimeSpan? SundayEnd { get; set; }
 
-        // Configuración general
-        public TimeSpan? BreakDuration { get; set; } = new TimeSpan(1, 0, 0);
-        public bool FlexibleHours { get; set; } = false;
-        public int? MaxFlexMinutes { get; set; } = 30;
+        public int ToleranceMinutes { get; set; } = 15;
+
+        public bool IsDefault { get; set; } = false;
 
         public bool Active { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // Relaciones
-        public virtual ICollection<Employee> Employees { get; set; } = new List<Employee>();
+        // Navegación
+        [ForeignKey("CompanyId")]
+        public virtual Company? Company { get; set; }
+
+        [ForeignKey("EmployeeId")]
+        public virtual Employee? Employee { get; set; }
+
+        public virtual ICollection<Break> Breaks { get; set; } = new List<Break>();
 
         // Propiedades calculadas
         [NotMapped]
-        public double WeeklyHours
+        public double WorkHoursPerDay => (EndTime - StartTime).TotalHours;
+
+        [NotMapped]
+        public int WorkDaysPerWeek
         {
             get
             {
-                double total = 0;
-                if (MondayEnabled && MondayStart.HasValue && MondayEnd.HasValue)
-                    total += (MondayEnd.Value - MondayStart.Value).TotalHours;
-                if (TuesdayEnabled && TuesdayStart.HasValue && TuesdayEnd.HasValue)
-                    total += (TuesdayEnd.Value - TuesdayStart.Value).TotalHours;
-                if (WednesdayEnabled && WednesdayStart.HasValue && WednesdayEnd.HasValue)
-                    total += (WednesdayEnd.Value - WednesdayStart.Value).TotalHours;
-                if (ThursdayEnabled && ThursdayStart.HasValue && ThursdayEnd.HasValue)
-                    total += (ThursdayEnd.Value - ThursdayStart.Value).TotalHours;
-                if (FridayEnabled && FridayStart.HasValue && FridayEnd.HasValue)
-                    total += (FridayEnd.Value - FridayStart.Value).TotalHours;
-                if (SaturdayEnabled && SaturdayStart.HasValue && SaturdayEnd.HasValue)
-                    total += (SaturdayEnd.Value - SaturdayStart.Value).TotalHours;
-                if (SundayEnabled && SundayStart.HasValue && SundayEnd.HasValue)
-                    total += (SundayEnd.Value - SundayStart.Value).TotalHours;
-                    
-                return total;
+                int count = 0;
+                if (MondayEnabled) count++;
+                if (TuesdayEnabled) count++;
+                if (WednesdayEnabled) count++;
+                if (ThursdayEnabled) count++;
+                if (FridayEnabled) count++;
+                if (SaturdayEnabled) count++;
+                if (SundayEnabled) count++;
+                return count;
             }
         }
+
+        [NotMapped]
+        public double WorkHoursPerWeek => WorkHoursPerDay * WorkDaysPerWeek;
     }
 }

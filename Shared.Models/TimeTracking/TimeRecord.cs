@@ -49,6 +49,17 @@ namespace Shared.Models.TimeTracking
         public DateTime DateTime => Date.Date + Time;
 
         [NotMapped]
+        public DateTime Timestamp 
+        { 
+            get => Date.Date + Time;
+            set 
+            { 
+                Date = value.Date;
+                Time = value.TimeOfDay;
+            }
+        }
+
+        [NotMapped]
         public string TypeDisplay => Type switch
         {
             RecordType.CheckIn => "Entrada",
@@ -57,5 +68,22 @@ namespace Shared.Models.TimeTracking
             RecordType.BreakEnd => "Fin Descanso",
             _ => Type.ToString()
         };
+
+        // Propiedades adicionales para compatibilidad
+        [NotMapped]
+        public DateTime? CheckIn { get; set; }
+
+        [NotMapped]
+        public DateTime? CheckOut { get; set; }
+
+        [NotMapped]
+        public double TotalHours { get; set; }
+
+        [NotMapped]
+        public RecordType RecordType 
+        { 
+            get => Type;
+            set => Type = value;
+        }
     }
 }

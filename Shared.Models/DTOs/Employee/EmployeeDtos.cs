@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Shared.Models.Enums;
 
 namespace Shared.Models.DTOs.Employee
 {
@@ -14,6 +15,8 @@ namespace Shared.Models.DTOs.Employee
         public string Email { get; set; } = string.Empty;
         public string? Position { get; set; }
         public string? Phone { get; set; }
+        public UserRole Role { get; set; } = UserRole.Employee;
+        public decimal? Salary { get; set; }
         public DateTime HireDate { get; set; }
         public bool Active { get; set; }
         public string? DepartmentName { get; set; }
@@ -24,6 +27,7 @@ namespace Shared.Models.DTOs.Employee
         // Propiedades calculadas
         public string FullName => $"{FirstName} {LastName}".Trim();
         public string DisplayName => !string.IsNullOrEmpty(FullName) ? FullName : Email;
+        public int? YearsOfService { get; set; }
     }
 
     public class CreateEmployeeDto
@@ -117,20 +121,6 @@ namespace Shared.Models.DTOs.Employee
         public bool IsCurrentlyWorking { get; set; }
         public bool IsOnBreak { get; set; }
         public string CurrentStatus { get; set; } = string.Empty;
-        public DateTime? LastActivity { get; set; }
-    }
-
-    public class ChangePasswordDto
-    {
-        [Required(ErrorMessage = "La contraseña actual es requerida")]
-        public string CurrentPassword { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "La nueva contraseña es requerida")]
-        [StringLength(100, MinimumLength = 6, ErrorMessage = "La contraseña debe tener entre 6 y 100 caracteres")]
-        public string NewPassword { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "La confirmación de contraseña es requerida")]
-        [Compare("NewPassword", ErrorMessage = "Las contraseñas no coinciden")]
-        public string ConfirmPassword { get; set; } = string.Empty;
+        public DateTime? LastCheckIn { get; set; }
     }
 }

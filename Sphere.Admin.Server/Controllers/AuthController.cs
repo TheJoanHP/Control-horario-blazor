@@ -129,6 +129,7 @@ namespace Sphere.Admin.Server.Controllers
 
                 // Obtener ID del usuario del token
                 var userId = _jwtService.GetUserIdFromToken(request.Token);
+
                 if (userId == null)
                 {
                     return Unauthorized(new { message = "Token inválido" });
@@ -167,7 +168,7 @@ namespace Sphere.Admin.Server.Controllers
         /// Logout (invalidar token del lado del cliente)
         /// </summary>
         [HttpPost("logout")]
-        public async Task<ActionResult> Logout()
+        public ActionResult Logout()
         {
             try
             {

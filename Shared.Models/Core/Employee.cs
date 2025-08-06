@@ -9,7 +9,7 @@ namespace Shared.Models.Core
     /// <summary>
     /// Representa un empleado en el sistema
     /// </summary>
-    [Table("Employees")]
+    [Table("employees")]
     public class Employee
     {
         [Key]
@@ -17,6 +17,8 @@ namespace Shared.Models.Core
 
         [Required]
         public int CompanyId { get; set; }
+
+        public int? UserId { get; set; }
 
         public int? DepartmentId { get; set; }
 
@@ -40,6 +42,9 @@ namespace Shared.Models.Core
         [StringLength(20)]
         public string EmployeeCode { get; set; } = string.Empty;
 
+        [StringLength(20)]
+        public string? EmployeeNumber { get; set; } // Alias para EmployeeCode
+
         [StringLength(100)]
         public string? Position { get; set; }
 
@@ -54,6 +59,8 @@ namespace Shared.Models.Core
         [Column(TypeName = "decimal(10,2)")]
         public decimal? Salary { get; set; }
 
+        public int? WorkScheduleId { get; set; }
+
         public DateTime? LastLoginAt { get; set; }
 
         public bool Active { get; set; } = true;
@@ -66,24 +73,29 @@ namespace Shared.Models.Core
         [ForeignKey("CompanyId")]
         public virtual Company? Company { get; set; }
 
+        [ForeignKey("UserId")]
+        public virtual User? User { get; set; }
+
         [ForeignKey("DepartmentId")]
         public virtual Department? Department { get; set; }
 
+        [ForeignKey("WorkScheduleId")]
+        public virtual WorkSchedule? WorkSchedule { get; set; }
+
         public virtual ICollection<TimeRecord> TimeRecords { get; set; } = new List<TimeRecord>();
-        public virtual ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
         public virtual ICollection<VacationRequest> VacationRequests { get; set; } = new List<VacationRequest>();
         public virtual ICollection<VacationBalance> VacationBalances { get; set; } = new List<VacationBalance>();
 
         // Propiedades calculadas
         [NotMapped]
-        public string FullName => $"{FirstName} {LastName}";
+        public string FullName => $"{FirstName} {LastName}".Trim();
 
         [NotMapped]
         public int? YearsOfService => HireDate.HasValue 
             ? (DateTime.UtcNow - HireDate.Value).Days / 365 
             : null;
 
-        // Alias para compatibilidad
+        // Propiedades de compatibilidad
         [NotMapped]
         public DateTime? HiredAt
         {
@@ -96,6 +108,21 @@ namespace Shared.Models.Core
         {
             get => LastLoginAt;
             set => LastLoginAt = value;
+        }
+
+        // Propiedad de compatibilidad para EmployeeNumber
+        [NotMapped]
+        public string EmployeeCodeOrNumber
+        {
+            get => EmployeeNumber ?? EmployeeCode;
+            set
+            {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    EmployeeCode = value;
+                    EmployeeNumber = value;
+                }
+            }
         }
     }
 }

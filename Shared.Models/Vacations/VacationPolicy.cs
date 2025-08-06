@@ -4,16 +4,12 @@ using Shared.Models.Core;
 
 namespace Shared.Models.Vacations
 {
-    /// <summary>
-    /// Política de vacaciones de la empresa
-    /// </summary>
-    [Table("VacationPolicies")]
+    [Table("vacation_policies")]
     public class VacationPolicy
     {
         [Key]
         public int Id { get; set; }
 
-        [Required]
         public int CompanyId { get; set; }
 
         [Required]
@@ -23,15 +19,21 @@ namespace Shared.Models.Vacations
         [StringLength(500)]
         public string? Description { get; set; }
 
-        public int DefaultDaysPerYear { get; set; } = 22;
+        public int DaysPerYear { get; set; } = 22;
 
-        public int MinimumServiceMonths { get; set; } = 0;
+        public int AnnualDays { get; set; } = 22; // Alias para DaysPerYear
 
         public int MaxConsecutiveDays { get; set; } = 15;
 
-        public int MinAdvanceNoticeDays { get; set; } = 15;
+        public int MaxCarryOver { get; set; } = 5;
+
+        public int MaxCarryOverDays { get; set; } = 5; // Alias para MaxCarryOver
 
         public bool RequireApproval { get; set; } = true;
+
+        public int MinAdvanceNoticeDays { get; set; } = 15;
+
+        public bool CarryOverEnabled { get; set; } = true;
 
         public bool Active { get; set; } = true;
 
@@ -41,6 +43,13 @@ namespace Shared.Models.Vacations
 
         // Navegación
         [ForeignKey("CompanyId")]
-        public virtual Company? Company { get; set; }
+        public virtual Company Company { get; set; } = null!;
+
+        // Propiedades calculadas
+        [NotMapped]
+        public string DisplayName => $"{Name} ({DaysPerYear} días/año)";
+
+        [NotMapped]
+        public bool IsDefault => Name.Contains("General") || Name.Contains("Default");
     }
 }

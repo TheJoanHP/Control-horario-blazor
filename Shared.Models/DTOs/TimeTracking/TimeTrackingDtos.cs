@@ -6,9 +6,7 @@ namespace Shared.Models.DTOs.TimeTracking
     // DTOs para Check In/Out
     public class CheckInDto
     {
-        [Required]
-        public int EmployeeId { get; set; }
-        
+        public DateTime Timestamp { get; set; } = DateTime.Now;
         public string? Notes { get; set; }
         public string? Location { get; set; }
         public double? Latitude { get; set; }
@@ -19,9 +17,7 @@ namespace Shared.Models.DTOs.TimeTracking
 
     public class CheckOutDto
     {
-        [Required]
-        public int EmployeeId { get; set; }
-        
+        public DateTime Timestamp { get; set; } = DateTime.Now;
         public string? Notes { get; set; }
         public string? Location { get; set; }
         public double? Latitude { get; set; }
@@ -62,16 +58,33 @@ namespace Shared.Models.DTOs.TimeTracking
         public int Id { get; set; }
         public int EmployeeId { get; set; }
         public string EmployeeName { get; set; } = string.Empty;
+        public string? EmployeeCode { get; set; }
         public RecordType Type { get; set; }
         public DateTime Date { get; set; }
         public TimeSpan Time { get; set; }
         public DateTime DateTime { get; set; }
+        public DateTime Timestamp => DateTime; // Alias para compatibilidad
         public string? Notes { get; set; }
         public string? Location { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public bool IsManualEntry { get; set; }
         public DateTime CreatedAt { get; set; }
+        
+        // Propiedades adicionales para reportes
+        public DateTime? CheckIn { get; set; }
+        public DateTime? CheckOut { get; set; }
+        public double TotalHours { get; set; }
+        public RecordType RecordType => Type; // Alias
+        
+        public string TypeDisplay => Type switch
+        {
+            RecordType.CheckIn => "Entrada",
+            RecordType.CheckOut => "Salida", 
+            RecordType.BreakStart => "Inicio Descanso",
+            RecordType.BreakEnd => "Fin Descanso",
+            _ => Type.ToString()
+        };
     }
 
     public class CreateTimeRecordDto
@@ -82,11 +95,7 @@ namespace Shared.Models.DTOs.TimeTracking
         [Required]
         public RecordType Type { get; set; }
 
-        [Required]
-        public DateTime Date { get; set; }
-
-        [Required]
-        public TimeSpan Time { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.Now;
 
         [StringLength(500)]
         public string? Notes { get; set; }
@@ -96,12 +105,12 @@ namespace Shared.Models.DTOs.TimeTracking
 
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
+        public bool IsManualEntry { get; set; } = false;
     }
 
     public class UpdateTimeRecordDto
     {
-        public DateTime? Date { get; set; }
-        public TimeSpan? Time { get; set; }
+        public DateTime? Timestamp { get; set; }
         public RecordType? Type { get; set; }
 
         [StringLength(500)]

@@ -19,6 +19,8 @@ namespace Shared.Models.Vacations
 
         public int DaysRequested { get; set; }
 
+        public int TotalDays { get; set; } // Alias para DaysRequested
+
         public VacationStatus Status { get; set; } = VacationStatus.Pending;
 
         [StringLength(1000)]
@@ -58,5 +60,28 @@ namespace Shared.Models.Vacations
 
         [NotMapped]
         public bool IsActive => Status == VacationStatus.Approved && EndDate >= DateTime.Today;
+
+        [NotMapped]
+        public int CalculatedDays
+        {
+            get
+            {
+                var days = (EndDate - StartDate).Days + 1;
+                // Solo contar días laborables (opcional)
+                var businessDays = 0;
+                for (var date = StartDate; date <= EndDate; date = date.AddDays(1))
+                {
+                    if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
+                        businessDays++;
+                }
+                return businessDays;
+            }
+        }
+
+        // Sincronizar propiedades alias
+        public void SyncTotalDays()
+        {
+            TotalDays = DaysRequested;
+        }
     }
 }

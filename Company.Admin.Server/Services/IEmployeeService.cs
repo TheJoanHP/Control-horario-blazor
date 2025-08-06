@@ -4,7 +4,7 @@ namespace Company.Admin.Server.Services
 {
     public interface IEmployeeService
     {
-        // CRUD Operations
+        // CRUD Operations - usar solo una versión de cada método
         Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createDto);
         Task<EmployeeDto> UpdateEmployeeAsync(int id, UpdateEmployeeDto updateDto);
         Task<EmployeeDto?> GetEmployeeByIdAsync(int id);
@@ -31,5 +31,16 @@ namespace Company.Admin.Server.Services
         Task<bool> IsEmailUniqueAsync(string email, int? excludeEmployeeId = null);
         Task<bool> IsEmployeeCodeUniqueAsync(string code, int? excludeEmployeeId = null);
         Task<string> GenerateUniqueEmployeeCodeAsync();
+
+        // Métodos adicionales requeridos por el controlador
+        Task<IEnumerable<EmployeeDto>> GetAllAsync(int? departmentId = null, bool? active = null);
+        Task<EmployeeDto?> GetByIdAsync(int id);
+        Task<EmployeeDto?> GetByEmployeeNumberAsync(string employeeNumber);
+        Task<IEnumerable<EmployeeDto>> GetByDepartmentAsync(int departmentId);
+        Task<EmployeeDto> CreateAsync(CreateEmployeeDto createDto);
+        Task<EmployeeDto> UpdateAsync(int id, UpdateEmployeeDto updateDto);
+        Task<bool> DeleteAsync(int id);
+        Task<bool> ExistsAsync(int id);
+        Task<bool> ExistsByEmployeeNumberAsync(string employeeNumber);
     }
 }
