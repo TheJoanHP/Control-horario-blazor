@@ -3,7 +3,7 @@ using Shared.Models.Core;
 using Shared.Models.TimeTracking;
 using Shared.Models.Vacations;
 
-namespace EmployeeApp.Server.Data
+namespace Employee.App.Server.Data
 {
     public class EmployeeDbContext : DbContext
     {
@@ -11,7 +11,7 @@ namespace EmployeeApp.Server.Data
 
         // Solo las entidades que necesita la app de empleados
         public DbSet<User> Users { get; set; }
-        public DbSet<Employee> Employees { get; set; }
+        public DbSet<Shared.Models.Core.Employee> Employees { get; set; } // Especificar namespace completo
         public DbSet<Shared.Models.Core.Company> Companies { get; set; }
         public DbSet<TimeRecord> TimeRecords { get; set; }
         public DbSet<VacationRequest> VacationRequests { get; set; }
@@ -26,15 +26,16 @@ namespace EmployeeApp.Server.Data
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.Email).IsUnique();
                 entity.Property(e => e.Email).IsRequired();
-                entity.Property(e => e.Name).IsRequired();
+                entity.Property(e => e.FirstName).IsRequired();
+                entity.Property(e => e.LastName).IsRequired();
             });
 
-            modelBuilder.Entity<Employee>(entity =>
+            modelBuilder.Entity<Shared.Models.Core.Employee>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.HasOne(e => e.User)
                       .WithOne(u => u.Employee)
-                      .HasForeignKey<Employee>(e => e.UserId);
+                      .HasForeignKey<Shared.Models.Core.Employee>(e => e.UserId);
                 entity.HasOne(e => e.Company)
                       .WithMany(c => c.Employees)
                       .HasForeignKey(e => e.CompanyId);
@@ -57,7 +58,7 @@ namespace EmployeeApp.Server.Data
                       .HasForeignKey(e => e.EmployeeId);
             });
 
-            modelBuilder.Entity<Shared.Models.Core.Company>(entity =>
+            modelBuilder.Entity<Company>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired();

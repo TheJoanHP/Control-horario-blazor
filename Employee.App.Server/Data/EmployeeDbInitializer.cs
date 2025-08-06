@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using EmployeeApp.Server.Data;
+using Employee.App.Server.Data; // Corregido namespace
 using Shared.Models.Core;
 using Shared.Models.TimeTracking;
 using Shared.Models.Enums;
 
-namespace EmployeeApp.Server.Data
+namespace Employee.App.Server.Data // Corregido namespace
 {
     public static class EmployeeDbInitializer
     {
@@ -27,15 +27,13 @@ namespace EmployeeApp.Server.Data
                 var company = new Shared.Models.Core.Company
                 {
                     Name = "Demo Company",
-                    TaxId = "12345678A",
-                    Address = "Calle Demo, 123",
-                    Phone = "+34 123 456 789",
+                    Code = "DEMO",
                     Email = "info@democompany.com",
+                    Phone = "+34 123 456 789",
+                    Address = "Calle Demo, 123",
                     Active = true,
-                    WorkStartTime = new TimeSpan(9, 0, 0),
-                    WorkEndTime = new TimeSpan(17, 0, 0),
-                    ToleranceMinutes = 15,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 };
 
                 context.Companies.Add(company);
@@ -46,30 +44,36 @@ namespace EmployeeApp.Server.Data
                 {
                     new User
                     {
-                        Name = "María García",
+                        FirstName = "María",
+                        LastName = "García",
                         Email = "maria@demo.com",
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword("Maria123!"),
-                        Role = "EMPLOYEE",
+                        Role = UserRole.Employee,
                         Active = true,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     },
                     new User
                     {
-                        Name = "Juan López",
+                        FirstName = "Juan",
+                        LastName = "López",
                         Email = "juan@demo.com",
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword("Juan123!"),
-                        Role = "EMPLOYEE",
+                        Role = UserRole.Employee,
                         Active = true,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     },
                     new User
                     {
-                        Name = "Ana Martín",
+                        FirstName = "Ana",
+                        LastName = "Martín",
                         Email = "ana@demo.com",
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword("Ana123!"),
-                        Role = "EMPLOYEE",
+                        Role = UserRole.Employee,
                         Active = true,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     }
                 };
 
@@ -79,58 +83,71 @@ namespace EmployeeApp.Server.Data
                 // Crear empleados
                 var employees = new[]
                 {
-                    new Employee
+                    new Shared.Models.Core.Employee
                     {
                         UserId = users[0].Id,
                         CompanyId = company.Id,
+                        FirstName = users[0].FirstName,
+                        LastName = users[0].LastName,
+                        Email = users[0].Email,
                         EmployeeCode = "EMP001",
-                        Department = "Desarrollo",
-                        Position = "Desarrolladora Frontend",
-                        HireDate = DateTime.UtcNow.AddMonths(-8),
-                        Pin = BCrypt.Net.BCrypt.HashPassword("1234"), // PIN para fichaje rápido
+                        Position = "Desarrolladora",
+                        Role = UserRole.Employee,
+                        PasswordHash = users[0].PasswordHash,
+                        HireDate = DateTime.UtcNow.AddMonths(-6),
                         Active = true,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     },
-                    new Employee
+                    new Shared.Models.Core.Employee
                     {
                         UserId = users[1].Id,
                         CompanyId = company.Id,
+                        FirstName = users[1].FirstName,
+                        LastName = users[1].LastName,
+                        Email = users[1].Email,
                         EmployeeCode = "EMP002",
-                        Department = "Desarrollo",
-                        Position = "Desarrollador Backend",
-                        HireDate = DateTime.UtcNow.AddMonths(-6),
-                        Pin = BCrypt.Net.BCrypt.HashPassword("5678"),
+                        Position = "Diseñador",
+                        Role = UserRole.Employee,
+                        PasswordHash = users[1].PasswordHash,
+                        HireDate = DateTime.UtcNow.AddMonths(-3),
                         Active = true,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     },
-                    new Employee
+                    new Shared.Models.Core.Employee
                     {
                         UserId = users[2].Id,
                         CompanyId = company.Id,
+                        FirstName = users[2].FirstName,
+                        LastName = users[2].LastName,
+                        Email = users[2].Email,
                         EmployeeCode = "EMP003",
-                        Department = "Marketing",
-                        Position = "Especialista en Marketing Digital",
-                        HireDate = DateTime.UtcNow.AddMonths(-4),
-                        Pin = BCrypt.Net.BCrypt.HashPassword("9999"),
+                        Position = "Administradora",
+                        Role = UserRole.Employee,
+                        PasswordHash = users[2].PasswordHash,
+                        HireDate = DateTime.UtcNow.AddMonths(-1),
                         Active = true,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     }
                 };
 
                 context.Employees.AddRange(employees);
                 await context.SaveChangesAsync();
 
-                // Crear registros de tiempo de ejemplo
                 await CreateSampleTimeRecords(context);
 
                 Console.WriteLine("✅ Datos de prueba creados exitosamente:");
-                Console.WriteLine("   • Empleados: maria@demo.com, juan@demo.com, ana@demo.com");
-                Console.WriteLine("   • Contraseñas: Maria123!, Juan123!, Ana123!");
-                Console.WriteLine("   • PIN fichaje: EMP001/1234, EMP002/5678, EMP003/9999");
+                Console.WriteLine("   • Empresa: Demo Company");
+                Console.WriteLine("   • Usuarios: maria@demo.com, juan@demo.com, ana@demo.com");
+                Console.WriteLine("   • Contraseña: Maria123!, Juan123!, Ana123!");
+                Console.WriteLine("   • Códigos empleado: EMP001, EMP002, EMP003");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Console.WriteLine("✅ Datos de prueba creados exitosamente:");
+                Console.WriteLine($"❌ Error creando datos de prueba: {ex.Message}");
+                throw;
             }
         }
 
@@ -164,9 +181,10 @@ namespace EmployeeApp.Server.Data
                     {
                         EmployeeId = employee.Id,
                         Type = RecordType.CheckIn,
+                        Date = checkInTime.Date,
+                        Time = checkInTime.TimeOfDay,
                         Timestamp = checkInTime,
                         Location = "Oficina Principal",
-                        IpAddress = "192.168.1." + random.Next(100, 200),
                         CreatedAt = checkInTime
                     });
 
@@ -175,9 +193,12 @@ namespace EmployeeApp.Server.Data
                     records.Add(new TimeRecord
                     {
                         EmployeeId = employee.Id,
-                        Type = RecordType.LunchStart,
+                        Type = RecordType.BreakStart,
+                        Date = lunchStart.Date,
+                        Time = lunchStart.TimeOfDay,
                         Timestamp = lunchStart,
                         Location = "Oficina Principal",
+                        Notes = "Pausa almuerzo",
                         CreatedAt = lunchStart
                     });
 
@@ -185,9 +206,12 @@ namespace EmployeeApp.Server.Data
                     records.Add(new TimeRecord
                     {
                         EmployeeId = employee.Id,
-                        Type = RecordType.LunchEnd,
+                        Type = RecordType.BreakEnd,
+                        Date = lunchEnd.Date,
+                        Time = lunchEnd.TimeOfDay,
                         Timestamp = lunchEnd,
                         Location = "Oficina Principal",
+                        Notes = "Fin pausa almuerzo",
                         CreatedAt = lunchEnd
                     });
 
@@ -197,9 +221,10 @@ namespace EmployeeApp.Server.Data
                     {
                         EmployeeId = employee.Id,
                         Type = RecordType.CheckOut,
+                        Date = checkOutTime.Date,
+                        Time = checkOutTime.TimeOfDay,
                         Timestamp = checkOutTime,
                         Location = "Oficina Principal",
-                        IpAddress = "192.168.1." + random.Next(100, 200),
                         CreatedAt = checkOutTime
                     });
                 }

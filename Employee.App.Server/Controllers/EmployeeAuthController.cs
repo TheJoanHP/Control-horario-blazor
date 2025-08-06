@@ -291,17 +291,4 @@ namespace Employee.App.Server.Controllers
             }
         }
     }
-
-    // DTOs específicos para empleados
-    public class PinLoginRequest
-    {
-        public int EmployeeId { get; set; }
-        public string Pin { get; set; } = string.Empty;
-    }
-
-    public class ChangePasswordRequest
-    {
-        public string CurrentPassword { get; set; } = string.Empty;
-        public string NewPassword { get; set; } = string.Empty;
-    }
 }
