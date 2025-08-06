@@ -71,7 +71,26 @@ namespace Company.Admin.Server.Controllers
                 await _context.SaveChangesAsync();
 
                 // Generar token JWT
-                var token = _jwtService.GenerateToken(user.Id, user.Email, user.Role);
+                var additionalClaims = new Dictionary<string, string>
+                {
+                    ["first_name"] = user.FirstName,
+                    ["last_name"] = user.LastName,
+                    ["company_id"] = user.CompanyId?.ToString() ?? ""
+                };
+
+                if (user.Employee != null)
+                {
+                    additionalClaims["employee_id"] = user.Employee.Id.ToString();
+                    additionalClaims["department_id"] = user.Employee.DepartmentId?.ToString() ?? "";
+                }
+
+                var token = _jwtService.CreateTokenInfo(
+                    user.Id, 
+                    user.Email, 
+                    user.Role.ToString(),
+                    user.CompanyId?.ToString(),
+                    additionalClaims
+                );
 
                 var userInfo = new UserInfo
                 {
@@ -117,10 +136,12 @@ namespace Company.Admin.Server.Controllers
 
                 var response = new LoginResponse
                 {
+                    Success = true,
                     Token = token.Token,
                     RefreshToken = token.RefreshToken,
                     ExpiresAt = token.ExpiresAt,
-                    User = userInfo
+                    User = userInfo,
+                    Message = "Login exitoso"
                 };
 
                 _logger.LogInformation("Login exitoso para usuario: {Email}", request.Email);
@@ -172,7 +193,26 @@ namespace Company.Admin.Server.Controllers
                 }
 
                 // Generar nuevo token
-                var newToken = _jwtService.GenerateToken(user.Id, user.Email, user.Role);
+                var additionalClaims = new Dictionary<string, string>
+                {
+                    ["first_name"] = user.FirstName,
+                    ["last_name"] = user.LastName,
+                    ["company_id"] = user.CompanyId?.ToString() ?? ""
+                };
+
+                if (user.Employee != null)
+                {
+                    additionalClaims["employee_id"] = user.Employee.Id.ToString();
+                    additionalClaims["department_id"] = user.Employee.DepartmentId?.ToString() ?? "";
+                }
+
+                var newToken = _jwtService.CreateTokenInfo(
+                    user.Id, 
+                    user.Email, 
+                    user.Role.ToString(),
+                    user.CompanyId?.ToString(),
+                    additionalClaims
+                );
 
                 var userInfo = new UserInfo
                 {
@@ -218,10 +258,12 @@ namespace Company.Admin.Server.Controllers
 
                 var response = new LoginResponse
                 {
+                    Success = true,
                     Token = newToken.Token,
                     RefreshToken = newToken.RefreshToken,
                     ExpiresAt = newToken.ExpiresAt,
-                    User = userInfo
+                    User = userInfo,
+                    Message = "Token renovado exitosamente"
                 };
 
                 return Ok(response);

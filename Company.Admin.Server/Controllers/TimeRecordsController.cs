@@ -158,14 +158,14 @@ namespace Company.Admin.Server.Controllers
                     return BadRequest("Empleado no encontrado");
 
                 var currentTime = DateTime.Now;
-                var recordDateTime = dto.Date.Date.Add(dto.Time);
+                var recordDateTime = dto.Timestamp;
 
                 var timeRecord = new TimeRecord
                 {
                     EmployeeId = dto.EmployeeId,
                     Type = dto.Type,
-                    Date = dto.Date.Date,
-                    Time = dto.Time,
+                    Date = dto.Timestamp.Date,
+                    Time = dto.Timestamp.TimeOfDay,
                     Notes = dto.Notes,
                     Location = dto.Location,
                     Latitude = dto.Latitude,
@@ -228,11 +228,11 @@ namespace Company.Admin.Server.Controllers
                 if (!timeRecord.IsManualEntry && !HasAdminPermissions())
                     return Forbid("Solo se pueden editar registros manuales");
 
-                if (dto.Date.HasValue)
-                    timeRecord.Date = dto.Date.Value.Date;
-
-                if (dto.Time.HasValue)
-                    timeRecord.Time = dto.Time.Value;
+                if (dto.Timestamp.HasValue)
+                {
+                    timeRecord.Date = dto.Timestamp.Value.Date;
+                    timeRecord.Time = dto.Timestamp.Value.TimeOfDay;
+                }
 
                 if (dto.Type.HasValue)
                     timeRecord.Type = dto.Type.Value;
@@ -339,7 +339,7 @@ namespace Company.Admin.Server.Controllers
         {
             try
             {
-                var record = await _timeTrackingService.CheckInAsync(dto);
+                var record = await _timeTrackingService.CheckInAsync(dto.EmployeeId, dto);
                 
                 var result = new TimeRecordDto
                 {
@@ -382,7 +382,7 @@ namespace Company.Admin.Server.Controllers
         {
             try
             {
-                var record = await _timeTrackingService.CheckOutAsync(dto);
+                var record = await _timeTrackingService.CheckOutAsync(dto.EmployeeId, dto);
                 
                 var result = new TimeRecordDto
                 {

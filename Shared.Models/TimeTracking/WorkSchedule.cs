@@ -56,6 +56,11 @@ namespace Shared.Models.TimeTracking
 
         public int ToleranceMinutes { get; set; } = 15;
 
+        // Propiedades adicionales requeridas por DbInitializer
+        public TimeSpan? BreakDuration { get; set; }
+        public bool FlexibleHours { get; set; } = false;
+        public int MaxFlexMinutes { get; set; } = 0;
+
         public bool IsDefault { get; set; } = false;
 
         public bool Active { get; set; } = true;

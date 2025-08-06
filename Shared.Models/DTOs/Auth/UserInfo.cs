@@ -45,8 +45,10 @@ namespace Shared.Models.DTOs.Auth
     {
         public int Id { get; set; }
         public string EmployeeCode { get; set; } = string.Empty;
+        public string? EmployeeNumber { get; set; }
         public string? Position { get; set; }
         public string? DepartmentName { get; set; }
+        public int? DepartmentId { get; set; }
         public DateTime? HireDate { get; set; }
         public bool Active { get; set; }
     }
@@ -57,5 +59,9 @@ namespace Shared.Models.DTOs.Auth
         public string Name { get; set; } = string.Empty;
         public string? Code { get; set; }
         public string? Subdomain { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public bool Active { get; set; } = true;
     }
 }

@@ -23,6 +23,8 @@ namespace Company.Admin.Server.Services
             _logger = logger;
         }
 
+        #region Main CRUD Operations
+
         public async Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createDto)
         {
             try
@@ -52,6 +54,7 @@ namespace Company.Admin.Server.Services
                     Email = createDto.Email,
                     PasswordHash = _passwordService.HashPassword(createDto.Password ?? "123456"),
                     Role = UserRole.Employee,
+                    CompanyId = createDto.CompanyId,
                     Active = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -66,9 +69,14 @@ namespace Company.Admin.Server.Services
                     UserId = user.Id,
                     CompanyId = createDto.CompanyId,
                     DepartmentId = createDto.DepartmentId,
+                    FirstName = createDto.FirstName,
+                    LastName = createDto.LastName,
+                    Email = createDto.Email,
                     EmployeeCode = employeeCode,
                     Position = createDto.Position,
                     Phone = createDto.Phone,
+                    Role = UserRole.Employee,
+                    PasswordHash = user.PasswordHash,
                     HireDate = createDto.HireDate ?? DateTime.Today,
                     Active = true,
                     CreatedAt = DateTime.UtcNow,
@@ -87,6 +95,10 @@ namespace Company.Admin.Server.Services
                     .Reference(e => e.Department)
                     .LoadAsync();
 
+                await _context.Entry(employee)
+                    .Reference(e => e.Company)
+                    .LoadAsync();
+
                 return MapToDto(employee);
             }
             catch (Exception ex)
@@ -103,6 +115,7 @@ namespace Company.Admin.Server.Services
                 var employee = await _context.Employees
                     .Include(e => e.User)
                     .Include(e => e.Department)
+                    .Include(e => e.Company)
                     .FirstOrDefaultAsync(e => e.Id == id);
 
                 if (employee == null)
@@ -112,18 +125,25 @@ namespace Company.Admin.Server.Services
 
                 // Actualizar datos del usuario si se proporcionan
                 if (!string.IsNullOrEmpty(updateDto.FirstName))
-                    employee.User.FirstName = updateDto.FirstName;
+                {
+                    employee.User!.FirstName = updateDto.FirstName;
+                    employee.FirstName = updateDto.FirstName;
+                }
 
                 if (!string.IsNullOrEmpty(updateDto.LastName))
-                    employee.User.LastName = updateDto.LastName;
+                {
+                    employee.User!.LastName = updateDto.LastName;
+                    employee.LastName = updateDto.LastName;
+                }
 
-                if (!string.IsNullOrEmpty(updateDto.Email) && updateDto.Email != employee.User.Email)
+                if (!string.IsNullOrEmpty(updateDto.Email) && updateDto.Email != employee.User!.Email)
                 {
                     if (!await IsEmailUniqueAsync(updateDto.Email, id))
                     {
                         throw new InvalidOperationException("El email ya está en uso");
                     }
                     employee.User.Email = updateDto.Email;
+                    employee.Email = updateDto.Email;
                 }
 
                 // Actualizar datos del empleado
@@ -151,11 +171,11 @@ namespace Company.Admin.Server.Services
                 if (updateDto.Active.HasValue)
                 {
                     employee.Active = updateDto.Active.Value;
-                    employee.User.Active = updateDto.Active.Value;
+                    employee.User!.Active = updateDto.Active.Value;
                 }
 
                 employee.UpdatedAt = DateTime.UtcNow;
-                employee.User.UpdatedAt = DateTime.UtcNow;
+                employee.User!.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
@@ -185,7 +205,7 @@ namespace Company.Admin.Server.Services
                 .Include(e => e.User)
                 .Include(e => e.Department)
                 .Include(e => e.Company)
-                .FirstOrDefaultAsync(e => e.User.Email == email);
+                .FirstOrDefaultAsync(e => e.Email == email || (e.User != null && e.User.Email == email));
 
             return employee != null ? MapToDto(employee) : null;
         }
@@ -200,27 +220,24 @@ namespace Company.Admin.Server.Services
 
             if (!string.IsNullOrEmpty(search))
             {
-                search = search.ToLower();
                 query = query.Where(e => 
-                    e.User.FirstName.ToLower().Contains(search) ||
-                    e.User.LastName.ToLower().Contains(search) ||
-                    e.User.Email.ToLower().Contains(search) ||
-                    e.EmployeeCode.ToLower().Contains(search));
+                    e.FirstName.Contains(search) ||
+                    e.LastName.Contains(search) ||
+                    e.Email.Contains(search) ||
+                    e.EmployeeCode.Contains(search) ||
+                    (e.User != null && (e.User.FirstName.Contains(search) || e.User.LastName.Contains(search)))
+                );
             }
 
             if (departmentId.HasValue)
-            {
-                query = query.Where(e => e.DepartmentId == departmentId);
-            }
+                query = query.Where(e => e.DepartmentId == departmentId.Value);
 
             if (active.HasValue)
-            {
-                query = query.Where(e => e.Active == active);
-            }
+                query = query.Where(e => e.Active == active.Value);
 
             var employees = await query
-                .OrderBy(e => e.User.LastName)
-                .ThenBy(e => e.User.FirstName)
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
                 .ToListAsync();
 
             return employees.Select(MapToDto);
@@ -236,11 +253,14 @@ namespace Company.Admin.Server.Services
 
                 if (employee == null) return false;
 
-                // Soft delete - marcar como inactivo
+                // Soft delete - marcar como inactivo en lugar de eliminar
                 employee.Active = false;
-                employee.User.Active = false;
+                if (employee.User != null)
+                    employee.User.Active = false;
+
                 employee.UpdatedAt = DateTime.UtcNow;
-                employee.User.UpdatedAt = DateTime.UtcNow;
+                if (employee.User != null)
+                    employee.User.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
                 return true;
@@ -251,6 +271,10 @@ namespace Company.Admin.Server.Services
                 return false;
             }
         }
+
+        #endregion
+
+        #region Status Management
 
         public async Task<bool> ActivateEmployeeAsync(int id)
         {
@@ -263,9 +287,12 @@ namespace Company.Admin.Server.Services
                 if (employee == null) return false;
 
                 employee.Active = true;
-                employee.User.Active = true;
+                if (employee.User != null)
+                    employee.User.Active = true;
+
                 employee.UpdatedAt = DateTime.UtcNow;
-                employee.User.UpdatedAt = DateTime.UtcNow;
+                if (employee.User != null)
+                    employee.User.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
                 return true;
@@ -288,9 +315,12 @@ namespace Company.Admin.Server.Services
                 if (employee == null) return false;
 
                 employee.Active = false;
-                employee.User.Active = false;
+                if (employee.User != null)
+                    employee.User.Active = false;
+
                 employee.UpdatedAt = DateTime.UtcNow;
-                employee.User.UpdatedAt = DateTime.UtcNow;
+                if (employee.User != null)
+                    employee.User.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
                 return true;
@@ -302,6 +332,10 @@ namespace Company.Admin.Server.Services
             }
         }
 
+        #endregion
+
+        #region Password Management
+
         public async Task<bool> ChangePasswordAsync(int id, string newPassword)
         {
             try
@@ -312,9 +346,16 @@ namespace Company.Admin.Server.Services
 
                 if (employee == null) return false;
 
-                employee.User.PasswordHash = _passwordService.HashPassword(newPassword);
-                employee.User.UpdatedAt = DateTime.UtcNow;
+                var hashedPassword = _passwordService.HashPassword(newPassword);
+                employee.PasswordHash = hashedPassword;
+                
+                if (employee.User != null)
+                {
+                    employee.User.PasswordHash = hashedPassword;
+                    employee.User.UpdatedAt = DateTime.UtcNow;
+                }
 
+                employee.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
                 return true;
             }
@@ -325,15 +366,23 @@ namespace Company.Admin.Server.Services
             }
         }
 
+        #endregion
+
+        #region Authentication & Validation
+
         public async Task<bool> ValidateEmployeeCredentialsAsync(string email, string password)
         {
             var employee = await _context.Employees
                 .Include(e => e.User)
-                .FirstOrDefaultAsync(e => e.User.Email == email && e.Active);
+                .FirstOrDefaultAsync(e => e.Email == email && e.Active);
 
             if (employee == null) return false;
 
-            return _passwordService.VerifyPassword(password, employee.User.PasswordHash);
+            var passwordToCheck = !string.IsNullOrEmpty(employee.PasswordHash) 
+                ? employee.PasswordHash 
+                : employee.User?.PasswordHash ?? "";
+
+            return _passwordService.VerifyPassword(password, passwordToCheck);
         }
 
         public async Task<EmployeeDto?> AuthenticateEmployeeAsync(string email, string password)
@@ -345,6 +394,10 @@ namespace Company.Admin.Server.Services
             return null;
         }
 
+        #endregion
+
+        #region Statistics
+
         public async Task<int> GetTotalEmployeesAsync()
         {
             return await _context.Employees.CountAsync();
@@ -355,16 +408,31 @@ namespace Company.Admin.Server.Services
             return await _context.Employees.CountAsync(e => e.Active);
         }
 
+        #endregion
+
+        #region Validation Helpers
+
         public async Task<bool> IsEmailUniqueAsync(string email, int? excludeEmployeeId = null)
         {
-            var query = _context.Users.Where(u => u.Email == email);
+            var query = _context.Employees.Where(e => e.Email == email);
             
             if (excludeEmployeeId.HasValue)
             {
-                query = query.Where(u => u.Employee == null || u.Employee.Id != excludeEmployeeId);
+                query = query.Where(e => e.Id != excludeEmployeeId.Value);
             }
 
-            return !await query.AnyAsync();
+            var existsInEmployees = await query.AnyAsync();
+
+            // También verificar en Users
+            var userQuery = _context.Users.Where(u => u.Email == email);
+            if (excludeEmployeeId.HasValue)
+            {
+                userQuery = userQuery.Where(u => u.Employee == null || u.Employee.Id != excludeEmployeeId.Value);
+            }
+
+            var existsInUsers = await userQuery.AnyAsync();
+
+            return !existsInEmployees && !existsInUsers;
         }
 
         public async Task<bool> IsEmployeeCodeUniqueAsync(string code, int? excludeEmployeeId = null)
@@ -402,28 +470,98 @@ namespace Company.Admin.Server.Services
             return $"{prefix}{nextNumber:D4}";
         }
 
-        // Método auxiliar para mapear Employee a EmployeeDto
+        #endregion
+
+        #region Alias Methods (Required by Controller)
+
+        public async Task<IEnumerable<EmployeeDto>> GetAllAsync(int? departmentId = null, bool? active = null)
+        {
+            return await GetEmployeesAsync(null, departmentId, active);
+        }
+
+        public async Task<EmployeeDto?> GetByIdAsync(int id)
+        {
+            return await GetEmployeeByIdAsync(id);
+        }
+
+        public async Task<EmployeeDto?> GetByEmployeeNumberAsync(string employeeNumber)
+        {
+            var employee = await _context.Employees
+                .Include(e => e.User)
+                .Include(e => e.Department)
+                .Include(e => e.Company)
+                .FirstOrDefaultAsync(e => e.EmployeeCode == employeeNumber || e.EmployeeNumber == employeeNumber);
+
+            return employee != null ? MapToDto(employee) : null;
+        }
+
+        public async Task<IEnumerable<EmployeeDto>> GetByDepartmentAsync(int departmentId)
+        {
+            return await GetEmployeesAsync(null, departmentId, null);
+        }
+
+        public async Task<EmployeeDto> CreateAsync(CreateEmployeeDto createDto)
+        {
+            return await CreateEmployeeAsync(createDto);
+        }
+
+        public async Task<EmployeeDto> UpdateAsync(int id, UpdateEmployeeDto updateDto)
+        {
+            return await UpdateEmployeeAsync(id, updateDto);
+        }
+
+        public async Task<bool> DeleteAsync(int id)
+        {
+            return await DeleteEmployeeAsync(id);
+        }
+
+        public async Task<bool> ExistsAsync(int id)
+        {
+            return await _context.Employees.AnyAsync(e => e.Id == id);
+        }
+
+        public async Task<bool> ExistsByEmployeeNumberAsync(string employeeNumber)
+        {
+            return await _context.Employees.AnyAsync(e => e.EmployeeCode == employeeNumber || e.EmployeeNumber == employeeNumber);
+        }
+
+        #endregion
+
+        #region Private Helper Methods
+
+        /// <summary>
+        /// Mapea una entidad Employee a EmployeeDto
+        /// </summary>
         private EmployeeDto MapToDto(Employee employee)
         {
             return new EmployeeDto
             {
                 Id = employee.Id,
-                UserId = employee.UserId,
+                UserId = employee.UserId ?? 0,
                 CompanyId = employee.CompanyId,
                 DepartmentId = employee.DepartmentId,
                 EmployeeCode = employee.EmployeeCode,
-                FirstName = employee.User?.FirstName ?? "",
-                LastName = employee.User?.LastName ?? "",
-                Email = employee.User?.Email ?? "",
-                Position = employee.Position,
+                FirstName = employee.User?.FirstName ?? employee.FirstName,
+                LastName = employee.User?.LastName ?? employee.LastName,
+                Email = employee.User?.Email ?? employee.Email,
                 Phone = employee.Phone,
-                HireDate = employee.HireDate,
+                Position = employee.Position,
+                Role = employee.Role,
+                Salary = employee.Salary,
+                HireDate = employee.HireDate ?? DateTime.Today,
                 Active = employee.Active,
-                DepartmentName = employee.Department?.Name,
-                CompanyName = employee.Company?.Name,
+                DepartmentName = employee.Department?.Name ?? "",
+                CompanyName = employee.Company?.Name ?? "",
                 CreatedAt = employee.CreatedAt,
-                UpdatedAt = employee.UpdatedAt
+                UpdatedAt = employee.UpdatedAt,
+                
+                // Propiedades calculadas
+                YearsOfService = employee.HireDate.HasValue 
+                    ? (DateTime.UtcNow - employee.HireDate.Value).Days / 365 
+                    : null
             };
         }
+
+        #endregion
     }
 }

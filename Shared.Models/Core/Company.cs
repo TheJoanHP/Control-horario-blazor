@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Shared.Models.TimeTracking;
+using Shared.Models.Vacations;
 
 namespace Shared.Models.Core
 {
@@ -54,6 +56,8 @@ namespace Shared.Models.Core
         public virtual ICollection<Department> Departments { get; set; } = new List<Department>();
         public virtual ICollection<Employee> Employees { get; set; } = new List<Employee>();
         public virtual ICollection<User> Users { get; set; } = new List<User>();
+        public virtual ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
+        public virtual ICollection<VacationPolicy> VacationPolicies { get; set; } = new List<VacationPolicy>();
 
         // Propiedades calculadas
         [NotMapped]

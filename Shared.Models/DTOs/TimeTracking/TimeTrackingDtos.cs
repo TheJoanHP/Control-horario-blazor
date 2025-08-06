@@ -6,6 +6,7 @@ namespace Shared.Models.DTOs.TimeTracking
     // DTOs para Check In/Out
     public class CheckInDto
     {
+        public int EmployeeId { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.Now;
         public string? Notes { get; set; }
         public string? Location { get; set; }
@@ -17,6 +18,7 @@ namespace Shared.Models.DTOs.TimeTracking
 
     public class CheckOutDto
     {
+        public int EmployeeId { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.Now;
         public string? Notes { get; set; }
         public string? Location { get; set; }
@@ -31,6 +33,7 @@ namespace Shared.Models.DTOs.TimeTracking
         [Required]
         public int EmployeeId { get; set; }
         
+        public DateTime Timestamp { get; set; } = DateTime.Now;
         public string? Notes { get; set; }
         public string? Location { get; set; }
         public double? Latitude { get; set; }
@@ -44,6 +47,7 @@ namespace Shared.Models.DTOs.TimeTracking
         [Required]
         public int EmployeeId { get; set; }
         
+        public DateTime Timestamp { get; set; } = DateTime.Now;
         public string? Notes { get; set; }
         public string? Location { get; set; }
         public double? Latitude { get; set; }
@@ -96,6 +100,8 @@ namespace Shared.Models.DTOs.TimeTracking
         public RecordType Type { get; set; }
 
         public DateTime Timestamp { get; set; } = DateTime.Now;
+        public DateTime Date => Timestamp.Date;
+        public TimeSpan Time => Timestamp.TimeOfDay;
 
         [StringLength(500)]
         public string? Notes { get; set; }
@@ -111,6 +117,8 @@ namespace Shared.Models.DTOs.TimeTracking
     public class UpdateTimeRecordDto
     {
         public DateTime? Timestamp { get; set; }
+        public DateTime? Date => Timestamp?.Date;
+        public TimeSpan? Time => Timestamp?.TimeOfDay;
         public RecordType? Type { get; set; }
 
         [StringLength(500)]
