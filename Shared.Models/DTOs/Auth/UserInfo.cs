@@ -65,7 +65,7 @@ namespace Shared.Models.DTOs.Auth
         public string? Address { get; set; }
         public bool Active { get; set; } = true;
         
-        // AGREGADA - Propiedad que faltaba para VacationDaysPerYear
-        public int? VacationDaysPerYear { get; set; } = 22;
+        // AGREGADA - Propiedad necesaria para las vacaciones
+        public int VacationDaysPerYear { get; set; } = 22;
     }
 }

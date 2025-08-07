@@ -1,5 +1,5 @@
 self.assetsManifest = {
-  "version": "E1chpKKt",
+  "version": "NoFqbvaG",
   "assets": [
     {
       "hash": "sha256-6OCtmQ2yjKbtel9QSdpzDmmGFIHfcGX6jwpzhWGb4fI=",
@@ -22,12 +22,12 @@ self.assetsManifest = {
       "url": "_framework/Blazored.LocalStorage.12n6dz54qr.wasm"
     },
     {
-      "hash": "sha256-rmu2fZyigHbcRBmZlVMdAmCK0Atv2uhI5O0TfIvwNfI=",
-      "url": "_framework/Employee.App.Client.636umxmvki.pdb"
+      "hash": "sha256-OSUy1cK5E2yB/gzNGqvl1nMEi/DX0D6Rv6L0HI7FR3k=",
+      "url": "_framework/Employee.App.Client.b7wbzoct3g.wasm"
     },
     {
-      "hash": "sha256-dRW8mwfDmc6J+7FJrbCBhKCrY0dTvSYea+hzrxV34UQ=",
-      "url": "_framework/Employee.App.Client.vrya85y7mk.wasm"
+      "hash": "sha256-1Abe8fcCJ0KB58jiVjhX2xF8heNRPWYelnmbG+GW8L4=",
+      "url": "_framework/Employee.App.Client.sgpdfaqjzp.pdb"
     },
     {
       "hash": "sha256-R3z3EHDfLygNZKgrLSQoa3nUMS29QCyoWiSkZCtA1qg=",
@@ -842,7 +842,7 @@ self.assetsManifest = {
       "url": "_framework/WindowsBase.pg3o6xzigg.wasm"
     },
     {
-      "hash": "sha256-oNMNeaQ8X8EcugyZX9JTuwp9/zD3h9fWNRbpcnKUWHI=",
+      "hash": "sha256-oXXcGS6hjVFsYNxUZfJtV7fKfJJP8SlSHJT0cJjqueQ=",
       "url": "_framework/blazor.boot.json"
     },
     {

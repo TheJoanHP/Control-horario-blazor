@@ -1,9 +1,3 @@
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.csproj.AssemblyReference.cache
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.AssemblyInfoInputs.cache
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.AssemblyInfo.cs
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.csproj.CoreCompileInputs.cache
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.sourcelink.json
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\bin\Debug\net9.0\appsettings.json
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\bin\Debug\net9.0\Scripts\01-CreateCentralDB.sql
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\bin\Debug\net9.0\Scripts\02-CreateTenantTemplate.sql
@@ -67,6 +61,12 @@ C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\bin\Debug\net9.0\Shared.Services.dll
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\bin\Debug\net9.0\Shared.Models.pdb
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\bin\Debug\net9.0\Shared.Services.pdb
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.csproj.AssemblyReference.cache
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.AssemblyInfoInputs.cache
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.AssemblyInfo.cs
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.csproj.CoreCompileInputs.cache
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.sourcelink.json
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.610E42F2.Up2Date
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\Database.Setup.dll
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Database.Setup\obj\Debug\net9.0\refint\Database.Setup.dll

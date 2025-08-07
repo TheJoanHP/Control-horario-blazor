@@ -111,6 +111,12 @@ namespace Shared.Models.DTOs.Employee
 
         [StringLength(100, MinimumLength = 6, ErrorMessage = "La contraseña debe tener entre 6 y 100 caracteres")]
         public string? Password { get; set; }
+
+        // AGREGADAS: Propiedades faltantes
+        public UserRole Role { get; set; } = UserRole.Employee;
+
+        [Range(0, double.MaxValue, ErrorMessage = "El salario debe ser un valor positivo")]
+        public decimal? Salary { get; set; }
     }
 
     public class UpdateEmployeeDto
@@ -140,6 +146,12 @@ namespace Shared.Models.DTOs.Employee
         public DateTime? HireDate { get; set; }
 
         public bool? Active { get; set; }
+
+        // AGREGADAS: Propiedades faltantes
+        public UserRole? Role { get; set; }
+
+        [Range(0, double.MaxValue, ErrorMessage = "El salario debe ser un valor positivo")]
+        public decimal? Salary { get; set; }
     }
 
     public class EmployeeListDto
@@ -170,5 +182,73 @@ namespace Shared.Models.DTOs.Employee
         public bool IsOnBreak { get; set; }
         public string CurrentStatus { get; set; } = string.Empty;
         public DateTime? LastCheckIn { get; set; }
+    }
+
+    public class EmployeeLoginDto
+    {
+        [Required(ErrorMessage = "El email es requerido")]
+        [EmailAddress(ErrorMessage = "El formato del email no es válido")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "La contraseña es requerida")]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    public class ChangePasswordDto
+    {
+        [Required(ErrorMessage = "La contraseña actual es requerida")]
+        public string CurrentPassword { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "La nueva contraseña es requerida")]
+        [StringLength(100, MinimumLength = 6, ErrorMessage = "La contraseña debe tener entre 6 y 100 caracteres")]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "La confirmación de contraseña es requerida")]
+        [Compare("NewPassword", ErrorMessage = "Las contraseñas no coinciden")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    public class ResetPasswordDto
+    {
+        [Required(ErrorMessage = "El email es requerido")]
+        [EmailAddress(ErrorMessage = "El formato del email no es válido")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "El token es requerido")]
+        public string Token { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "La nueva contraseña es requerida")]
+        [StringLength(100, MinimumLength = 6, ErrorMessage = "La contraseña debe tener entre 6 y 100 caracteres")]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "La confirmación de contraseña es requerida")]
+        [Compare("NewPassword", ErrorMessage = "Las contraseñas no coinciden")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    public class EmployeeFilterDto
+    {
+        public string? Search { get; set; }
+        public int? DepartmentId { get; set; }
+        public bool? Active { get; set; }
+        public UserRole? Role { get; set; }
+        public DateTime? HiredFrom { get; set; }
+        public DateTime? HiredTo { get; set; }
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 10;
+        public string? OrderBy { get; set; }
+        public bool Ascending { get; set; } = true;
+    }
+
+    public class EmployeeStatisticsDto
+    {
+        public int TotalEmployees { get; set; }
+        public int ActiveEmployees { get; set; }
+        public int InactiveEmployees { get; set; }
+        public int NewThisMonth { get; set; }
+        public Dictionary<string, int> ByDepartment { get; set; } = new();
+        public Dictionary<string, int> ByRole { get; set; } = new();
+        public double AverageYearsOfService { get; set; }
+        public double TurnoverRatePercentage { get; set; }
     }
 }
