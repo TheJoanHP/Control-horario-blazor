@@ -18,8 +18,6 @@ namespace Shared.Models.DTOs.Auth
         public string? DepartmentName { get; set; }
         public string? Position { get; set; }
         public string? EmployeeCode { get; set; }
-
-        // AGREGADA la propiedad que falta
         public string? CompanyName { get; set; }
         
         // Navegación 
@@ -66,5 +64,8 @@ namespace Shared.Models.DTOs.Auth
         public string? Phone { get; set; }
         public string? Address { get; set; }
         public bool Active { get; set; } = true;
+        
+        // AGREGADA - Propiedad que faltaba para VacationDaysPerYear
+        public int? VacationDaysPerYear { get; set; } = 22;
     }
 }

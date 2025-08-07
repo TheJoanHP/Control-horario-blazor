@@ -4,11 +4,12 @@ namespace Company.Admin.Server.Services
 {
     public interface IEmployeeService
     {
-        // CRUD Operations - usar solo una versión de cada método
+        // CRUD Operations
         Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createDto);
         Task<EmployeeDto> UpdateEmployeeAsync(int id, UpdateEmployeeDto updateDto);
         Task<EmployeeDto?> GetEmployeeByIdAsync(int id);
         Task<EmployeeDto?> GetEmployeeByEmailAsync(string email);
+        Task<EmployeeDto?> GetEmployeeByCodeAsync(string employeeCode); // AGREGADO
         Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(string? search = null, int? departmentId = null, bool? active = null);
         Task<bool> DeleteEmployeeAsync(int id);
 
@@ -32,7 +33,7 @@ namespace Company.Admin.Server.Services
         Task<bool> IsEmployeeCodeUniqueAsync(string code, int? excludeEmployeeId = null);
         Task<string> GenerateUniqueEmployeeCodeAsync();
 
-        // Métodos adicionales requeridos por el controlador
+        // Métodos adicionales requeridos por el controlador (alias)
         Task<IEnumerable<EmployeeDto>> GetAllAsync(int? departmentId = null, bool? active = null);
         Task<EmployeeDto?> GetByIdAsync(int id);
         Task<EmployeeDto?> GetByEmployeeNumberAsync(string employeeNumber);

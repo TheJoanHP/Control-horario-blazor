@@ -52,9 +52,8 @@ namespace Company.Admin.Server.Services
                     FirstName = createDto.FirstName,
                     LastName = createDto.LastName,
                     Email = createDto.Email,
-                    PasswordHash = _passwordService.HashPassword(createDto.Password ?? "123456"),
-                    Role = UserRole.Employee,
-                    CompanyId = createDto.CompanyId,
+                    PasswordHash = _passwordService.HashPassword(createDto.Password ?? "Temporal123"),
+                    Role = createDto.Role, // Usar el rol del DTO
                     Active = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -72,12 +71,12 @@ namespace Company.Admin.Server.Services
                     FirstName = createDto.FirstName,
                     LastName = createDto.LastName,
                     Email = createDto.Email,
+                    Phone = createDto.Phone,
                     EmployeeCode = employeeCode,
                     Position = createDto.Position,
-                    Phone = createDto.Phone,
-                    Role = UserRole.Employee,
-                    PasswordHash = user.PasswordHash,
-                    HireDate = createDto.HireDate ?? DateTime.Today,
+                    Role = createDto.Role, // Ahora existe en CreateEmployeeDto
+                    HireDate = createDto.HireDate,
+                    Salary = createDto.Salary, // Ahora existe en CreateEmployeeDto
                     Active = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -86,24 +85,13 @@ namespace Company.Admin.Server.Services
                 _context.Employees.Add(employee);
                 await _context.SaveChangesAsync();
 
-                // Cargar relaciones para el DTO
-                await _context.Entry(employee)
-                    .Reference(e => e.User)
-                    .LoadAsync();
+                _logger.LogInformation("Empleado creado: {EmployeeId} - {Email}", employee.Id, employee.Email);
 
-                await _context.Entry(employee)
-                    .Reference(e => e.Department)
-                    .LoadAsync();
-
-                await _context.Entry(employee)
-                    .Reference(e => e.Company)
-                    .LoadAsync();
-
-                return MapToDto(employee);
+                return await GetEmployeeByIdAsync(employee.Id) ?? throw new InvalidOperationException("Error al recuperar el empleado creado");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creando empleado");
+                _logger.LogError(ex, "Error creando empleado {Email}", createDto.Email);
                 throw;
             }
         }
@@ -114,72 +102,64 @@ namespace Company.Admin.Server.Services
             {
                 var employee = await _context.Employees
                     .Include(e => e.User)
-                    .Include(e => e.Department)
-                    .Include(e => e.Company)
                     .FirstOrDefaultAsync(e => e.Id == id);
 
                 if (employee == null)
+                    throw new ArgumentException($"Empleado con ID {id} no encontrado");
+
+                // Verificar unicidad del email (excluyendo al empleado actual)
+                if (!string.IsNullOrEmpty(updateDto.Email) && employee.Email != updateDto.Email && !await IsEmailUniqueAsync(updateDto.Email, id))
                 {
-                    throw new ArgumentException("Empleado no encontrado");
+                    throw new InvalidOperationException("El email ya está en uso");
                 }
 
-                // Actualizar datos del usuario si se proporcionan
+                // Actualizar empleado solo con propiedades no nulas
                 if (!string.IsNullOrEmpty(updateDto.FirstName))
-                {
-                    employee.User!.FirstName = updateDto.FirstName;
                     employee.FirstName = updateDto.FirstName;
-                }
-
+                
                 if (!string.IsNullOrEmpty(updateDto.LastName))
-                {
-                    employee.User!.LastName = updateDto.LastName;
                     employee.LastName = updateDto.LastName;
-                }
-
-                if (!string.IsNullOrEmpty(updateDto.Email) && updateDto.Email != employee.User!.Email)
-                {
-                    if (!await IsEmailUniqueAsync(updateDto.Email, id))
-                    {
-                        throw new InvalidOperationException("El email ya está en uso");
-                    }
-                    employee.User.Email = updateDto.Email;
+                
+                if (!string.IsNullOrEmpty(updateDto.Email))
                     employee.Email = updateDto.Email;
-                }
-
-                // Actualizar datos del empleado
-                if (!string.IsNullOrEmpty(updateDto.EmployeeCode) && updateDto.EmployeeCode != employee.EmployeeCode)
-                {
-                    if (!await IsEmployeeCodeUniqueAsync(updateDto.EmployeeCode, id))
-                    {
-                        throw new InvalidOperationException("El código de empleado ya está en uso");
-                    }
-                    employee.EmployeeCode = updateDto.EmployeeCode;
-                }
-
+                
+                if (updateDto.Phone != null)
+                    employee.Phone = updateDto.Phone;
+                
+                if (!string.IsNullOrEmpty(updateDto.Position))
+                    employee.Position = updateDto.Position;
+                
                 if (updateDto.DepartmentId.HasValue)
                     employee.DepartmentId = updateDto.DepartmentId;
 
-                if (!string.IsNullOrEmpty(updateDto.Position))
-                    employee.Position = updateDto.Position;
+                if (updateDto.Role.HasValue)
+                    employee.Role = updateDto.Role.Value;
 
-                if (!string.IsNullOrEmpty(updateDto.Phone))
-                    employee.Phone = updateDto.Phone;
-
-                if (updateDto.HireDate.HasValue)
-                    employee.HireDate = updateDto.HireDate.Value;
-
-                if (updateDto.Active.HasValue)
-                {
-                    employee.Active = updateDto.Active.Value;
-                    employee.User!.Active = updateDto.Active.Value;
-                }
+                if (updateDto.Salary.HasValue)
+                    employee.Salary = updateDto.Salary.Value;
 
                 employee.UpdatedAt = DateTime.UtcNow;
-                employee.User!.UpdatedAt = DateTime.UtcNow;
+
+                // Actualizar usuario asociado si existe
+                if (employee.User != null)
+                {
+                    if (!string.IsNullOrEmpty(updateDto.FirstName))
+                        employee.User.FirstName = updateDto.FirstName;
+                    
+                    if (!string.IsNullOrEmpty(updateDto.LastName))
+                        employee.User.LastName = updateDto.LastName;
+                    
+                    if (!string.IsNullOrEmpty(updateDto.Email))
+                        employee.User.Email = updateDto.Email;
+                    
+                    employee.User.UpdatedAt = DateTime.UtcNow;
+                }
 
                 await _context.SaveChangesAsync();
 
-                return MapToDto(employee);
+                _logger.LogInformation("Empleado actualizado: {EmployeeId}", employee.Id);
+
+                return await GetEmployeeByIdAsync(id) ?? throw new InvalidOperationException("Error al recuperar el empleado actualizado");
             }
             catch (Exception ex)
             {
@@ -190,57 +170,104 @@ namespace Company.Admin.Server.Services
 
         public async Task<EmployeeDto?> GetEmployeeByIdAsync(int id)
         {
-            var employee = await _context.Employees
-                .Include(e => e.User)
-                .Include(e => e.Department)
-                .Include(e => e.Company)
-                .FirstOrDefaultAsync(e => e.Id == id);
+            try
+            {
+                var employee = await _context.Employees
+                    .Include(e => e.User)
+                    .Include(e => e.Department)
+                    .Include(e => e.Company)
+                    .FirstOrDefaultAsync(e => e.Id == id);
 
-            return employee != null ? MapToDto(employee) : null;
+                if (employee == null) return null;
+
+                return MapToEmployeeDto(employee);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo empleado {EmployeeId}", id);
+                return null;
+            }
         }
 
         public async Task<EmployeeDto?> GetEmployeeByEmailAsync(string email)
         {
-            var employee = await _context.Employees
-                .Include(e => e.User)
-                .Include(e => e.Department)
-                .Include(e => e.Company)
-                .FirstOrDefaultAsync(e => e.Email == email || (e.User != null && e.User.Email == email));
+            try
+            {
+                var employee = await _context.Employees
+                    .Include(e => e.User)
+                    .Include(e => e.Department)
+                    .Include(e => e.Company)
+                    .FirstOrDefaultAsync(e => e.Email == email);
 
-            return employee != null ? MapToDto(employee) : null;
+                return employee != null ? MapToEmployeeDto(employee) : null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo empleado por email {Email}", email);
+                return null;
+            }
+        }
+
+        public async Task<EmployeeDto?> GetEmployeeByCodeAsync(string employeeCode)
+        {
+            try
+            {
+                var employee = await _context.Employees
+                    .Include(e => e.User)
+                    .Include(e => e.Department)
+                    .Include(e => e.Company)
+                    .FirstOrDefaultAsync(e => e.EmployeeCode == employeeCode && e.Active);
+
+                return employee != null ? MapToEmployeeDto(employee) : null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo empleado por código {EmployeeCode}", employeeCode);
+                return null;
+            }
         }
 
         public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(string? search = null, int? departmentId = null, bool? active = null)
         {
-            var query = _context.Employees
-                .Include(e => e.User)
-                .Include(e => e.Department)
-                .Include(e => e.Company)
-                .AsQueryable();
-
-            if (!string.IsNullOrEmpty(search))
+            try
             {
-                query = query.Where(e => 
-                    e.FirstName.Contains(search) ||
-                    e.LastName.Contains(search) ||
-                    e.Email.Contains(search) ||
-                    e.EmployeeCode.Contains(search) ||
-                    (e.User != null && (e.User.FirstName.Contains(search) || e.User.LastName.Contains(search)))
-                );
+                var query = _context.Employees
+                    .Include(e => e.User)
+                    .Include(e => e.Department)
+                    .Include(e => e.Company)
+                    .AsQueryable();
+
+                if (!string.IsNullOrEmpty(search))
+                {
+                    query = query.Where(e => 
+                        e.FirstName.Contains(search) || 
+                        e.LastName.Contains(search) || 
+                        e.Email.Contains(search) ||
+                        e.EmployeeCode.Contains(search));
+                }
+
+                if (departmentId.HasValue)
+                {
+                    query = query.Where(e => e.DepartmentId == departmentId.Value);
+                }
+
+                if (active.HasValue)
+                {
+                    query = query.Where(e => e.Active == active.Value);
+                }
+
+                var employees = await query
+                    .OrderBy(e => e.FirstName)
+                    .ThenBy(e => e.LastName)
+                    .ToListAsync();
+
+                return employees.Select(MapToEmployeeDto);
             }
-
-            if (departmentId.HasValue)
-                query = query.Where(e => e.DepartmentId == departmentId.Value);
-
-            if (active.HasValue)
-                query = query.Where(e => e.Active == active.Value);
-
-            var employees = await query
-                .OrderBy(e => e.LastName)
-                .ThenBy(e => e.FirstName)
-                .ToListAsync();
-
-            return employees.Select(MapToDto);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo empleados");
+                return Enumerable.Empty<EmployeeDto>();
+            }
         }
 
         public async Task<bool> DeleteEmployeeAsync(int id)
@@ -253,16 +280,19 @@ namespace Company.Admin.Server.Services
 
                 if (employee == null) return false;
 
-                // Soft delete - marcar como inactivo en lugar de eliminar
+                // Soft delete - marcar como inactivo
                 employee.Active = false;
-                if (employee.User != null)
-                    employee.User.Active = false;
-
                 employee.UpdatedAt = DateTime.UtcNow;
+
                 if (employee.User != null)
+                {
+                    employee.User.Active = false;
                     employee.User.UpdatedAt = DateTime.UtcNow;
+                }
 
                 await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Empleado desactivado (soft delete): {EmployeeId}", id);
                 return true;
             }
             catch (Exception ex)
@@ -287,12 +317,13 @@ namespace Company.Admin.Server.Services
                 if (employee == null) return false;
 
                 employee.Active = true;
-                if (employee.User != null)
-                    employee.User.Active = true;
-
                 employee.UpdatedAt = DateTime.UtcNow;
+
                 if (employee.User != null)
+                {
+                    employee.User.Active = true;
                     employee.User.UpdatedAt = DateTime.UtcNow;
+                }
 
                 await _context.SaveChangesAsync();
                 return true;
@@ -315,12 +346,13 @@ namespace Company.Admin.Server.Services
                 if (employee == null) return false;
 
                 employee.Active = false;
-                if (employee.User != null)
-                    employee.User.Active = false;
-
                 employee.UpdatedAt = DateTime.UtcNow;
+
                 if (employee.User != null)
+                {
+                    employee.User.Active = false;
                     employee.User.UpdatedAt = DateTime.UtcNow;
+                }
 
                 await _context.SaveChangesAsync();
                 return true;
@@ -492,7 +524,7 @@ namespace Company.Admin.Server.Services
                 .Include(e => e.Company)
                 .FirstOrDefaultAsync(e => e.EmployeeCode == employeeNumber || e.EmployeeNumber == employeeNumber);
 
-            return employee != null ? MapToDto(employee) : null;
+            return employee != null ? MapToEmployeeDto(employee) : null;
         }
 
         public async Task<IEnumerable<EmployeeDto>> GetByDepartmentAsync(int departmentId)
@@ -529,10 +561,7 @@ namespace Company.Admin.Server.Services
 
         #region Private Helper Methods
 
-        /// <summary>
-        /// Mapea una entidad Employee a EmployeeDto
-        /// </summary>
-        private EmployeeDto MapToDto(Employee employee)
+        private EmployeeDto MapToEmployeeDto(Employee employee)
         {
             return new EmployeeDto
             {
@@ -540,25 +569,20 @@ namespace Company.Admin.Server.Services
                 UserId = employee.UserId ?? 0,
                 CompanyId = employee.CompanyId,
                 DepartmentId = employee.DepartmentId,
-                EmployeeCode = employee.EmployeeCode,
-                FirstName = employee.User?.FirstName ?? employee.FirstName,
-                LastName = employee.User?.LastName ?? employee.LastName,
-                Email = employee.User?.Email ?? employee.Email,
+                FirstName = employee.FirstName,
+                LastName = employee.LastName,
+                Email = employee.Email,
                 Phone = employee.Phone,
+                EmployeeCode = employee.EmployeeCode,
                 Position = employee.Position,
                 Role = employee.Role,
+                HireDate = employee.HireDate ?? DateTime.MinValue,
                 Salary = employee.Salary,
-                HireDate = employee.HireDate ?? DateTime.Today,
                 Active = employee.Active,
-                DepartmentName = employee.Department?.Name ?? "",
-                CompanyName = employee.Company?.Name ?? "",
                 CreatedAt = employee.CreatedAt,
                 UpdatedAt = employee.UpdatedAt,
-                
-                // Propiedades calculadas
-                YearsOfService = employee.HireDate.HasValue 
-                    ? (DateTime.UtcNow - employee.HireDate.Value).Days / 365 
-                    : null
+                DepartmentName = employee.Department?.Name,
+                CompanyName = employee.Company?.Name
             };
         }
 

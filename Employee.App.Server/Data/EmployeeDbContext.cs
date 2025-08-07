@@ -15,6 +15,7 @@ namespace Employee.App.Server.Data
         public DbSet<Shared.Models.Core.Company> Companies { get; set; }
         public DbSet<TimeRecord> TimeRecords { get; set; }
         public DbSet<VacationRequest> VacationRequests { get; set; }
+        public DbSet<VacationBalance> VacationBalances { get; set; }
         
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -58,10 +59,18 @@ namespace Employee.App.Server.Data
                       .HasForeignKey(e => e.EmployeeId);
             });
 
-            modelBuilder.Entity<Company>(entity =>
+            modelBuilder.Entity<Shared.Models.Core.Company>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired();
+            });
+
+            modelBuilder.Entity<VacationBalance>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasOne(e => e.Employee)
+                      .WithMany(emp => emp.VacationBalances)
+                      .HasForeignKey(e => e.EmployeeId);
             });
         }
     }

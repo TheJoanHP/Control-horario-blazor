@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Company.Admin.Server.Services;
-using Shared.Models.DTOs.TimeTracking;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Employee.App.Server.Data;
+using Shared.Models.TimeTracking;
+using Shared.Models.Enums;
+using System.Globalization;
 
 namespace Employee.App.Server.Controllers
 {
@@ -11,401 +14,436 @@ namespace Employee.App.Server.Controllers
     [Authorize]
     public class TimeClockController : ControllerBase
     {
-        private readonly ITimeTrackingService _timeTrackingService;
-        private readonly IEmployeeService _employeeService;
+        private readonly EmployeeDbContext _context;
         private readonly ILogger<TimeClockController> _logger;
 
-        public TimeClockController(
-            ITimeTrackingService timeTrackingService,
-            IEmployeeService employeeService,
-            ILogger<TimeClockController> logger)
+        public TimeClockController(EmployeeDbContext context, ILogger<TimeClockController> logger)
         {
-            _timeTrackingService = timeTrackingService;
-            _employeeService = employeeService;
+            _context = context;
             _logger = logger;
         }
 
-        /// <summary>
-        /// Obtener estado actual del empleado
-        /// </summary>
-        [HttpGet("status")]
-        public async Task<ActionResult> GetStatus()
-        {
-            try
-            {
-                var employeeId = GetCurrentEmployeeId();
-                if (employeeId == null) return Unauthorized();
-
-                var isCheckedIn = await _timeTrackingService.IsEmployeeCheckedInAsync(employeeId.Value);
-                var isOnBreak = await _timeTrackingService.IsEmployeeOnBreakAsync(employeeId.Value);
-                var status = await _timeTrackingService.GetEmployeeStatusAsync(employeeId.Value);
-                var lastRecord = await _timeTrackingService.GetLastRecordAsync(employeeId.Value);
-
-                return Ok(new
-                {
-                    employeeId = employeeId.Value,
-                    isCheckedIn,
-                    isOnBreak,
-                    status,
-                    lastActivity = lastRecord?.Timestamp,
-                    lastActivityType = lastRecord?.Type.ToString(),
-                    canCheckIn = !isCheckedIn,
-                    canCheckOut = isCheckedIn,
-                    canStartBreak = isCheckedIn && !isOnBreak,
-                    canEndBreak = isOnBreak
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al obtener estado del empleado");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Fichar entrada
-        /// </summary>
         [HttpPost("check-in")]
-        public async Task<ActionResult> CheckIn([FromBody] CheckInDto checkInDto)
+        public async Task<ActionResult<object>> CheckIn([FromBody] TimeClockRequest request)
         {
             try
             {
-                var employeeId = GetCurrentEmployeeId();
-                if (employeeId == null) return Unauthorized();
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                
+                var employee = await _context.Employees
+                    .Include(e => e.User)
+                    .FirstOrDefaultAsync(e => e.UserId == userId);
 
-                // Validar que el empleado pueda fichar entrada
-                if (!await _timeTrackingService.ValidateCheckInAsync(employeeId.Value))
+                if (employee == null)
+                    return BadRequest(new { message = "Empleado no encontrado" });
+
+                var now = DateTime.Now;
+                var today = now.Date;
+
+                // Verificar que no tenga un check-in activo
+                var lastRecord = await _context.TimeRecords
+                    .Where(tr => tr.EmployeeId == employee.Id)
+                    .OrderByDescending(tr => tr.Date)
+                    .ThenByDescending(tr => tr.Time)
+                    .FirstOrDefaultAsync();
+
+                if (lastRecord?.Type == RecordType.CheckIn)
                 {
-                    return BadRequest("No puedes fichar entrada. Ya tienes un registro activo.");
+                    return BadRequest(new { message = "Ya tienes una entrada registrada. Debes registrar la salida primero." });
                 }
 
-                var timeRecord = await _timeTrackingService.CheckInAsync(employeeId.Value, checkInDto);
+                var timeRecord = new TimeRecord
+                {
+                    EmployeeId = employee.Id,
+                    Type = RecordType.CheckIn,
+                    Date = today,
+                    Time = now.TimeOfDay,
+                    Notes = request.Notes,
+                    Location = request.Location,
+                    Latitude = request.Latitude,
+                    Longitude = request.Longitude,
+                    IsManualEntry = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
 
-                _logger.LogInformation("Empleado {EmployeeId} fichó entrada a las {Timestamp}", 
-                    employeeId.Value, timeRecord.Timestamp);
+                _context.TimeRecords.Add(timeRecord);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Check-in registrado para empleado {EmployeeId} a las {Time}", 
+                    employee.Id, now.ToString("HH:mm:ss"));
 
                 return Ok(new
                 {
                     success = true,
                     message = "Entrada registrada correctamente",
-                    timestamp = timeRecord.Timestamp,
-                    recordId = timeRecord.Id
+                    record = new
+                    {
+                        timeRecord.Id,
+                        timeRecord.Type,
+                        DateTime = timeRecord.Date.Add(timeRecord.Time),
+                        timeRecord.Notes,
+                        timeRecord.Location
+                    }
                 });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al fichar entrada");
-                return StatusCode(500, "Error interno del servidor");
+                _logger.LogError(ex, "Error registrando check-in");
+                return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }
 
-        /// <summary>
-        /// Fichar salida
-        /// </summary>
         [HttpPost("check-out")]
-        public async Task<ActionResult> CheckOut([FromBody] CheckOutDto checkOutDto)
+        public async Task<ActionResult<object>> CheckOut([FromBody] TimeClockRequest request)
         {
             try
             {
-                var employeeId = GetCurrentEmployeeId();
-                if (employeeId == null) return Unauthorized();
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                
+                var employee = await _context.Employees
+                    .Include(e => e.User)
+                    .FirstOrDefaultAsync(e => e.UserId == userId);
 
-                // Validar que el empleado pueda fichar salida
-                if (!await _timeTrackingService.ValidateCheckOutAsync(employeeId.Value))
+                if (employee == null)
+                    return BadRequest(new { message = "Empleado no encontrado" });
+
+                var now = DateTime.Now;
+                var today = now.Date;
+
+                // Verificar que tenga un check-in activo
+                var lastRecord = await _context.TimeRecords
+                    .Where(tr => tr.EmployeeId == employee.Id)
+                    .OrderByDescending(tr => tr.Date)
+                    .ThenByDescending(tr => tr.Time)
+                    .FirstOrDefaultAsync();
+
+                if (lastRecord?.Type != RecordType.CheckIn)
                 {
-                    return BadRequest("No puedes fichar salida. No tienes un registro de entrada activo.");
+                    return BadRequest(new { message = "No tienes una entrada registrada para poder marcar la salida." });
                 }
 
-                var timeRecord = await _timeTrackingService.CheckOutAsync(employeeId.Value, checkOutDto);
+                var timeRecord = new TimeRecord
+                {
+                    EmployeeId = employee.Id,
+                    Type = RecordType.CheckOut,
+                    Date = today,
+                    Time = now.TimeOfDay,
+                    Notes = request.Notes,
+                    Location = request.Location,
+                    Latitude = request.Latitude,
+                    Longitude = request.Longitude,
+                    IsManualEntry = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                _context.TimeRecords.Add(timeRecord);
+                await _context.SaveChangesAsync();
 
                 // Calcular horas trabajadas del día
-                var workedHours = await _timeTrackingService.CalculateWorkedHoursAsync(employeeId.Value, DateTime.Today);
+                var todayRecords = await _context.TimeRecords
+                    .Where(tr => tr.EmployeeId == employee.Id && tr.Date == today)
+                    .OrderBy(tr => tr.Time)
+                    .ToListAsync();
 
-                _logger.LogInformation("Empleado {EmployeeId} fichó salida a las {Timestamp}. Horas trabajadas: {Hours}", 
-                    employeeId.Value, timeRecord.Timestamp, workedHours);
+                var workedHours = CalculateWorkedHours(todayRecords);
+
+                _logger.LogInformation("Check-out registrado para empleado {EmployeeId} a las {Time}", 
+                    employee.Id, now.ToString("HH:mm:ss"));
 
                 return Ok(new
                 {
                     success = true,
                     message = "Salida registrada correctamente",
-                    timestamp = timeRecord.Timestamp,
-                    recordId = timeRecord.Id,
-                    workedHours = workedHours.ToString(@"hh\:mm")
+                    record = new
+                    {
+                        timeRecord.Id,
+                        timeRecord.Type,
+                        DateTime = timeRecord.Date.Add(timeRecord.Time),
+                        timeRecord.Notes,
+                        timeRecord.Location
+                    },
+                    summary = new
+                    {
+                        WorkedHours = workedHours,
+                        TotalRecords = todayRecords.Count
+                    }
                 });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al fichar salida");
-                return StatusCode(500, "Error interno del servidor");
+                _logger.LogError(ex, "Error registrando check-out");
+                return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }
 
-        /// <summary>
-        /// Iniciar descanso
-        /// </summary>
-        [HttpPost("start-break")]
-        public async Task<ActionResult> StartBreak([FromBody] CheckInDto breakDto)
+        [HttpPost("break-start")]
+        public async Task<ActionResult<object>> StartBreak([FromBody] TimeClockRequest request)
         {
             try
             {
-                var employeeId = GetCurrentEmployeeId();
-                if (employeeId == null) return Unauthorized();
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                
+                var employee = await _context.Employees
+                    .FirstOrDefaultAsync(e => e.UserId == userId);
 
-                var timeRecord = await _timeTrackingService.StartBreakAsync(employeeId.Value, breakDto);
+                if (employee == null)
+                    return BadRequest(new { message = "Empleado no encontrado" });
 
-                _logger.LogInformation("Empleado {EmployeeId} inició descanso a las {Timestamp}", 
-                    employeeId.Value, timeRecord.Timestamp);
+                var now = DateTime.Now;
+
+                var timeRecord = new TimeRecord
+                {
+                    EmployeeId = employee.Id,
+                    Type = RecordType.BreakStart,
+                    Date = now.Date,
+                    Time = now.TimeOfDay,
+                    Notes = request.Notes,
+                    Location = request.Location,
+                    IsManualEntry = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                _context.TimeRecords.Add(timeRecord);
+                await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
                     success = true,
-                    message = "Descanso iniciado",
-                    timestamp = timeRecord.Timestamp,
-                    recordId = timeRecord.Id
+                    message = "Inicio de descanso registrado",
+                    record = new
+                    {
+                        timeRecord.Id,
+                        timeRecord.Type,
+                        DateTime = timeRecord.Date.Add(timeRecord.Time)
+                    }
                 });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al iniciar descanso");
-                return StatusCode(500, "Error interno del servidor");
+                _logger.LogError(ex, "Error registrando inicio de descanso");
+                return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }
 
-        /// <summary>
-        /// Finalizar descanso
-        /// </summary>
-        [HttpPost("end-break")]
-        public async Task<ActionResult> EndBreak([FromBody] CheckOutDto breakDto)
+        [HttpPost("break-end")]
+        public async Task<ActionResult<object>> EndBreak([FromBody] TimeClockRequest request)
         {
             try
             {
-                var employeeId = GetCurrentEmployeeId();
-                if (employeeId == null) return Unauthorized();
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                
+                var employee = await _context.Employees
+                    .FirstOrDefaultAsync(e => e.UserId == userId);
 
-                var timeRecord = await _timeTrackingService.EndBreakAsync(employeeId.Value, breakDto);
+                if (employee == null)
+                    return BadRequest(new { message = "Empleado no encontrado" });
 
-                _logger.LogInformation("Empleado {EmployeeId} finalizó descanso a las {Timestamp}", 
-                    employeeId.Value, timeRecord.Timestamp);
+                var now = DateTime.Now;
+
+                var timeRecord = new TimeRecord
+                {
+                    EmployeeId = employee.Id,
+                    Type = RecordType.BreakEnd,
+                    Date = now.Date,
+                    Time = now.TimeOfDay,
+                    Notes = request.Notes,
+                    Location = request.Location,
+                    IsManualEntry = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                _context.TimeRecords.Add(timeRecord);
+                await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
                     success = true,
-                    message = "Descanso finalizado",
-                    timestamp = timeRecord.Timestamp,
-                    recordId = timeRecord.Id
-                });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al finalizar descanso");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Obtener registros del día actual
-        /// </summary>
-        [HttpGet("today")]
-        public async Task<ActionResult> GetTodayRecords()
-        {
-            try
-            {
-                var employeeId = GetCurrentEmployeeId();
-                if (employeeId == null) return Unauthorized();
-
-                var records = await _timeTrackingService.GetDailyRecordsAsync(employeeId.Value, DateTime.Today);
-                var workedHours = await _timeTrackingService.CalculateWorkedHoursAsync(employeeId.Value, DateTime.Today);
-                var breakTime = await _timeTrackingService.CalculateBreakTimeAsync(employeeId.Value, DateTime.Today);
-
-                var recordsData = records.Select(r => new
-                {
-                    id = r.Id,
-                    type = r.Type.ToString(),
-                    timestamp = r.Timestamp,
-                    notes = r.Notes,
-                    location = r.Location
-                }).ToList();
-
-                return Ok(new
-                {
-                    date = DateTime.Today.ToString("yyyy-MM-dd"),
-                    records = recordsData,
-                    summary = new
+                    message = "Fin de descanso registrado",
+                    record = new
                     {
-                        workedHours = workedHours.ToString(@"hh\:mm"),
-                        breakTime = breakTime.ToString(@"hh\:mm"),
-                        totalRecords = records.Count(),
-                        lastActivity = records.LastOrDefault()?.Timestamp
+                        timeRecord.Id,
+                        timeRecord.Type,
+                        DateTime = timeRecord.Date.Add(timeRecord.Time)
                     }
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al obtener registros del día");
-                return StatusCode(500, "Error interno del servidor");
+                _logger.LogError(ex, "Error registrando fin de descanso");
+                return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }
 
-        /// <summary>
-        /// Obtener registros de la semana actual
-        /// </summary>
-        [HttpGet("week")]
-        public async Task<ActionResult> GetWeekRecords()
+        [HttpGet("current-status")]
+        public async Task<ActionResult<object>> GetCurrentStatus()
         {
             try
             {
-                var employeeId = GetCurrentEmployeeId();
-                if (employeeId == null) return Unauthorized();
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                
+                var employee = await _context.Employees
+                    .FirstOrDefaultAsync(e => e.UserId == userId);
 
-                var startOfWeek = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek + 1); // Lunes
-                var weekData = new List<object>();
-
-                for (int i = 0; i < 7; i++)
-                {
-                    var date = startOfWeek.AddDays(i);
-                    if (date <= DateTime.Today)
-                    {
-                        var dailyRecords = await _timeTrackingService.GetDailyRecordsAsync(employeeId.Value, date);
-                        var workedHours = await _timeTrackingService.CalculateWorkedHoursAsync(employeeId.Value, date);
-
-                        var checkIn = dailyRecords.FirstOrDefault(r => r.Type == Shared.Models.Enums.RecordType.CheckIn);
-                        var checkOut = dailyRecords.FirstOrDefault(r => r.Type == Shared.Models.Enums.RecordType.CheckOut);
-
-                        weekData.Add(new
-                        {
-                            date = date.ToString("yyyy-MM-dd"),
-                            dayName = date.ToString("dddd"),
-                            checkIn = checkIn?.Timestamp.ToString("HH:mm"),
-                            checkOut = checkOut?.Timestamp.ToString("HH:mm"),
-                            workedHours = workedHours.ToString(@"hh\:mm"),
-                            isToday = date.Date == DateTime.Today
-                        });
-                    }
-                }
-
-                var totalWeekHours = TimeSpan.Zero;
-                for (int i = 0; i < 7; i++)
-                {
-                    var date = startOfWeek.AddDays(i);
-                    if (date <= DateTime.Today)
-                    {
-                        var dailyHours = await _timeTrackingService.CalculateWorkedHoursAsync(employeeId.Value, date);
-                        totalWeekHours = totalWeekHours.Add(dailyHours);
-                    }
-                }
-
-                return Ok(new
-                {
-                    weekStart = startOfWeek.ToString("yyyy-MM-dd"),
-                    weekEnd = startOfWeek.AddDays(6).ToString("yyyy-MM-dd"),
-                    days = weekData,
-                    summary = new
-                    {
-                        totalHours = totalWeekHours.ToString(@"hh\:mm"),
-                        averageHoursPerDay = TimeSpan.FromTicks(totalWeekHours.Ticks / Math.Max(1, weekData.Count)).ToString(@"hh\:mm")
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al obtener registros de la semana");
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
-
-        /// <summary>
-        /// Obtener resumen del empleado
-        /// </summary>
-        [HttpGet("summary")]
-        public async Task<ActionResult> GetEmployeeSummary()
-        {
-            try
-            {
-                var employeeId = GetCurrentEmployeeId();
-                if (employeeId == null) return Unauthorized();
-
-                var employee = await _employeeService.GetEmployeeByIdAsync(employeeId.Value);
-                if (employee == null) return NotFound();
+                if (employee == null)
+                    return BadRequest(new { message = "Empleado no encontrado" });
 
                 var today = DateTime.Today;
-                var thisMonth = new DateTime(today.Year, today.Month, 1);
-                
-                // Horas del día
-                var todayHours = await _timeTrackingService.CalculateWorkedHoursAsync(employeeId.Value, today);
-                
-                // Horas del mes
-                var monthHours = TimeSpan.Zero;
-                var current = thisMonth;
-                while (current <= today)
-                {
-                    var dailyHours = await _timeTrackingService.CalculateWorkedHoursAsync(employeeId.Value, current);
-                    monthHours = monthHours.Add(dailyHours);
-                    current = current.AddDays(1);
-                }
+                var lastRecord = await _context.TimeRecords
+                    .Where(tr => tr.EmployeeId == employee.Id && tr.Date == today)
+                    .OrderByDescending(tr => tr.Time)
+                    .FirstOrDefaultAsync();
 
-                var isCurrentlyWorking = await _timeTrackingService.IsEmployeeCheckedInAsync(employeeId.Value);
-                var isOnBreak = await _timeTrackingService.IsEmployeeOnBreakAsync(employeeId.Value);
+                var status = GetCurrentStatus(lastRecord);
+                var isCheckedIn = lastRecord?.Type == RecordType.CheckIn || lastRecord?.Type == RecordType.BreakEnd;
+                var isOnBreak = lastRecord?.Type == RecordType.BreakStart;
 
                 return Ok(new
                 {
-                    employee = new
+                    status = status,
+                    isCheckedIn = isCheckedIn,
+                    isOnBreak = isOnBreak,
+                    lastRecord = lastRecord != null ? new
                     {
-                        id = employee.Id,
-                        name = employee.FullName,
-                        employeeCode = employee.EmployeeCode,
-                        department = employee.Department?.Name,
-                        workSchedule = new
-                        {
-                            startTime = employee.WorkStartTime.ToString(@"hh\:mm"),
-                            endTime = employee.WorkEndTime.ToString(@"hh\:mm")
-                        }
-                    },
-                    status = new
-                    {
-                        isWorking = isCurrentlyWorking,
-                        isOnBreak = isOnBreak,
-                        currentStatus = await _timeTrackingService.GetEmployeeStatusAsync(employeeId.Value)
-                    },
-                    hours = new
-                    {
-                        today = todayHours.ToString(@"hh\:mm"),
-                        thisMonth = monthHours.ToString(@"hh\:mm")
-                    },
-                    lastUpdate = DateTime.UtcNow
+                        lastRecord.Type,
+                        DateTime = lastRecord.Date.Add(lastRecord.Time),
+                        lastRecord.Notes
+                    } : null
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al obtener resumen del empleado");
-                return StatusCode(500, "Error interno del servidor");
+                _logger.LogError(ex, "Error obteniendo estado actual");
+                return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }
 
-        // Método auxiliar para obtener el ID del empleado actual
-        private int? GetCurrentEmployeeId()
+        [HttpGet("today-summary")]
+        public async Task<ActionResult<object>> GetTodaySummary()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            try
             {
-                return null;
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                
+                var employee = await _context.Employees
+                    .FirstOrDefaultAsync(e => e.UserId == userId);
+
+                if (employee == null)
+                    return BadRequest(new { message = "Empleado no encontrado" });
+
+                var today = DateTime.Today;
+                var todayRecords = await _context.TimeRecords
+                    .Where(tr => tr.EmployeeId == employee.Id && tr.Date == today)
+                    .OrderBy(tr => tr.Time)
+                    .ToListAsync();
+
+                var workedHours = CalculateWorkedHours(todayRecords);
+                var breakTime = CalculateBreakTime(todayRecords);
+
+                var summary = new
+                {
+                    Date = today,
+                    Records = todayRecords.Select(r => new
+                    {
+                        r.Id,
+                        r.Type,
+                        DateTime = r.Date.Add(r.Time),
+                        TimeDisplay = r.Time.ToString(@"hh\:mm"), // CORREGIDO: usar formato correcto
+                        r.Notes,
+                        TypeDisplay = r.Type switch
+                        {
+                            RecordType.CheckIn => "Entrada",
+                            RecordType.CheckOut => "Salida",
+                            RecordType.BreakStart => "Inicio Descanso",
+                            RecordType.BreakEnd => "Fin Descanso",
+                            _ => r.Type.ToString()
+                        }
+                    }).ToList(),
+                    Summary = new
+                    {
+                        WorkedHours = workedHours,
+                        BreakTime = breakTime,
+                        CheckIn = todayRecords.FirstOrDefault(r => r.Type == RecordType.CheckIn)?.Time.ToString(@"hh\:mm"), // CORREGIDO
+                        CheckOut = todayRecords.FirstOrDefault(r => r.Type == RecordType.CheckOut)?.Time.ToString(@"hh\:mm"), // CORREGIDO
+                        Status = GetCurrentStatus(todayRecords.LastOrDefault())
+                    }
+                };
+
+                return Ok(summary);
             }
-            return userId;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo resumen del día");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
         }
+
+        // Métodos privados auxiliares
+        private double CalculateWorkedHours(List<TimeRecord> records)
+        {
+            if (records.Count < 2) return 0;
+
+            var checkIn = records.FirstOrDefault(r => r.Type == RecordType.CheckIn);
+            var checkOut = records.FirstOrDefault(r => r.Type == RecordType.CheckOut);
+
+            if (checkIn == null) return 0;
+
+            var endTime = checkOut?.Time ?? DateTime.Now.TimeOfDay;
+            var workedTime = endTime - checkIn.Time;
+
+            // Restar tiempo de descansos
+            var breakTime = CalculateBreakTime(records);
+            var totalMinutes = workedTime.TotalMinutes - (breakTime * 60);
+
+            return Math.Max(0, totalMinutes / 60.0);
+        }
+
+        private double CalculateBreakTime(List<TimeRecord> records)
+        {
+            double totalBreakHours = 0;
+            TimeRecord? breakStart = null;
+
+            foreach (var record in records.OrderBy(r => r.Time))
+            {
+                if (record.Type == RecordType.BreakStart)
+                {
+                    breakStart = record;
+                }
+                else if (record.Type == RecordType.BreakEnd && breakStart != null)
+                {
+                    var breakDuration = record.Time - breakStart.Time;
+                    totalBreakHours += breakDuration.TotalHours;
+                    breakStart = null;
+                }
+            }
+
+            return totalBreakHours;
+        }
+
+        private string GetCurrentStatus(TimeRecord? lastRecord)
+        {
+            if (lastRecord == null) return "No fichado";
+
+            return lastRecord.Type switch
+            {
+                RecordType.CheckIn => "Trabajando",
+                RecordType.CheckOut => "Fuera",
+                RecordType.BreakStart => "En descanso",
+                RecordType.BreakEnd => "Trabajando",
+                _ => "Desconocido"
+            };
+        }
+    }
+
+    // Clase para las peticiones de fichaje
+    public class TimeClockRequest
+    {
+        public string? Notes { get; set; }
+        public string? Location { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 }

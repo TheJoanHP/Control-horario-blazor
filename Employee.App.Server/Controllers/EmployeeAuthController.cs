@@ -4,6 +4,7 @@ using Company.Admin.Server.Services;
 using Shared.Models.DTOs.Auth;
 using Shared.Services.Security;
 using Shared.Services.Database;
+using Employee.App.Server.DTOs;
 using System.Security.Claims;
 
 namespace Employee.App.Server.Controllers
@@ -30,7 +31,7 @@ namespace Employee.App.Server.Controllers
         }
 
         /// <summary>
-        /// Login para empleados (todos los roles)
+        /// Login para empleados usando servicios compartidos
         /// </summary>
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
@@ -63,27 +64,23 @@ namespace Employee.App.Server.Controllers
                 {
                     ["employee_id"] = employee.Id.ToString(),
                     ["company_id"] = employee.CompanyId.ToString(),
-                    ["department_id"] = employee.DepartmentId?.ToString() ?? "",
-                    ["full_name"] = employee.FullName
+                    ["department_id"] = employee.DepartmentId?.ToString() ?? ""
                 };
 
                 var tokenInfo = _jwtService.CreateTokenInfo(
-                    employee.Id,
-                    employee.Email,
+                    employee.Id, 
+                    employee.Email, 
                     employee.Role.ToString(),
                     tenantId,
                     additionalClaims
                 );
 
-                _logger.LogInformation("Login de empleado exitoso para {Email} con rol {Role}", employee.Email, employee.Role);
-
                 return Ok(new LoginResponse
                 {
                     Success = true,
-                    Message = "Login exitoso",
                     Token = tokenInfo.Token,
-                    RefreshToken = tokenInfo.RefreshToken,
                     ExpiresAt = tokenInfo.ExpiresAt,
+                    RefreshToken = tokenInfo.RefreshToken,
                     User = new UserInfo
                     {
                         Id = employee.Id,
@@ -97,7 +94,7 @@ namespace Employee.App.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error durante el login de empleado para {Email}", request.Email);
+                _logger.LogError(ex, "Error durante el login del empleado {Email}", request.Email);
                 return StatusCode(500, new LoginResponse
                 {
                     Success = false,
@@ -107,33 +104,17 @@ namespace Employee.App.Server.Controllers
         }
 
         /// <summary>
-        /// Login con PIN (para kioscos/dispositivos compartidos)
+        /// Login con PIN para empleados
         /// </summary>
         [HttpPost("pin-login")]
         public async Task<ActionResult<LoginResponse>> PinLogin([FromBody] PinLoginRequest request)
         {
             try
             {
-                // Por ahora, simulamos que el PIN es los últimos 4 dígitos del ID del empleado
-                // En una implementación real, tendrías una tabla de PINs
-                
-                var employee = await _employeeService.GetEmployeeByIdAsync(request.EmployeeId);
+                var employee = await _employeeService.GetEmployeeByCodeAsync(request.Pin);
                 
                 if (employee == null || !employee.Active)
                 {
-                    return Unauthorized(new LoginResponse
-                    {
-                        Success = false,
-                        Message = "PIN inválido"
-                    });
-                }
-
-                // Validación simple del PIN (implementar lógica real)
-                var expectedPin = employee.Id.ToString().PadLeft(4, '0').Substring(Math.Max(0, employee.Id.ToString().Length - 4));
-                
-                if (request.Pin != expectedPin)
-                {
-                    _logger.LogWarning("Intento de login con PIN fallido para empleado {EmployeeId}", request.EmployeeId);
                     return Unauthorized(new LoginResponse
                     {
                         Success = false,
@@ -150,21 +131,17 @@ namespace Employee.App.Server.Controllers
                 };
 
                 var tokenInfo = _jwtService.CreateTokenInfo(
-                    employee.Id,
-                    employee.Email,
+                    employee.Id, 
+                    employee.Email, 
                     employee.Role.ToString(),
                     tenantId,
                     additionalClaims
                 );
 
-                _logger.LogInformation("Login con PIN exitoso para empleado {EmployeeId}", employee.Id);
-
                 return Ok(new LoginResponse
                 {
                     Success = true,
-                    Message = "Login con PIN exitoso",
                     Token = tokenInfo.Token,
-                    RefreshToken = tokenInfo.RefreshToken,
                     ExpiresAt = tokenInfo.ExpiresAt,
                     User = new UserInfo
                     {
@@ -231,7 +208,7 @@ namespace Employee.App.Server.Controllers
         /// </summary>
         [HttpPost("change-password")]
         [Authorize]
-        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        public async Task<ActionResult> ChangePassword([FromBody] EmployeeChangePasswordRequest request)
         {
             try
             {
@@ -275,7 +252,7 @@ namespace Employee.App.Server.Controllers
         /// </summary>
         [HttpPost("logout")]
         [Authorize]
-        public async Task<ActionResult> Logout()
+        public ActionResult Logout()
         {
             try
             {
