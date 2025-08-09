@@ -4,7 +4,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Company.Admin.Server.Data;
 using Company.Admin.Server.Services;
-using Company.Admin.Server.Middleware;
 using Employee.App.Server.Services;
 using Employee.App.Server.Middleware;
 using Shared.Services.Security;
@@ -13,12 +12,26 @@ using AutoMapper;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// *** IMPORTANTE: Registrar HttpContextAccessor PRIMERO ***
+builder.Services.AddHttpContextAccessor();
+
 // Configuración de servicios
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "Employee App API", Version = "v1" });
+    
+    // SOLUCIÓN: Configurar IDs de esquema únicos para evitar conflictos
+    c.CustomSchemaIds(type => 
+    {
+        if (type.FullName?.Contains("Shared.Models.DTOs.Auth.CompanyInfo") == true)
+            return "AuthCompanyInfo";
+        if (type.FullName?.Contains("Shared.Models.DTOs.Employee.CompanyInfo") == true)
+            return "EmployeeCompanyInfo";
+        return type.Name;
+    });
+    
     c.AddSecurityDefinition("Bearer", new()
     {
         Description = "JWT Authorization header using the Bearer scheme",
@@ -55,10 +68,11 @@ builder.Services.AddCors(options =>
 });
 
 // Configuración de Entity Framework (reutilizando CompanyDbContext)
-builder.Services.AddDbContext<CompanyDbContext>((serviceProvider, options) =>
+builder.Services.AddDbContext<CompanyDbContext>(options =>
 {
-    var tenantResolver = serviceProvider.GetRequiredService<ITenantResolver>();
-    var connectionString = tenantResolver.GetConnectionString();
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
+        throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+    
     options.UseNpgsql(connectionString);
     
     if (builder.Environment.IsDevelopment())
@@ -69,7 +83,8 @@ builder.Services.AddDbContext<CompanyDbContext>((serviceProvider, options) =>
 
 // Configuración de autenticación JWT
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey no está configurada");
+var secretKey = jwtSettings["SecretKey"] ??
+    throw new InvalidOperationException("JWT SecretKey no está configurada");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -101,12 +116,11 @@ builder.Services.AddScoped<ITenantResolver, TenantResolver>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 
-// Servicios reutilizados de Company.Admin.Server
-builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+// Servicios específicos para empleados (simplificados por ahora)
 builder.Services.AddScoped<ITimeTrackingService, TimeTrackingService>();
-
-// Servicios específicos para empleados
-builder.Services.AddScoped<IEmployeeAppService, EmployeeAppService>();
+// TODO: Implementar estos servicios gradualmente:
+// builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+// builder.Services.AddScoped<IEmployeeAppService, EmployeeAppService>();
 
 var app = builder.Build();
 
@@ -129,16 +143,16 @@ else
 
 app.UseHttpsRedirection();
 
-// Middleware personalizado para multi-tenant (específico para empleados)
-app.UseMiddleware<EmployeeTenantMiddleware>();
+// TODO: Implementar middleware personalizado cuando sea necesario
+// app.UseMiddleware<EmployeeTenantMiddleware>();
 
 app.UseCors("AllowEmployeeApp");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Middleware de manejo de errores
-app.UseMiddleware<EmployeeErrorHandlingMiddleware>();
+// TODO: Implementar middleware de manejo de errores cuando sea necesario
+// app.UseMiddleware<EmployeeErrorHandlingMiddleware>();
 
 app.MapControllers();
 

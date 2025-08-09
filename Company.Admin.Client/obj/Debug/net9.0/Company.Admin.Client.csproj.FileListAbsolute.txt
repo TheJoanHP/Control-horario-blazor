@@ -1107,10 +1107,10 @@ C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\refint\Company.Admin.Client.dll
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\Company.Admin.Client.pdb
 C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\ref\Company.Admin.Client.dll
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\bin\Debug\net9.0\wwwroot\_framework\Company.Admin.Client.295kwvugo2.wasm
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\bin\Debug\net9.0\wwwroot\_framework\Company.Admin.Client.ydgyq1djgh.pdb
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\bin\Debug\net9.0\wwwroot\_framework\Company.Admin.Client.295kwvugo2.wasm.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\bin\Debug\net9.0\wwwroot\_framework\Company.Admin.Client.ydgyq1djgh.pdb.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\compressed\emrmnt0ycf-295kwvugo2.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\compressed\f5jwog0bpl-ydgyq1djgh.gz
-C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\compressed\47b893wqht-dapmcc5k17.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\bin\Debug\net9.0\wwwroot\_framework\Company.Admin.Client.8n0x4cewsl.wasm
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\bin\Debug\net9.0\wwwroot\_framework\Company.Admin.Client.wctj8g1iee.pdb
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\bin\Debug\net9.0\wwwroot\_framework\Company.Admin.Client.8n0x4cewsl.wasm.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\bin\Debug\net9.0\wwwroot\_framework\Company.Admin.Client.wctj8g1iee.pdb.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\compressed\emrmnt0ycf-8n0x4cewsl.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\compressed\f5jwog0bpl-wctj8g1iee.gz
+C:\Users\Joan-PC\Desktop\Programacion\control-horario-app\control-horario-blazor\SphereTimeControl\Company.Admin.Client\obj\Debug\net9.0\compressed\47b893wqht-7cztz6u27r.gz

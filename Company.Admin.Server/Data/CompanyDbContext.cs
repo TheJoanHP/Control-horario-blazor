@@ -228,6 +228,30 @@ namespace Company.Admin.Server.Data
                       .HasDatabaseName("IX_VacationBalances_EmployeeId_Year");
             });
 
+            // Configuración de Break
+            modelBuilder.Entity<Break>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.StartTime).IsRequired();
+                entity.Property(e => e.EndTime).IsRequired();
+                // CORRECCIÓN: Remover Duration ya que es una propiedad calculada [NotMapped]
+                // entity.Property(e => e.Duration).IsRequired();
+                entity.Property(e => e.Active).HasDefaultValue(true);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+
+                entity.HasOne(e => e.WorkSchedule)
+                      .WithMany(ws => ws.Breaks)
+                      .HasForeignKey(e => e.WorkScheduleId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                      
+                entity.HasOne(e => e.Employee)
+                      .WithMany()
+                      .HasForeignKey(e => e.EmployeeId)
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
+
             // Configuración de conversiones de enums
             modelBuilder.Entity<User>()
                 .Property(e => e.Role)

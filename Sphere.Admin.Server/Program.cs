@@ -9,6 +9,9 @@ using AutoMapper;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// *** IMPORTANTE: Registrar HttpContextAccessor PRIMERO ***
+builder.Services.AddHttpContextAccessor();
+
 // Configuración de servicios
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -137,6 +140,13 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Health check endpoint
+app.MapGet("/health", () => new { 
+    Status = "Healthy", 
+    App = "Sphere Admin",
+    Timestamp = DateTime.UtcNow 
+});
+
 // Migración automática en desarrollo
 if (app.Environment.IsDevelopment())
 {
@@ -145,11 +155,11 @@ if (app.Environment.IsDevelopment())
     try
     {
         await context.Database.MigrateAsync();
-        app.Logger.LogInformation("Base de datos migrada correctamente");
+        app.Logger.LogInformation("✅ Base de datos migrada correctamente");
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "Error durante la migración de la base de datos");
+        app.Logger.LogError(ex, "❌ Error durante la migración de la base de datos");
     }
 }
 

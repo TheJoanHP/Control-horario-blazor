@@ -319,12 +319,39 @@ namespace Employee.App.Server.Services
         private async Task<TimeSpan> GetTodayBreakTimeAsync(int employeeId)
         {
             var today = DateTime.Today;
-            // CORRECCIÓN 4: Usar StartTime en lugar de StartTime.Date
-            var breaks = await _context.Breaks
-                .Where(b => b.EmployeeId == employeeId && b.StartTime >= today && b.StartTime < today.AddDays(1))
+            
+            // Obtener todos los registros de descanso de hoy (BreakStart y BreakEnd)
+            var breakRecords = await _context.TimeRecords
+                .Where(tr => tr.EmployeeId == employeeId && 
+                            tr.Date == today && 
+                            (tr.Type == Shared.Models.Enums.RecordType.BreakStart || 
+                            tr.Type == Shared.Models.Enums.RecordType.BreakEnd))
+                .OrderBy(tr => tr.Timestamp)
                 .ToListAsync();
 
-            return TimeSpan.FromMinutes(breaks.Sum(b => b.DurationMinutes));
+            var totalBreakTime = TimeSpan.Zero;
+            DateTime? breakStartTime = null;
+
+            foreach (var record in breakRecords)
+            {
+                if (record.Type == Shared.Models.Enums.RecordType.BreakStart)
+                {
+                    breakStartTime = record.Timestamp;
+                }
+                else if (record.Type == Shared.Models.Enums.RecordType.BreakEnd && breakStartTime.HasValue)
+                {
+                    totalBreakTime = totalBreakTime.Add(record.Timestamp - breakStartTime.Value);
+                    breakStartTime = null;
+                }
+            }
+
+            // Si aún está en descanso (hay BreakStart pero no BreakEnd), calcular hasta ahora
+            if (breakStartTime.HasValue)
+            {
+                totalBreakTime = totalBreakTime.Add(DateTime.Now - breakStartTime.Value);
+            }
+
+            return totalBreakTime;
         }
 
         private async Task<TimeSpan> GetWeekWorkedHoursAsync(int employeeId)

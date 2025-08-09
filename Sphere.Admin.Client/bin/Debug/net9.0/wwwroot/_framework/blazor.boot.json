@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "Sphere.Admin.Client",
   "resources": {
-    "hash": "sha256-1GCDElqunpO1ZaS7cA2Mvg+5t4htRYiic9k4ZA5WdKU=",
+    "hash": "sha256-QeS1DSLfm/6W19ZREUBFHp1+K1HmN5ZoY9a3wVpoIYI=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Microsoft.AspNetCore.Authorization.bvu82j4ad3.wasm": "Microsoft.AspNetCore.Authorization.wasm",
@@ -207,8 +207,8 @@
       "icudt_CJK.tjcz0u77k5.dat": "icudt_CJK.dat",
       "icudt_EFIGS.tptq2av103.dat": "icudt_EFIGS.dat",
       "icudt_no_CJK.lfu7j35m59.dat": "icudt_no_CJK.dat",
-      "Sphere.Admin.Client.aqq5bs7h3t.wasm": "Sphere.Admin.Client.wasm",
-      "Sphere.Admin.Client.eojnaimzdn.pdb": "Sphere.Admin.Client.pdb"
+      "Sphere.Admin.Client.fbjmskgtyi.wasm": "Sphere.Admin.Client.wasm",
+      "Sphere.Admin.Client.8pg9njyqv0.pdb": "Sphere.Admin.Client.pdb"
     },
     "jsModuleNative": {
       "dotnet.native.st0ovrfdhi.js": "sha256-MBW/zayfv+YU6mhH7y4b8NNU4D1EYd7nf9gYrFshnnY="
@@ -424,10 +424,10 @@
       "WindowsBase.pg3o6xzigg.wasm": "sha256-dz62CHynC+zqTkbMOf3vm7YAhiRA8/pIoAwuqHfBL5M=",
       "mscorlib.jl2pswegra.wasm": "sha256-mSoCIDTdCQKTipW8VmFCypW/4AopZauaYRa8LoZdHvY=",
       "netstandard.uriri6ambh.wasm": "sha256-yuH/cvPd6r8N9nfPWihyckFD7hPFP+VQtQQxEqi7HIQ=",
-      "Sphere.Admin.Client.aqq5bs7h3t.wasm": "sha256-kqGq4kfxrd9gosjAbUz9NewQ/zmPbRXL91iWsRZYMYg="
+      "Sphere.Admin.Client.fbjmskgtyi.wasm": "sha256-tUj1HQV9XErhwL/DPYyXCk+II2v4c5QWWUFlqwe1Byw="
     },
     "pdb": {
-      "Sphere.Admin.Client.eojnaimzdn.pdb": "sha256-XrXnC7r50FQ282lHSV7rV4PMjF26ZMKY1YNKCIfHP0w="
+      "Sphere.Admin.Client.8pg9njyqv0.pdb": "sha256-NAAAUXablBeI47+zriodcokknFKshWt/7rftUTXXSfg="
     }
   },
   "cacheBootResources": true,
