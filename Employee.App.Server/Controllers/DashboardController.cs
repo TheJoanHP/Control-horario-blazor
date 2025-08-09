@@ -2,10 +2,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using Employee.App.Server.Data; // Corregido namespace
+using Employee.App.Server.Data;
 using Shared.Models.Enums;
 
-namespace Employee.App.Server.Controllers // Corregido namespace
+namespace Employee.App.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
@@ -101,8 +101,9 @@ namespace Employee.App.Server.Controllers // Corregido namespace
                     UpcomingVacations = upcomingVacations
                 });
             }
-            catch (Exception ex)
+            catch
             {
+                // CORRECCIÓN: Eliminar la variable 'ex' no utilizada
                 return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }

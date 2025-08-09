@@ -158,10 +158,13 @@ namespace Employee.App.Server.Services
 
             if (balance == null)
             {
-                // Crear balance por defecto si no existe
-                var employee = await _employeeService.GetEmployeeByIdAsync(employeeId);
-                var company = employee?.Company;
-                var defaultDays = company?.VacationDaysPerYear ?? 22;
+                // CORRECCIÓN 1: Obtener la empresa desde el contexto directo
+                var employee = await _context.Employees
+                    .Include(e => e.Company)
+                    .FirstOrDefaultAsync(e => e.Id == employeeId);
+                
+                // CORRECCIÓN 2: Usar la propiedad correcta del modelo Company
+                var defaultDays = employee?.Company?.VacationDaysPerYear ?? 22;
 
                 balance = new VacationBalance
                 {
@@ -244,6 +247,7 @@ namespace Employee.App.Server.Services
             }
         }
 
+        // MÉTODO FALTANTE 1: GetRecentVacationRequestsAsync
         public async Task<List<object>> GetRecentVacationRequestsAsync(int employeeId)
         {
             var requests = await _context.VacationRequests
@@ -266,148 +270,119 @@ namespace Employee.App.Server.Services
             return requests.Cast<object>().ToList();
         }
 
+        // MÉTODO FALTANTE 2: GetTodayTimeRecordsAsync
         public async Task<object> GetTodayTimeRecordsAsync(int employeeId)
         {
             var today = DateTime.Today;
             var records = await _context.TimeRecords
                 .Where(tr => tr.EmployeeId == employeeId && tr.Date == today)
-                .OrderBy(tr => tr.Time)
+                .OrderBy(tr => tr.Timestamp)
                 .Select(tr => new
                 {
                     tr.Id,
                     tr.Type,
+                    tr.Timestamp,
                     tr.Date,
                     tr.Time,
-                    DateTime = tr.Date.Add(tr.Time),
-                    tr.Notes,
-                    TypeDisplay = tr.Type.ToString()
+                    // CORRECCIÓN 3: Usar Notes en lugar de Comments
+                    Notes = tr.Notes,
+                    TypeText = tr.Type.ToString()
                 })
                 .ToListAsync();
 
-            var totalHours = CalculateWorkedHours(records);
-
-            return new
+            var summary = new
             {
+                Date = today.ToString("yyyy-MM-dd"),
                 Records = records,
-                TotalHours = totalHours,
-                Summary = new
-                {
-                    CheckIn = records.FirstOrDefault(r => r.Type.ToString() == "CheckIn")?.DateTime,
-                    CheckOut = records.FirstOrDefault(r => r.Type.ToString() == "CheckOut")?.DateTime,
-                    BreakTime = CalculateBreakTime(records),
-                    WorkedHours = totalHours,
-                    Status = GetCurrentStatus(records.LastOrDefault())
-                }
+                TotalRecords = records.Count,
+                WorkedHours = CalculateWorkedHours(await _context.TimeRecords
+                    .Where(tr => tr.EmployeeId == employeeId && tr.Date == today)
+                    .ToListAsync()).ToString(@"hh\:mm"),
+                LastRecord = records.LastOrDefault()
             };
+
+            return summary;
         }
 
         // Métodos auxiliares privados
-        private async Task<double> GetTodayWorkedHoursAsync(int employeeId)
+        private async Task<TimeSpan> GetTodayWorkedHoursAsync(int employeeId)
         {
             var today = DateTime.Today;
             var records = await _context.TimeRecords
                 .Where(tr => tr.EmployeeId == employeeId && tr.Date == today)
-                .OrderBy(tr => tr.Time)
+                .OrderBy(tr => tr.Timestamp)
                 .ToListAsync();
 
             return CalculateWorkedHours(records);
         }
 
-        private async Task<double> GetTodayBreakTimeAsync(int employeeId)
+        private async Task<TimeSpan> GetTodayBreakTimeAsync(int employeeId)
         {
             var today = DateTime.Today;
-            var records = await _context.TimeRecords
-                .Where(tr => tr.EmployeeId == employeeId && tr.Date == today)
-                .OrderBy(tr => tr.Time)
+            // CORRECCIÓN 4: Usar StartTime en lugar de StartTime.Date
+            var breaks = await _context.Breaks
+                .Where(b => b.EmployeeId == employeeId && b.StartTime >= today && b.StartTime < today.AddDays(1))
                 .ToListAsync();
 
-            return CalculateBreakTime(records);
+            return TimeSpan.FromMinutes(breaks.Sum(b => b.DurationMinutes));
         }
 
-        private async Task<double> GetWeekWorkedHoursAsync(int employeeId)
+        private async Task<TimeSpan> GetWeekWorkedHoursAsync(int employeeId)
         {
             var startOfWeek = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek + 1);
-            var endOfWeek = startOfWeek.AddDays(7);
+            var endOfWeek = startOfWeek.AddDays(6);
 
             var records = await _context.TimeRecords
-                .Where(tr => tr.EmployeeId == employeeId && tr.Date >= startOfWeek && tr.Date < endOfWeek)
-                .OrderBy(tr => tr.Date).ThenBy(tr => tr.Time)
+                .Where(tr => tr.EmployeeId == employeeId && 
+                           tr.Date >= startOfWeek && 
+                           tr.Date <= endOfWeek)
+                .OrderBy(tr => tr.Timestamp)
                 .ToListAsync();
 
-            // Agrupar por día y calcular horas trabajadas por día
             var dailyHours = records
                 .GroupBy(r => r.Date)
-                .Sum(dayGroup => CalculateWorkedHours(dayGroup.Select(r => new
-                {
-                    r.Id,
-                    r.Type,
-                    r.Date,
-                    r.Time,
-                    DateTime = r.Date.Add(r.Time),
-                    r.Notes,
-                    TypeDisplay = r.Type.ToString()
-                }).ToList()));
+                .Select(g => CalculateWorkedHours(g.ToList()))
+                .Sum(h => h.TotalHours);
 
-            return dailyHours;
+            return TimeSpan.FromHours(dailyHours);
         }
 
-        private double CalculateWorkedHours(IEnumerable<object> records)
+        private static TimeSpan CalculateWorkedHours(List<Shared.Models.TimeTracking.TimeRecord> records)
         {
-            // Implementación simplificada
-            var recordList = records.ToList();
-            if (recordList.Count < 2) return 0;
+            var totalHours = TimeSpan.Zero;
+            Shared.Models.TimeTracking.TimeRecord? checkIn = null;
 
-            // Buscar entrada y salida
-            var checkIn = recordList.FirstOrDefault();
-            var checkOut = recordList.LastOrDefault();
-
-            if (checkIn != null && checkOut != null)
+            foreach (var record in records.OrderBy(r => r.Timestamp))
             {
-                // Implementación básica - necesitará mejoras
-                return 8.0; // Placeholder
+                if (record.Type == Shared.Models.Enums.RecordType.CheckIn)
+                {
+                    checkIn = record;
+                }
+                else if (record.Type == Shared.Models.Enums.RecordType.CheckOut && checkIn != null)
+                {
+                    totalHours = totalHours.Add(record.Timestamp - checkIn.Timestamp);
+                    checkIn = null;
+                }
             }
 
-            return 0;
+            return totalHours;
         }
 
-        private double CalculateBreakTime(IEnumerable<object> records)
+        private static int CalculateWorkingDays(DateTime startDate, DateTime endDate)
         {
-            // Implementación simplificada
-            return 0.5; // 30 minutos por defecto
-        }
+            int workingDays = 0;
+            var current = startDate.Date;
 
-        private string GetCurrentStatus(object? lastRecord)
-        {
-            if (lastRecord == null) return "No fichado";
-            
-            // Usar reflexión para obtener el tipo
-            var type = lastRecord.GetType().GetProperty("Type")?.GetValue(lastRecord);
-            
-            return type?.ToString() switch
-            {
-                "CheckIn" => "Trabajando",
-                "CheckOut" => "Fuera",
-                "BreakStart" => "En descanso",
-                "BreakEnd" => "Trabajando",
-                _ => "Desconocido"
-            };
-        }
-
-        private int CalculateWorkingDays(DateTime startDate, DateTime endDate)
-        {
-            var days = 0;
-            var current = startDate;
-
-            while (current <= endDate)
+            while (current <= endDate.Date)
             {
                 if (current.DayOfWeek != DayOfWeek.Saturday && current.DayOfWeek != DayOfWeek.Sunday)
                 {
-                    days++;
+                    workingDays++;
                 }
                 current = current.AddDays(1);
             }
 
-            return days;
+            return workingDays;
         }
     }
 }
