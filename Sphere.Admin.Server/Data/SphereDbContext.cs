@@ -20,74 +20,22 @@ namespace Sphere.Admin.Server.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configuración de Tenant
-            modelBuilder.Entity<Tenant>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Code).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.Description).HasMaxLength(500);
-                entity.Property(e => e.Subdomain).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.DatabaseName).IsRequired().HasMaxLength(200);
-                entity.Property(e => e.ContactEmail).IsRequired().HasMaxLength(255);
-                entity.Property(e => e.ContactPhone).HasMaxLength(20);
-                entity.Property(e => e.LicenseType).HasDefaultValue(LicenseType.Trial);
-                entity.Property(e => e.MaxEmployees).HasDefaultValue(10);
-                entity.Property(e => e.Active).HasDefaultValue(true);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
-
-                // Índices únicos
-                entity.HasIndex(e => e.Code)
-                      .IsUnique()
-                      .HasDatabaseName("IX_Tenants_Code");
-
-                entity.HasIndex(e => e.Subdomain)
-                      .IsUnique()
-                      .HasDatabaseName("IX_Tenants_Subdomain");
-
-                entity.HasIndex(e => e.DatabaseName)
-                      .IsUnique()
-                      .HasDatabaseName("IX_Tenants_DatabaseName");
-
-                entity.HasIndex(e => e.ContactEmail)
-                      .IsUnique()
-                      .HasDatabaseName("IX_Tenants_ContactEmail");
-            });
-
-            // Configuración de License
-            modelBuilder.Entity<License>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.LicenseType).IsRequired();
-                entity.Property(e => e.MaxEmployees).IsRequired();
-                entity.Property(e => e.MonthlyPrice).HasPrecision(10, 2);
-                entity.Property(e => e.Active).HasDefaultValue(true);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
-
-                entity.HasOne(e => e.Tenant)
-                      .WithOne(t => t.License)
-                      .HasForeignKey<License>(e => e.TenantId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                // Índice para consultas por tenant
-                entity.HasIndex(e => new { e.TenantId, e.Active })
-                      .HasDatabaseName("IX_Licenses_TenantId_Active");
-            });
-
-            // Configuración de SphereAdmin
+            // *** CONFIGURACIÓN MÁS IMPORTANTE: SphereAdmin ***
             modelBuilder.Entity<SphereAdmin>(entity =>
             {
+                entity.ToTable("SphereAdmins"); // Nombre EXACTO de la tabla en PostgreSQL
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.FirstName).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
-                entity.Property(e => e.PasswordHash).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.PasswordHash).IsRequired();
                 entity.Property(e => e.Role).HasDefaultValue(UserRole.SuperAdmin);
                 entity.Property(e => e.Active).HasDefaultValue(true);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+                
+                // *** MAPEO CORRECTO DE COLUMNAS ***
+                entity.Property(e => e.LastLogin).HasColumnName("LastLoginAt");
+                entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt");
+                entity.Property(e => e.UpdatedAt).HasColumnName("UpdatedAt");
 
                 // Índice único para email
                 entity.HasIndex(e => e.Email)
@@ -95,20 +43,50 @@ namespace Sphere.Admin.Server.Data
                       .HasDatabaseName("IX_SphereAdmins_Email");
             });
 
-            // Configuración de SystemConfig
+            // Configuración de SystemConfig - SOLO propiedades que existen
             modelBuilder.Entity<SystemConfig>(entity =>
             {
+                entity.ToTable("SystemConfigs"); // Nombre exacto de la tabla
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Key).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.Value).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(500);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.Property(e => e.Category).HasMaxLength(50);
+                entity.Property(e => e.IsEditable).HasDefaultValue(true);
 
                 // Índice único para key
                 entity.HasIndex(e => e.Key)
                       .IsUnique()
                       .HasDatabaseName("IX_SystemConfigs_Key");
+            });
+
+            // Configuración de Tenant - SIMPLIFICADA
+            modelBuilder.Entity<Tenant>(entity =>
+            {
+                entity.ToTable("Tenants");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Code).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Subdomain).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.DatabaseName).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.ContactEmail).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Active).HasDefaultValue(true);
+
+                // Índices únicos básicos
+                entity.HasIndex(e => e.Code).IsUnique();
+                entity.HasIndex(e => e.Subdomain).IsUnique();
+                entity.HasIndex(e => e.ContactEmail).IsUnique();
+            });
+
+            // Configuración de License - SIMPLIFICADA
+            modelBuilder.Entity<License>(entity =>
+            {
+                entity.ToTable("Licenses");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.TenantId).IsRequired();
+                entity.Property(e => e.LicenseType).IsRequired();
+                entity.Property(e => e.MaxEmployees).IsRequired();
+                entity.Property(e => e.Active).HasDefaultValue(true);
             });
 
             // Configuración de conversiones de enums
@@ -123,6 +101,18 @@ namespace Sphere.Admin.Server.Data
             modelBuilder.Entity<SphereAdmin>()
                 .Property(e => e.Role)
                 .HasConversion<int>();
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            base.OnConfiguring(optionsBuilder);
+            
+            // Configurar para que no convierta nombres a minúsculas
+            if (!optionsBuilder.IsConfigured)
+            {
+                // Solo si no está configurado desde Program.cs
+                optionsBuilder.UseNpgsql();
+            }
         }
     }
 }

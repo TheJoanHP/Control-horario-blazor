@@ -1,0 +1,239 @@
+@page "/"
+@using DevExpress.Blazor
+
+<PageTitle>Dashboard - Sphere Admin</PageTitle>
+
+<div class="dashboard">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-3">
+                <i class="fas fa-tachometer-alt text-primary me-2"></i>
+                Dashboard de Administración
+            </h1>
+            <p class="text-muted">Panel de control principal para la gestión de Sphere Time Control</p>
+        </div>
+    </div>
+
+    <!-- Cards de Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <DxCard CssClass="h-100 shadow-sm border-0">
+                <HeaderContent>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="text-primary mb-0">@totalTenants</h5>
+                            <small class="text-muted">Tenants Activos</small>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded">
+                            <i class="fas fa-building fa-2x text-primary"></i>
+                        </div>
+                    </div>
+                </HeaderContent>
+            </DxCard>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <DxCard CssClass="h-100 shadow-sm border-0">
+                <HeaderContent>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="text-success mb-0">@totalUsers</h5>
+                            <small class="text-muted">Usuarios Totales</small>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded">
+                            <i class="fas fa-users fa-2x text-success"></i>
+                        </div>
+                    </div>
+                </HeaderContent>
+            </DxCard>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <DxCard CssClass="h-100 shadow-sm border-0">
+                <HeaderContent>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="text-warning mb-0">€@monthlyRevenue</h5>
+                            <small class="text-muted">Ingresos Mensuales</small>
+                        </div>
+                        <div class="bg-warning bg-opacity-10 p-3 rounded">
+                            <i class="fas fa-euro-sign fa-2x text-warning"></i>
+                        </div>
+                    </div>
+                </HeaderContent>
+            </DxCard>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <DxCard CssClass="h-100 shadow-sm border-0">
+                <HeaderContent>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="text-info mb-0">@trialTenants</h5>
+                            <small class="text-muted">Tenants en Trial</small>
+                        </div>
+                        <div class="bg-info bg-opacity-10 p-3 rounded">
+                            <i class="fas fa-clock fa-2x text-info"></i>
+                        </div>
+                    </div>
+                </HeaderContent>
+            </DxCard>
+        </div>
+    </div>
+
+    <!-- Contenido Principal -->
+    <div class="row">
+        <!-- Tenants Recientes -->
+        <div class="col-lg-8 mb-4">
+            <DxCard CssClass="h-100 shadow-sm border-0">
+                <HeaderContent>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-building me-2"></i>
+                            Tenants Recientes
+                        </h5>
+                        <DxButton Text="Ver Todos" 
+                                  RenderStyle="ButtonRenderStyle.Link" 
+                                  NavigateUrl="/tenants" />
+                    </div>
+                </HeaderContent>
+                <BodyContent>
+                    <DxGrid Data="@recentTenants" 
+                            CssClass="border-0"
+                            PageSize="5"
+                            ShowPager="false">
+                        <Columns>
+                            <DxGridDataColumn FieldName="Name" Caption="Empresa" Width="30%" />
+                            <DxGridDataColumn FieldName="ContactEmail" Caption="Email" Width="25%" />
+                            <DxGridDataColumn FieldName="LicenseType" Caption="Licencia" Width="15%">
+                                <DisplayTemplate>
+                                    @{
+                                        var tenant = context as TenantInfo;
+                                        var badgeClass = tenant?.LicenseType switch
+                                        {
+                                            "Trial" => "bg-warning",
+                                            "Basic" => "bg-info",
+                                            "Professional" => "bg-success",
+                                            "Enterprise" => "bg-primary",
+                                            _ => "bg-secondary"
+                                        };
+                                    }
+                                    <span class="badge @badgeClass">@tenant?.LicenseType</span>
+                                </DisplayTemplate>
+                            </DxGridDataColumn>
+                            <DxGridDataColumn FieldName="CreatedAt" Caption="Creado" Width="15%">
+                                <DisplayTemplate>
+                                    @{
+                                        var tenant = context as TenantInfo;
+                                    }
+                                    <small class="text-muted">@tenant?.CreatedAt.ToString("dd/MM/yyyy")</small>
+                                </DisplayTemplate>
+                            </DxGridDataColumn>
+                            <DxGridDataColumn FieldName="Status" Caption="Estado" Width="15%">
+                                <DisplayTemplate>
+                                    @{
+                                        var tenant = context as TenantInfo;
+                                        var statusClass = tenant?.Active == true ? "text-success" : "text-danger";
+                                        var statusIcon = tenant?.Active == true ? "fa-check-circle" : "fa-times-circle";
+                                        var statusText = tenant?.Active == true ? "Activo" : "Inactivo";
+                                    }
+                                    <i class="fas @statusIcon @statusClass me-1"></i>
+                                    <small class="@statusClass">@statusText</small>
+                                </DisplayTemplate>
+                            </DxGridDataColumn>
+                        </Columns>
+                    </DxGrid>
+                </BodyContent>
+            </DxCard>
+        </div>
+
+        <!-- Actividad Reciente -->
+        <div class="col-lg-4 mb-4">
+            <DxCard CssClass="h-100 shadow-sm border-0">
+                <HeaderContent>
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2"></i>
+                        Actividad Reciente
+                    </h5>
+                </HeaderContent>
+                <BodyContent>
+                    <div class="activity-list">
+                        @foreach (var activity in recentActivities)
+                        {
+                            <div class="activity-item d-flex align-items-start mb-3">
+                                <div class="activity-icon me-3">
+                                    <i class="@activity.Icon @activity.IconColor"></i>
+                                </div>
+                                <div class="activity-content flex-grow-1">
+                                    <p class="mb-1 small">@activity.Description</p>
+                                    <small class="text-muted">@activity.Time.ToString("HH:mm - dd/MM")</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </BodyContent>
+            </DxCard>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Datos simulados - en producción vendrán de la API
+    private int totalTenants = 15;
+    private int totalUsers = 247;
+    private decimal monthlyRevenue = 2450.50m;
+    private int trialTenants = 3;
+
+    private List<TenantInfo> recentTenants = new()
+    {
+        new() { Name = "TechSoft Solutions", ContactEmail = "admin@techsoft.com", LicenseType = "Professional", CreatedAt = DateTime.Now.AddDays(-2), Active = true },
+        new() { Name = "Marketing Pro", ContactEmail = "info@marketingpro.com", LicenseType = "Basic", CreatedAt = DateTime.Now.AddDays(-5), Active = true },
+        new() { Name = "StartUp Inc", ContactEmail = "hello@startup.com", LicenseType = "Trial", CreatedAt = DateTime.Now.AddDays(-7), Active = true },
+        new() { Name = "Enterprise Corp", ContactEmail = "admin@enterprise.com", LicenseType = "Enterprise", CreatedAt = DateTime.Now.AddDays(-10), Active = true },
+        new() { Name = "Small Biz", ContactEmail = "contact@smallbiz.com", LicenseType = "Basic", CreatedAt = DateTime.Now.AddDays(-12), Active = false }
+    };
+
+    private List<ActivityInfo> recentActivities = new()
+    {
+        new() { Description = "Nuevo tenant 'TechSoft Solutions' creado", Time = DateTime.Now.AddHours(-2), Icon = "fas fa-plus-circle", IconColor = "text-success" },
+        new() { Description = "Licencia renovada para 'Marketing Pro'", Time = DateTime.Now.AddHours(-4), Icon = "fas fa-sync-alt", IconColor = "text-info" },
+        new() { Description = "Tenant 'Small Biz' desactivado", Time = DateTime.Now.AddHours(-6), Icon = "fas fa-pause-circle", IconColor = "text-warning" },
+        new() { Description = "Nuevo admin agregado al sistema", Time = DateTime.Now.AddHours(-8), Icon = "fas fa-user-plus", IconColor = "text-primary" },
+        new() { Description = "Backup automático completado", Time = DateTime.Now.AddHours(-12), Icon = "fas fa-database", IconColor = "text-secondary" }
+    };
+
+    public class TenantInfo
+    {
+        public string Name { get; set; } = "";
+        public string ContactEmail { get; set; } = "";
+        public string LicenseType { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public bool Active { get; set; }
+    }
+
+    public class ActivityInfo
+    {
+        public string Description { get; set; } = "";
+        public DateTime Time { get; set; }
+        public string Icon { get; set; } = "";
+        public string IconColor { get; set; } = "";
+    }
+}
+
+<style>
+    .activity-icon {
+        width: 30px;
+        text-align: center;
+    }
+    
+    .activity-item {
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .activity-item:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+</style>

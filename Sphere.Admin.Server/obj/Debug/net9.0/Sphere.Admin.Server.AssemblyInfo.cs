@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Sphere.Admin.Server")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0422e3a8b019f34a4497dfa5019f75d851a72b1e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+201406ae325dd10f58932d117a78a5f27dbbcf45")]
 [assembly: System.Reflection.AssemblyProductAttribute("Sphere.Admin.Server")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Sphere.Admin.Server")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,39 +1,49 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">Sphere.Admin.Client</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
+﻿@using MudBlazor
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-    </nav>
-</div>
-
-@code {
-    private bool collapseNavMenu = true;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
-}
+<MudNavMenu>
+    <MudNavLink Href="/" 
+                Match="NavLinkMatch.All" 
+                Icon="@Icons.Material.Filled.Dashboard">
+        Dashboard
+    </MudNavLink>
+    
+    <MudNavGroup Text="Gestión de Tenants" 
+                 Icon="@Icons.Material.Filled.Business" 
+                 Expanded="true">
+        <MudNavLink Href="/tenants" 
+                    Icon="@Icons.Material.Filled.List">
+            Lista de Empresas
+        </MudNavLink>
+        <MudNavLink Href="/tenants/create" 
+                    Icon="@Icons.Material.Filled.Add">
+            Nueva Empresa
+        </MudNavLink>
+    </MudNavGroup>
+    
+    <MudNavLink Href="/licenses" 
+                Icon="@Icons.Material.Filled.Badge">
+        Licencias
+    </MudNavLink>
+    
+    <MudNavLink Href="/billing" 
+                Icon="@Icons.Material.Filled.Receipt">
+        Facturación
+    </MudNavLink>
+    
+    <MudNavLink Href="/analytics" 
+                Icon="@Icons.Material.Filled.Analytics">
+        Analíticas
+    </MudNavLink>
+    
+    <MudNavGroup Text="Sistema" 
+                 Icon="@Icons.Material.Filled.Settings">
+        <MudNavLink Href="/system/config" 
+                    Icon="@Icons.Material.Filled.Tune">
+            Configuración
+        </MudNavLink>
+        <MudNavLink Href="/system/admins" 
+                    Icon="@Icons.Material.Filled.SupervisorAccount">
+            Administradores
+        </MudNavLink>
+    </MudNavGroup>
+</MudNavMenu>

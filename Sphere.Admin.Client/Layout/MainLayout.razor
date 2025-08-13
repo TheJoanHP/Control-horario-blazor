@@ -1,16 +1,85 @@
-﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
+﻿@using MudBlazor
+@inherits LayoutView
+
+<MudThemeProvider Theme="customTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <!-- AppBar -->
+    <MudAppBar Color="Color.Primary" Fixed="false">
+        <MudIconButton Icon="Icons.Material.Filled.Menu" 
+                       Color="Color.Inherit" 
+                       Edge="Edge.Start" 
+                       OnClick="@((e) => DrawerToggle())" />
+        
+        <MudIcon Icon="fas fa-globe-americas" Style="margin-right: 10px;" />
+        <MudText Typo="Typo.h6">Sphere Time Control</MudText>
+        <MudChip Color="Color.Secondary" Size="Size.Small" Style="margin-left: 10px;">Admin</MudChip>
+        
+        <MudSpacer />
+        
+        <MudMenu>
+            <ActivatorContent>
+                <MudButton Variant="Variant.Text" 
+                           Color="Color.Inherit"
+                           StartIcon="@Icons.Material.Filled.Person">
+                    @currentUser
+                </MudButton>
+            </ActivatorContent>
+            <ChildContent>
+                <MudMenuItem Icon="@Icons.Material.Filled.AccountCircle">Mi Perfil</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Settings">Configuración</MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.ExitToApp" OnClick="HandleLogout">
+                    Cerrar Sesión
+                </MudMenuItem>
+            </ChildContent>
+        </MudMenu>
+    </MudAppBar>
+
+    <!-- Drawer -->
+    <MudDrawer @bind-Open="_drawerOpen" 
+               ClipMode="DrawerClipMode.Always" 
+               Elevation="2"
+               Variant="@DrawerVariant.Mini">
         <NavMenu />
-    </div>
+    </MudDrawer>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
+    <!-- Main Content -->
+    <MudMainContent Class="pa-4">
+        <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
             @Body
-        </article>
-    </main>
-</div>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private string currentUser = "Super Admin";
+    private bool _drawerOpen = true;
+    
+    private MudTheme customTheme = new()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#1976d2",
+            Secondary = "#ff9800",
+            Success = "#4caf50",
+            Warning = "#ff9800",
+            Error = "#f44336",
+            Info = "#2196f3",
+            AppbarBackground = "#1976d2",
+        }
+    };
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void HandleLogout()
+    {
+        NavigationManager.NavigateTo("/login");
+    }
+}
