@@ -4,9 +4,27 @@
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
     <NotFound>
-        <PageTitle>Not found</PageTitle>
+        <PageTitle>No encontrado</PageTitle>
         <LayoutView Layout="@typeof(MainLayout)">
-            <p role="alert">Sorry, there's nothing at this address.</p>
+            <div class="d-flex align-center justify-center" style="min-height: 50vh;">
+                <MudCard Class="pa-8 text-center">
+                    <MudIcon Icon="@Icons.Material.Filled.SearchOff" 
+                             Size="Size.Large" 
+                             Color="Color.Secondary" 
+                             Class="mb-4" 
+                             Style="font-size: 4rem;" />
+                    <MudText Typo="Typo.h4" Class="mb-2">Página no encontrada</MudText>
+                    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-4">
+                        La página que buscas no existe o ha sido movida.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled" 
+                               Color="Color.Primary" 
+                               StartIcon="@Icons.Material.Filled.Home"
+                               Href="/">
+                        Volver al Dashboard
+                    </MudButton>
+                </MudCard>
+            </div>
         </LayoutView>
     </NotFound>
 </Router>

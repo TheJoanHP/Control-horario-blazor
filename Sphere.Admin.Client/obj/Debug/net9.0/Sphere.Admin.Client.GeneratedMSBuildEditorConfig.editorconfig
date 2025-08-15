@@ -5,7 +5,7 @@ build_property.EnableTrimAnalyzer = false
 build_property.IncludeAllContentForSelfExtract = 
 build_property.MudDebugAnalyzer = 
 build_property.MudAllowedAttributePattern = 
-build_property.MudIllegalParameters = 
+build_property.MudAllowedAttributeList = 
 build_property.TargetFramework = net9.0
 build_property.TargetPlatformMinVersion = 
 build_property.UsingMicrosoftNETSdkWeb = 
@@ -31,28 +31,20 @@ build_property.EnableCodeStyleSeverity =
 build_metadata.AdditionalFiles.TargetPath = QXBwLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Auth/Login.razor]
-build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQXV0aFxMb2dpbi5yYXpvcg==
+[C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Layout/AuthLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = TGF5b3V0XEF1dGhMYXlvdXQucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Counter.razor]
-build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQ291bnRlci5yYXpvcg==
+[C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Auth/Login.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQXV0aFxMb2dpbi5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Dashboard/Index.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRGFzaGJvYXJkXEluZGV4LnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Home.razor]
-build_metadata.AdditionalFiles.TargetPath = UGFnZXNcSG9tZS5yYXpvcg==
-build_metadata.AdditionalFiles.CssScope = 
-
 [C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Tenants/TenantsManagement.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVGVuYW50c1xUZW5hbnRzTWFuYWdlbWVudC5yYXpvcg==
-build_metadata.AdditionalFiles.CssScope = 
-
-[C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Weather.razor]
-build_metadata.AdditionalFiles.TargetPath = UGFnZXNcV2VhdGhlci5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/_Imports.razor]

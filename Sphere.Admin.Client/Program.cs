@@ -16,7 +16,17 @@ builder.Services.AddScoped(sp => new HttpClient
 });
 
 // Servicios de MudBlazor
-builder.Services.AddMudServices();
+builder.Services.AddMudServices(config =>
+{
+    config.SnackbarConfiguration.PositionClass = MudBlazor.Defaults.Classes.Position.BottomLeft;
+    config.SnackbarConfiguration.PreventDuplicates = false;
+    config.SnackbarConfiguration.NewestOnTop = false;
+    config.SnackbarConfiguration.ShowCloseIcon = true;
+    config.SnackbarConfiguration.VisibleStateDuration = 5000;
+    config.SnackbarConfiguration.HideTransitionDuration = 500;
+    config.SnackbarConfiguration.ShowTransitionDuration = 500;
+    config.SnackbarConfiguration.SnackbarVariant = MudBlazor.Variant.Filled;
+});
 
 // Servicios personalizados
 builder.Services.AddScoped<ApiService>();
@@ -25,4 +35,13 @@ builder.Services.AddScoped<AuthenticationService>();
 // Configuración de logging
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 
-await builder.Build().RunAsync();
+var app = builder.Build();
+
+// Inicializar autenticación
+using (var scope = app.Services.CreateScope())
+{
+    var authService = scope.ServiceProvider.GetRequiredService<AuthenticationService>();
+    await authService.InitializeAsync();
+}
+
+await app.RunAsync();

@@ -1,155 +1,118 @@
 @page "/login"
-@using DevExpress.Blazor
-@layout EmptyLayout
+@layout AuthLayout
+@using Sphere.Admin.Client.Models
+@inject NavigationManager Navigation
+@inject AuthenticationService AuthService
 
 <PageTitle>Login - Sphere Admin</PageTitle>
 
-<div class="login-container">
-    <div class="login-form-wrapper">
-        <DxCard CssClass="login-card shadow-lg border-0">
-            <HeaderContent>
-                <div class="text-center py-4">
-                    <div class="login-logo mb-3">
-                        <i class="fas fa-globe-americas fa-3x text-primary"></i>
-                    </div>
-                    <h2 class="h4 text-primary mb-1">Sphere Time Control</h2>
-                    <p class="text-muted mb-0">Panel de Administración</p>
-                </div>
-            </HeaderContent>
-            <BodyContent>
-                <DxFormLayout CssClass="login-form">
-                    <DxFormLayoutItem Caption="Email" ColSpanMd="12">
-                        <Template>
-                            <DxTextBox @bind-Text="@loginModel.Email"
-                                       Placeholder="admin@spheretimecontrol.com"
-                                       CssClass="w-100"
-                                       NullText="Ingrese su email">
-                                <LeftIconCssClass>fas fa-envelope</LeftIconCssClass>
-                            </DxTextBox>
-                            @if (showValidation && string.IsNullOrEmpty(loginModel.Email))
-                            {
-                                <div class="text-danger small mt-1">El email es requerido</div>
-                            }
-                        </Template>
-                    </DxFormLayoutItem>
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 100vh;">
+    <MudCard Class="pa-8" Style="width: 100%; max-width: 400px;">
+        <MudCardContent>
+            <!-- Logo y Header -->
+            <div class="text-center mb-6">
+                <MudIcon Icon="@Icons.Material.Filled.Public" 
+                         Color="Color.Primary" 
+                         Size="Size.Large" 
+                         Class="mb-4" 
+                         Style="font-size: 4rem;" />
+                <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-2">
+                    Sphere Time Control
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Panel de Administración
+                </MudText>
+            </div>
 
-                    <DxFormLayoutItem Caption="Contraseña" ColSpanMd="12">
-                        <Template>
-                            <DxTextBox @bind-Text="@loginModel.Password"
-                                       Password="true"
-                                       Placeholder="••••••••"
-                                       CssClass="w-100"
-                                       NullText="Ingrese su contraseña">
-                                <LeftIconCssClass>fas fa-lock</LeftIconCssClass>
-                            </DxTextBox>
-                            @if (showValidation && string.IsNullOrEmpty(loginModel.Password))
-                            {
-                                <div class="text-danger small mt-1">La contraseña es requerida</div>
-                            }
-                        </Template>
-                    </DxFormLayoutItem>
+            <!-- Formulario de Login -->
+            <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+                <DataAnnotationsValidator />
 
-                    @if (!string.IsNullOrEmpty(errorMessage))
+                <MudTextField @bind-Value="loginModel.Email"
+                              For="@(() => loginModel.Email)"
+                              Label="Email"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Email"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Email"
+                              Class="mb-4"
+                              FullWidth="true" 
+                              Placeholder="admin@test.com" />
+
+                <MudTextField @bind-Value="loginModel.Password"
+                              For="@(() => loginModel.Password)"
+                              Label="Contraseña"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Password"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Lock"
+                              Class="mb-4"
+                              FullWidth="true" 
+                              Placeholder="123456" />
+
+                <!-- Mensaje de Error -->
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-4">
+                        @errorMessage
+                    </MudAlert>
+                }
+
+                <!-- Botón de Login -->
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           FullWidth="true"
+                           Class="mt-4"
+                           Disabled="isLoading">
+                    @if (isLoading)
                     {
-                        <DxFormLayoutItem ColSpanMd="12">
-                            <Template>
-                                <DxAlert Text="@errorMessage" 
-                                         AlertType="AlertType.Danger"
-                                         CssClass="mb-3" />
-                            </Template>
-                        </DxFormLayoutItem>
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                        <span>Iniciando sesión...</span>
                     }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Login" Class="me-2" />
+                        <span>Iniciar Sesión</span>
+                    }
+                </MudButton>
+            </EditForm>
 
-                    <DxFormLayoutItem ColSpanMd="12">
-                        <Template>
-                            <div class="d-grid gap-2">
-                                <DxButton Text="@(isLoading ? "Iniciando sesión..." : "Iniciar Sesión")"
-                                          RenderStyle="ButtonRenderStyle.Primary"
-                                          CssClass="btn-lg"
-                                          Enabled="@(!isLoading)"
-                                          Click="@HandleLogin">
-                                    <IconCssClass>@(isLoading ? "fas fa-spinner fa-spin" : "fas fa-sign-in-alt")</IconCssClass>
-                                </DxButton>
-                            </div>
-                        </Template>
-                    </DxFormLayoutItem>
-
-                    <DxFormLayoutItem ColSpanMd="12">
-                        <Template>
-                            <div class="text-center mt-3">
-                                <small class="text-muted">
-                                    ¿Problemas para acceder? 
-                                    <a href="mailto:support@spheretimecontrol.com" class="text-decoration-none">
-                                        Contactar soporte
-                                    </a>
-                                </small>
-                            </div>
-                        </Template>
-                    </DxFormLayoutItem>
-                </DxFormLayout>
-            </BodyContent>
-        </DxCard>
-
-        <!-- Demo Credentials -->
-        <DxCard CssClass="demo-credentials mt-4 shadow-sm border-0">
-            <BodyContent>
-                <div class="text-center">
-                    <small class="text-muted d-block mb-2">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Credenciales de demostración:
-                    </small>
-                    <div class="row">
-                        <div class="col-6">
-                            <small class="text-muted">Email:</small><br>
-                            <code class="small">admin@spheretimecontrol.com</code>
-                        </div>
-                        <div class="col-6">
-                            <small class="text-muted">Password:</small><br>
-                            <code class="small">admin123</code>
-                        </div>
-                    </div>
-                </div>
-            </BodyContent>
-        </DxCard>
-    </div>
-</div>
+            <!-- Credenciales de Demo -->
+            <div class="text-center mt-4">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    💡 Demo: admin@test.com / 123456
+                </MudText>
+            </div>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
 
 @code {
     private LoginModel loginModel = new();
+    private string errorMessage = string.Empty;
     private bool isLoading = false;
-    private bool showValidation = false;
-    private string errorMessage = "";
 
     private async Task HandleLogin()
     {
-        showValidation = true;
-        errorMessage = "";
-
-        // Validación básica
-        if (string.IsNullOrEmpty(loginModel.Email) || string.IsNullOrEmpty(loginModel.Password))
-        {
-            return;
-        }
-
         isLoading = true;
-        
+        errorMessage = string.Empty;
+
         try
         {
-            // TODO: Implementar llamada a la API
-            await Task.Delay(1500); // Simular llamada API
+            var result = await AuthService.LoginAsync(loginModel.Email, loginModel.Password);
             
-            // Por ahora, validación simple para demo
-            if (loginModel.Email == "admin@spheretimecontrol.com" && loginModel.Password == "admin123")
+            if (result.Success)
             {
-                // Login exitoso - redirigir al dashboard
-                NavigationManager.NavigateTo("/");
+                Navigation.NavigateTo("/");
             }
             else
             {
-                errorMessage = "Email o contraseña incorrectos";
+                errorMessage = result.ErrorMessage ?? "Error al iniciar sesión";
             }
         }
-        catch (Exception ex)
+        catch
         {
             errorMessage = "Error de conexión. Intente nuevamente.";
         }
@@ -159,67 +122,11 @@
         }
     }
 
-    public class LoginModel
+    protected override async Task OnInitializedAsync()
     {
-        public string Email { get; set; } = "";
-        public string Password { get; set; } = "";
+        if (await AuthService.IsAuthenticatedAsync())
+        {
+            Navigation.NavigateTo("/");
+        }
     }
 }
-
-<style>
-    .login-container {
-        min-height: 100vh;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-    }
-
-    .login-form-wrapper {
-        width: 100%;
-        max-width: 420px;
-    }
-
-    .login-card {
-        backdrop-filter: blur(10px);
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 1rem;
-    }
-
-    .login-logo {
-        animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-
-    .login-form ::deep .dx-textbox {
-        border-radius: 0.5rem;
-        border: 1px solid #e0e0e0;
-        transition: all 0.3s ease;
-    }
-
-    .login-form ::deep .dx-textbox:focus-within {
-        border-color: #667eea;
-        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-    }
-
-    .demo-credentials {
-        background: rgba(255, 255, 255, 0.9);
-        border-radius: 0.75rem;
-    }
-
-    @media (max-width: 576px) {
-        .login-container {
-            padding: 1rem;
-        }
-        
-        .login-form-wrapper {
-            max-width: 100%;
-        }
-    }
-</style>

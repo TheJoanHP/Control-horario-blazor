@@ -1,147 +1,204 @@
-using Microsoft.JSInterop;
+using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.JSInterop;
 
-namespace Sphere.Admin.Client.Services
+namespace Sphere.Admin.Client.Services;
+
+public class AuthenticationService
 {
-    public class AuthenticationService
+    private readonly HttpClient _httpClient;
+    private readonly IJSRuntime _jsRuntime;
+    private const string TokenKey = "sphere_admin_token";
+    private const string UserKey = "sphere_admin_user";
+
+    public AuthenticationService(HttpClient httpClient, IJSRuntime jsRuntime)
     {
-        private readonly ApiService _apiService;
-        private readonly IJSRuntime _jsRuntime;
-        private const string TokenKey = "sphere_admin_token";
-        private const string UserKey = "sphere_admin_user";
+        _httpClient = httpClient;
+        _jsRuntime = jsRuntime;
+    }
 
-        public AuthenticationService(ApiService apiService, IJSRuntime jsRuntime)
+    public async Task<LoginResult> LoginAsync(string email, string password)
+    {
+        try
         {
-            _apiService = apiService;
-            _jsRuntime = jsRuntime;
-        }
-
-        public event Action<bool>? AuthenticationStateChanged;
-
-        public bool IsAuthenticated { get; private set; }
-        public CurrentUser? CurrentUser { get; private set; }
-
-        public async Task<bool> LoginAsync(string email, string password)
-        {
-            try
+            var loginRequest = new AuthLoginRequest
             {
-                var request = new LoginRequest(email, password);
-                var response = await _apiService.LoginAsync(request);
+                Email = email,
+                Password = password
+            };
 
-                if (response != null)
+            var response = await _httpClient.PostAsJsonAsync("api/auth/login", loginRequest);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var loginResponse = await response.Content.ReadFromJsonAsync<AuthLoginResponse>();
+                
+                if (loginResponse?.Success == true && !string.IsNullOrEmpty(loginResponse.Token))
                 {
                     // Guardar token y usuario en localStorage
-                    await _jsRuntime.InvokeVoidAsync("localStorage.setItem", TokenKey, response.Token);
+                    await _jsRuntime.InvokeVoidAsync("localStorage.setItem", TokenKey, loginResponse.Token);
+                    await _jsRuntime.InvokeVoidAsync("localStorage.setItem", UserKey, JsonSerializer.Serialize(loginResponse.User));
                     
-                    var user = new CurrentUser(
-                        response.Email,
-                        response.FirstName,
-                        response.LastName,
-                        response.ExpiresAt);
-                        
-                    await _jsRuntime.InvokeVoidAsync("localStorage.setItem", UserKey, JsonSerializer.Serialize(user));
-
-                    // Configurar header de autorización
-                    _apiService.SetAuthorizationHeader(response.Token);
-
-                    // Actualizar estado
-                    IsAuthenticated = true;
-                    CurrentUser = user;
+                    // Configurar header de autenticación
+                    _httpClient.DefaultRequestHeaders.Authorization = 
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResponse.Token);
                     
-                    AuthenticationStateChanged?.Invoke(true);
-                    return true;
+                    return new LoginResult { Success = true };
                 }
-
-                return false;
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error en login: {ex.Message}");
-                return false;
-            }
+            
+            return new LoginResult 
+            { 
+                Success = false, 
+                ErrorMessage = "Credenciales inválidas" 
+            };
         }
-
-        public async Task LogoutAsync()
+        catch (Exception ex)
         {
-            try
-            {
-                // Llamar al endpoint de logout
-                await _apiService.LogoutAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error en logout: {ex.Message}");
-            }
-            finally
-            {
-                // Limpiar datos locales
-                await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", TokenKey);
-                await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", UserKey);
-                
-                _apiService.ClearAuthorizationHeader();
-                
-                IsAuthenticated = false;
-                CurrentUser = null;
-                
-                AuthenticationStateChanged?.Invoke(false);
-            }
+            return new LoginResult 
+            { 
+                Success = false, 
+                ErrorMessage = "Error de conexión con el servidor" 
+            };
         }
+    }
 
-        public async Task<bool> InitializeAsync()
+    public async Task<bool> IsAuthenticatedAsync()
+    {
+        try
         {
-            try
-            {
-                // Verificar si hay un token guardado
-                var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", TokenKey);
-                var userJson = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", UserKey);
-
-                if (!string.IsNullOrEmpty(token) && !string.IsNullOrEmpty(userJson))
-                {
-                    var user = JsonSerializer.Deserialize<CurrentUser>(userJson);
-                    
-                    if (user != null && user.ExpiresAt > DateTime.UtcNow)
-                    {
-                        // Token válido
-                        _apiService.SetAuthorizationHeader(token);
-                        IsAuthenticated = true;
-                        CurrentUser = user;
-                        
-                        AuthenticationStateChanged?.Invoke(true);
-                        return true;
-                    }
-                    else
-                    {
-                        // Token expirado - limpiar
-                        await LogoutAsync();
-                    }
-                }
-
+            var token = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", TokenKey);
+            
+            if (string.IsNullOrEmpty(token))
                 return false;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error inicializando autenticación: {ex.Message}");
-                await LogoutAsync();
-                return false;
-            }
+            
+            // Verificar si el token es válido
+            return !IsTokenExpired(token);
         }
-
-        public async Task<bool> RefreshTokenAsync()
+        catch
         {
-            // TODO: Implementar refresh token si es necesario
-            // Por ahora, si el token expira, el usuario debe hacer login nuevamente
-            await LogoutAsync();
             return false;
         }
     }
 
-    public record CurrentUser(
-        string Email,
-        string FirstName,
-        string LastName,
-        DateTime ExpiresAt)
+    public async Task<UserInfo?> GetCurrentUserAsync()
     {
-        public string FullName => $"{FirstName} {LastName}";
-        public string DisplayName => !string.IsNullOrEmpty(FullName.Trim()) ? FullName : Email;
+        try
+        {
+            var userJson = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", UserKey);
+            
+            if (string.IsNullOrEmpty(userJson))
+                return null;
+            
+            return JsonSerializer.Deserialize<UserInfo>(userJson);
+        }
+        catch
+        {
+            return null;
+        }
     }
+
+    public async Task LogoutAsync()
+    {
+        try
+        {
+            // Llamar al endpoint de logout si existe
+            await _httpClient.PostAsync("api/auth/logout", null);
+        }
+        catch
+        {
+            // Ignorar errores del logout del servidor
+        }
+        finally
+        {
+            // Limpiar datos locales
+            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", TokenKey);
+            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", UserKey);
+            
+            // Limpiar header de autenticación
+            _httpClient.DefaultRequestHeaders.Authorization = null;
+        }
+    }
+
+    public async Task InitializeAsync()
+    {
+        try
+        {
+            var token = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", TokenKey);
+            
+            if (!string.IsNullOrEmpty(token) && !IsTokenExpired(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+        }
+        catch
+        {
+            // Ignorar errores de inicialización
+        }
+    }
+
+    private bool IsTokenExpired(string token)
+    {
+        try
+        {
+            // Decodificar JWT para verificar expiración
+            var parts = token.Split('.');
+            if (parts.Length != 3)
+                return true;
+
+            var payload = parts[1];
+            // Agregar padding si es necesario
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+
+            var json = Convert.FromBase64String(payload);
+            var claims = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+            
+            if (claims?.ContainsKey("exp") == true)
+            {
+                var exp = Convert.ToInt64(claims["exp"]);
+                var expDate = DateTimeOffset.FromUnixTimeSeconds(exp);
+                return expDate <= DateTimeOffset.UtcNow;
+            }
+            
+            return true;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+}
+
+// DTOs para la autenticación
+public class AuthLoginRequest
+{
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+
+public class AuthLoginResponse
+{
+    public bool Success { get; set; }
+    public string? Token { get; set; }
+    public UserInfo? User { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+public class LoginResult
+{
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+public class UserInfo
+{
+    public int Id { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
 }

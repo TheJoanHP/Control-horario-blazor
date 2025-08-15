@@ -75,7 +75,7 @@
             },
             "MudBlazor": {
               "target": "Package",
-              "version": "[7.8.0, )"
+              "version": "[8.11.0, )"
             }
           },
           "imports": [

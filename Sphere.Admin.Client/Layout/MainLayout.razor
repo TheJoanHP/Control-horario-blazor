@@ -1,85 +1,129 @@
-﻿@using MudBlazor
-@inherits LayoutView
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject AuthenticationService AuthService
 
-<MudThemeProvider Theme="customTheme" />
-<MudPopoverProvider />
+<MudThemeProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <!-- AppBar -->
-    <MudAppBar Color="Color.Primary" Fixed="false">
-        <MudIconButton Icon="Icons.Material.Filled.Menu" 
+    <!-- Drawer de Navegación -->
+    <MudDrawer @bind-Open="@drawerOpen" 
+               ClipMode="DrawerClipMode.Always" 
+               Elevation="1"
+               Variant="DrawerVariant.Mini">
+        
+        <!-- Header del Drawer -->
+        <div class="pa-4 d-flex align-center">
+            @if (drawerOpen)
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Public" 
+                         Color="Color.Primary" 
+                         Size="Size.Large" 
+                         Class="me-3" />
+                <div>
+                    <MudText Typo="Typo.h6" Color="Color.Primary">Sphere</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Time Control</MudText>
+                </div>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Public" 
+                         Color="Color.Primary" 
+                         Size="Size.Large" />
+            }
+        </div>
+
+        <MudDivider />
+
+        <!-- Navegación -->
+        <NavMenu />
+        
+    </MudDrawer>
+
+    <!-- AppBar Superior -->
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" 
                        Color="Color.Inherit" 
                        Edge="Edge.Start" 
-                       OnClick="@((e) => DrawerToggle())" />
-        
-        <MudIcon Icon="fas fa-globe-americas" Style="margin-right: 10px;" />
-        <MudText Typo="Typo.h6">Sphere Time Control</MudText>
-        <MudChip Color="Color.Secondary" Size="Size.Small" Style="margin-left: 10px;">Admin</MudChip>
+                       OnClick="@ToggleDrawer" />
         
         <MudSpacer />
         
-        <MudMenu>
-            <ActivatorContent>
-                <MudButton Variant="Variant.Text" 
-                           Color="Color.Inherit"
-                           StartIcon="@Icons.Material.Filled.Person">
-                    @currentUser
-                </MudButton>
-            </ActivatorContent>
-            <ChildContent>
-                <MudMenuItem Icon="@Icons.Material.Filled.AccountCircle">Mi Perfil</MudMenuItem>
-                <MudMenuItem Icon="@Icons.Material.Filled.Settings">Configuración</MudMenuItem>
-                <MudDivider />
-                <MudMenuItem Icon="@Icons.Material.Filled.ExitToApp" OnClick="HandleLogout">
-                    Cerrar Sesión
-                </MudMenuItem>
-            </ChildContent>
+        <!-- Notificaciones -->
+        <MudBadge Content="3" 
+                  Color="Color.Error" 
+                  Overlap="true" 
+                  Class="me-3">
+            <MudIconButton Icon="@Icons.Material.Filled.Notifications" 
+                           Color="Color.Inherit" />
+        </MudBadge>
+
+        <!-- Información del Usuario -->
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" 
+                 Color="Color.Inherit" 
+                 Direction="Direction.Bottom" 
+                 OffsetY="true">
+            <div class="pa-4" style="min-width: 200px;">
+                <MudText Typo="Typo.body2" Class="mb-1">
+                    <strong>@currentUser</strong>
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Super Administrador
+                </MudText>
+            </div>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Person">
+                Mi Perfil
+            </MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Settings">
+                Configuración
+            </MudMenuItem>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" 
+                         OnClick="@HandleLogout">
+                Cerrar Sesión
+            </MudMenuItem>
         </MudMenu>
     </MudAppBar>
 
-    <!-- Drawer -->
-    <MudDrawer @bind-Open="_drawerOpen" 
-               ClipMode="DrawerClipMode.Always" 
-               Elevation="2"
-               Variant="@DrawerVariant.Mini">
-        <NavMenu />
-    </MudDrawer>
-
-    <!-- Main Content -->
-    <MudMainContent Class="pa-4">
-        <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+    <!-- Contenido Principal -->
+    <MudMainContent>
+        <div class="pa-4" style="min-height: calc(100vh - 64px);">
             @Body
-        </MudContainer>
+        </div>
     </MudMainContent>
 </MudLayout>
 
 @code {
-    private string currentUser = "Super Admin";
-    private bool _drawerOpen = true;
-    
-    private MudTheme customTheme = new()
-    {
-        PaletteLight = new PaletteLight()
-        {
-            Primary = "#1976d2",
-            Secondary = "#ff9800",
-            Success = "#4caf50",
-            Warning = "#ff9800",
-            Error = "#f44336",
-            Info = "#2196f3",
-            AppbarBackground = "#1976d2",
-        }
-    };
+    private bool drawerOpen = true;
+    private string currentUser = "admin@spheretimecontrol.com";
 
-    void DrawerToggle()
+    protected override async Task OnInitializedAsync()
     {
-        _drawerOpen = !_drawerOpen;
+        // Verificar autenticación
+        if (!await AuthService.IsAuthenticatedAsync())
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        // Cargar información del usuario
+        var userInfo = await AuthService.GetCurrentUserAsync();
+        if (userInfo != null)
+        {
+            currentUser = userInfo.Email ?? "Usuario";
+        }
     }
 
-    private void HandleLogout()
+    private void ToggleDrawer()
     {
-        NavigationManager.NavigateTo("/login");
+        drawerOpen = !drawerOpen;
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
     }
 }
