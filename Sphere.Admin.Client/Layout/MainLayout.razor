@@ -1,129 +1,165 @@
 ﻿@inherits LayoutComponentBase
-@inject NavigationManager Navigation
-@inject AuthenticationService AuthService
+@inject AuthService AuthService
+@inject IJSRuntime JSRuntime
+@implements IDisposable
 
-<MudThemeProvider />
+<MudThemeProvider Theme="@_theme" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <!-- Drawer de Navegación -->
-    <MudDrawer @bind-Open="@drawerOpen" 
-               ClipMode="DrawerClipMode.Always" 
-               Elevation="1"
-               Variant="DrawerVariant.Mini">
-        
-        <!-- Header del Drawer -->
-        <div class="pa-4 d-flex align-center">
-            @if (drawerOpen)
-            {
-                <MudIcon Icon="@Icons.Material.Filled.Public" 
-                         Color="Color.Primary" 
-                         Size="Size.Large" 
-                         Class="me-3" />
-                <div>
-                    <MudText Typo="Typo.h6" Color="Color.Primary">Sphere</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">Time Control</MudText>
-                </div>
-            }
-            else
-            {
-                <MudIcon Icon="@Icons.Material.Filled.Public" 
-                         Color="Color.Primary" 
-                         Size="Size.Large" />
-            }
-        </div>
+    @if (_isAuthenticated)
+    {
+        <!-- Sidebar Navigation -->
+        <MudDrawer @bind-Open="_drawerOpen" 
+                   ClipMode="DrawerClipMode.Always" 
+                   Elevation="2"
+                   Variant="@DrawerVariant.Mini" 
+                   OpenMiniOnHover="true">
+            <NavMenu />
+        </MudDrawer>
 
-        <MudDivider />
+        <!-- Top App Bar -->
+        <MudAppBar Elevation="1" Dense="true">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                         Color="Color.Inherit" 
+                         Edge="Edge.Start" 
+                         OnClick="@ToggleDrawer" />
+            
+            <MudText Typo="Typo.h6" Class="ml-3">Sphere Control Admin</MudText>
+            
+            <MudSpacer />
+            
+            <!-- User Menu -->
+            <MudMenu Icon="@Icons.Material.Filled.AccountCircle" 
+                     Color="Color.Inherit" 
+                     Direction="Origin.BottomLeft"
+                     OffsetX="true">
+                <MudMenuItem>
+                    <div class="d-flex flex-column">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @(_userInfo?.Email ?? "Admin")
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @(_userInfo?.FirstName) @(_userInfo?.LastName)
+                        </MudText>
+                    </div>
+                </MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.Person" OnClick="GoToProfile">
+                    Mi perfil
+                </MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Settings" OnClick="GoToSettings">
+                    Configuración
+                </MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" 
+                           OnClick="HandleLogout"
+                           Class="mud-error-text">
+                    Cerrar sesión
+                </MudMenuItem>
+            </MudMenu>
+        </MudAppBar>
 
-        <!-- Navegación -->
-        <NavMenu />
-        
-    </MudDrawer>
-
-    <!-- AppBar Superior -->
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" 
-                       Color="Color.Inherit" 
-                       Edge="Edge.Start" 
-                       OnClick="@ToggleDrawer" />
-        
-        <MudSpacer />
-        
-        <!-- Notificaciones -->
-        <MudBadge Content="3" 
-                  Color="Color.Error" 
-                  Overlap="true" 
-                  Class="me-3">
-            <MudIconButton Icon="@Icons.Material.Filled.Notifications" 
-                           Color="Color.Inherit" />
-        </MudBadge>
-
-        <!-- Información del Usuario -->
-        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" 
-                 Color="Color.Inherit" 
-                 Direction="Direction.Bottom" 
-                 OffsetY="true">
-            <div class="pa-4" style="min-width: 200px;">
-                <MudText Typo="Typo.body2" Class="mb-1">
-                    <strong>@currentUser</strong>
-                </MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    Super Administrador
-                </MudText>
-            </div>
-            <MudDivider />
-            <MudMenuItem Icon="@Icons.Material.Filled.Person">
-                Mi Perfil
-            </MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Settings">
-                Configuración
-            </MudMenuItem>
-            <MudDivider />
-            <MudMenuItem Icon="@Icons.Material.Filled.Logout" 
-                         OnClick="@HandleLogout">
-                Cerrar Sesión
-            </MudMenuItem>
-        </MudMenu>
-    </MudAppBar>
-
-    <!-- Contenido Principal -->
-    <MudMainContent>
-        <div class="pa-4" style="min-height: calc(100vh - 64px);">
+        <!-- Main Content -->
+        <MudMainContent Class="pt-16 px-4">
+            <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+                @Body
+            </MudContainer>
+        </MudMainContent>
+    }
+    else
+    {
+        <!-- Login Layout -->
+        <MudMainContent>
             @Body
-        </div>
-    </MudMainContent>
+        </MudMainContent>
+    }
 </MudLayout>
 
 @code {
-    private bool drawerOpen = true;
-    private string currentUser = "admin@spheretimecontrol.com";
+    private bool _drawerOpen = false;
+    private bool _isAuthenticated = false;
+    private UserInfo? _userInfo;
+
+    private readonly MudTheme _theme = new()
+    {
+        Palette = new PaletteLight()
+        {
+            Primary = "#1976d2",
+            Secondary = "#424242",
+            AppbarBackground = "#1976d2",
+            Background = "#f5f5f5",
+            DrawerBackground = "#ffffff",
+            DrawerText = "rgba(0,0,0, 0.87)",
+            Success = "#4caf50"
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#90caf9",
+            Secondary = "#ce93d8",
+            AppbarBackground = "#1976d2",
+            Background = "#121212",
+            DrawerBackground = "#1e1e1e",
+            DrawerText = "rgba(255,255,255, 0.87)"
+        }
+    };
 
     protected override async Task OnInitializedAsync()
     {
         // Verificar autenticación
-        if (!await AuthService.IsAuthenticatedAsync())
+        _isAuthenticated = await AuthService.IsAuthenticatedAsync();
+        
+        if (_isAuthenticated)
         {
-            Navigation.NavigateTo("/login");
-            return;
+            _userInfo = await AuthService.GetUserInfoAsync();
         }
 
-        // Cargar información del usuario
-        var userInfo = await AuthService.GetCurrentUserAsync();
-        if (userInfo != null)
+        // Suscribirse a cambios de estado de autenticación
+        AuthService.AuthStateChanged += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged(bool isAuthenticated)
+    {
+        _isAuthenticated = isAuthenticated;
+        
+        if (isAuthenticated)
         {
-            currentUser = userInfo.Email ?? "Usuario";
+            InvokeAsync(async () =>
+            {
+                _userInfo = await AuthService.GetUserInfoAsync();
+                StateHasChanged();
+            });
+        }
+        else
+        {
+            _userInfo = null;
+            StateHasChanged();
         }
     }
 
     private void ToggleDrawer()
     {
-        drawerOpen = !drawerOpen;
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void GoToProfile()
+    {
+        // TODO: Implementar página de perfil
+    }
+
+    private void GoToSettings()
+    {
+        // TODO: Implementar página de configuración
     }
 
     private async Task HandleLogout()
     {
         await AuthService.LogoutAsync();
-        Navigation.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        AuthService.AuthStateChanged -= OnAuthStateChanged;
     }
 }

@@ -1,0 +1,54 @@
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+@if (_isAuthenticated)
+{
+    @ChildContent
+}
+else if (_isChecking)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 100vh;">
+        <div class="text-center">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.h6" Class="mt-4">Verificando autenticación...</MudText>
+        </div>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _isAuthenticated = false;
+    private bool _isChecking = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isAuthenticated = await AuthService.IsAuthenticatedAsync();
+        _isChecking = false;
+
+        if (!_isAuthenticated)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+        }
+
+        // Suscribirse a cambios de autenticación
+        AuthService.AuthStateChanged += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged(bool isAuthenticated)
+    {
+        _isAuthenticated = isAuthenticated;
+        
+        if (!isAuthenticated)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+        }
+        
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        AuthService.AuthStateChanged -= OnAuthStateChanged;
+    }
+}

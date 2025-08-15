@@ -1,0 +1,448 @@
+@page "/tenants/edit/{tenantId:int}"
+@inject ApiService ApiService
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+
+<PageTitle>Editar @(_tenant?.Name ?? "Empresa") - Sphere Admin</PageTitle>
+
+@if (_isLoading)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 400px;">
+        <div class="text-center">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.h6" Class="mt-4">Cargando información de la empresa...</MudText>
+        </div>
+    </MudContainer>
+}
+else if (_tenant == null)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 400px;">
+        <MudCard Class="pa-8">
+            <MudCardContent Class="text-center">
+                <MudIcon Icon="@Icons.Material.Filled.Error" 
+                       Color="Color.Error" 
+                       Size="Size.Large" 
+                       Class="mb-4" />
+                <MudText Typo="Typo.h5" Class="mb-4">Empresa no encontrada</MudText>
+                <MudButton Variant="Variant.Filled" 
+                         Color="Color.Primary" 
+                         Href="/tenants"
+                         StartIcon="@Icons.Material.Filled.ArrowBack">
+                    Volver a la lista
+                </MudButton>
+            </MudCardContent>
+        </MudCard>
+    </MudContainer>
+}
+else
+{
+    <!-- Header -->
+    <MudContainer MaxWidth="MaxWidth.False" Class="mb-4">
+        <div class="d-flex align-center">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" 
+                         Color="Color.Primary" 
+                         Href="@($"/tenants/{TenantId}")"
+                         Class="mr-3" />
+            <MudAvatar Size="Size.Large" Color="Color.Primary" Class="mr-4">
+                @_tenant.Name.Substring(0, 1).ToUpper()
+            </MudAvatar>
+            <div>
+                <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                    Editar @_tenant.Name
+                </MudText>
+                <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">
+                    Modifica la información de la empresa
+                </MudText>
+            </div>
+        </div>
+    </MudContainer>
+
+    <!-- Form -->
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudCard Elevation="4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Información de la Empresa</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <EditForm Model="@_editModel" OnValidSubmit="@HandleUpdateTenant">
+                    <DataAnnotationsValidator />
+                    
+                    <MudGrid>
+                        <!-- Información Básica -->
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.h6" Class="mb-4 mud-text-primary">
+                                <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" />
+                                Información Básica
+                            </MudText>
+                        </MudItem>
+
+                        <!-- Código (Solo lectura) -->
+                        <MudItem xs="12" md="6">
+                            <MudTextField Value="@_tenant.Code"
+                                        Label="Código de Empresa"
+                                        Variant="Variant.Outlined"
+                                        ReadOnly="true"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Tag"
+                                        HelperText="El código no se puede modificar"
+                                        FullWidth="true" />
+                        </MudItem>
+
+                        <!-- Nombre de Empresa -->
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_editModel.Name"
+                                        For="@(() => _editModel.Name)"
+                                        Label="Nombre de la Empresa"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Business"
+                                        FullWidth="true"
+                                        Disabled="@_isSaving" />
+                        </MudItem>
+
+                        <!-- Email de Contacto -->
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_editModel.ContactEmail"
+                                        For="@(() => _editModel.ContactEmail)"
+                                        Label="Email de Contacto"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Email"
+                                        FullWidth="true"
+                                        Disabled="@_isSaving" />
+                        </MudItem>
+
+                        <!-- Teléfono de Contacto -->
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_editModel.ContactPhone"
+                                        For="@(() => _editModel.ContactPhone)"
+                                        Label="Teléfono de Contacto"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Phone"
+                                        FullWidth="true"
+                                        Disabled="@_isSaving" />
+                        </MudItem>
+
+                        <!-- Configuración de Licencia -->
+                        <MudItem xs="12" Class="mt-6">
+                            <MudText Typo="Typo.h6" Class="mb-4 mud-text-primary">
+                                <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Class="mr-2" />
+                                Configuración de Licencia
+                            </MudText>
+                        </MudItem>
+
+                        <!-- Tipo de Licencia -->
+                        <MudItem xs="12" md="6">
+                            <MudSelect @bind-Value="_editModel.LicenseType"
+                                     For="@(() => _editModel.LicenseType)"
+                                     Label="Tipo de Licencia"
+                                     Variant="Variant.Outlined"
+                                     AnchorOrigin="Origin.BottomCenter"
+                                     FullWidth="true"
+                                     Disabled="@_isSaving">
+                                <MudSelectItem Value="@("Trial")">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" Color="Color.Warning" />
+                                        Trial (30 días gratis)
+                                    </div>
+                                </MudSelectItem>
+                                <MudSelectItem Value="@("Basic")">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.Star" Class="mr-2" Color="Color.Info" />
+                                        Basic (€9.99/mes)
+                                    </div>
+                                </MudSelectItem>
+                                <MudSelectItem Value="@("Professional")">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.StarRate" Class="mr-2" Color="Color.Primary" />
+                                        Professional (€19.99/mes)
+                                    </div>
+                                </MudSelectItem>
+                                <MudSelectItem Value="@("Enterprise")">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.Diamond" Class="mr-2" Color="Color.Secondary" />
+                                        Enterprise (€39.99/mes)
+                                    </div>
+                                </MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+
+                        <!-- Máximo de Empleados -->
+                        <MudItem xs="12" md="6">
+                            <MudNumericField @bind-Value="_editModel.MaxEmployees"
+                                           For="@(() => _editModel.MaxEmployees)"
+                                           Label="Máximo de Empleados"
+                                           Variant="Variant.Outlined"
+                                           Min="1"
+                                           Max="10000"
+                                           Step="1"
+                                           Adornment="Adornment.Start"
+                                           AdornmentIcon="@Icons.Material.Filled.People"
+                                           HelperText="@GetEmployeeLimitHelperText()"
+                                           FullWidth="true"
+                                           Disabled="@_isSaving" />
+                        </MudItem>
+
+                        <!-- Estado -->
+                        <MudItem xs="12" md="6">
+                            <MudSwitch @bind-Checked="_editModel.Active"
+                                     For="@(() => _editModel.Active)"
+                                     Label="@(_editModel.Active ? "Empresa Activa" : "Empresa Inactiva")"
+                                     Color="@(_editModel.Active ? Color.Success : Color.Error)"
+                                     ThumbIcon="@(_editModel.Active ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)"
+                                     Disabled="@_isSaving" />
+                        </MudItem>
+
+                        <!-- License Info Card -->
+                        <MudItem xs="12" Class="mt-4">
+                            @if (!string.IsNullOrEmpty(_editModel.LicenseType))
+                            {
+                                <MudCard Elevation="2" Class="mud-theme-primary">
+                                    <MudCardContent>
+                                        <div class="d-flex align-center">
+                                            <MudIcon Icon="@GetLicenseIcon(_editModel.LicenseType)" 
+                                                   Color="@GetLicenseColor(_editModel.LicenseType)" 
+                                                   Class="mr-4" 
+                                                   Size="Size.Large" />
+                                            <div>
+                                                <MudText Typo="Typo.h6" Class="font-weight-bold">
+                                                    Plan @_editModel.LicenseType
+                                                </MudText>
+                                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                                    @GetLicenseDescription(_editModel.LicenseType)
+                                                </MudText>
+                                            </div>
+                                        </div>
+                                    </MudCardContent>
+                                </MudCard>
+                            }
+                        </MudItem>
+
+                        <!-- Información de Cambios -->
+                        @if (HasChanges())
+                        {
+                            <MudItem xs="12" Class="mt-4">
+                                <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.Info">
+                                    <MudText Typo="Typo.body2">
+                                        <strong>Cambios detectados:</strong> Los cambios se aplicarán inmediatamente al guardar.
+                                        @if (_editModel.LicenseType != _originalTenant?.LicenseType)
+                                        {
+                                            <br />• El cambio de plan de licencia puede afectar la facturación.
+                                        }
+                                        @if (_editModel.MaxEmployees != _originalTenant?.MaxEmployees)
+                                        {
+                                            <br />• El cambio en el límite de empleados se aplicará inmediatamente.
+                                        }
+                                    </MudText>
+                                </MudAlert>
+                            </MudItem>
+                        }
+
+                        <!-- Validation Summary -->
+                        <MudItem xs="12" Class="mt-4">
+                            <ValidationSummary />
+                        </MudItem>
+
+                        <!-- Actions -->
+                        <MudItem xs="12" Class="mt-6">
+                            <div class="d-flex justify-end gap-4">
+                                <MudButton Variant="Variant.Text" 
+                                         Href="@($"/tenants/{TenantId}")"
+                                         Disabled="@_isSaving">
+                                    Cancelar
+                                </MudButton>
+                                <MudButton ButtonType="ButtonType.Submit"
+                                         Variant="Variant.Filled"
+                                         Color="Color.Primary"
+                                         StartIcon="@Icons.Material.Filled.Save"
+                                         Disabled="@(_isSaving || !HasChanges())"
+                                         Size="Size.Large">
+                                    @if (_isSaving)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                        <span>Guardando...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Guardar Cambios</span>
+                                    }
+                                </MudButton>
+                            </div>
+                        </MudItem>
+                    </MudGrid>
+                </EditForm>
+            </MudCardContent>
+        </MudCard>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public int TenantId { get; set; }
+
+    private TenantDto? _tenant;
+    private TenantDto? _originalTenant;
+    private readonly EditTenantModel _editModel = new();
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTenant();
+    }
+
+    private async Task LoadTenant()
+    {
+        try
+        {
+            _isLoading = true;
+            _tenant = await ApiService.GetTenantAsync(TenantId);
+            
+            if (_tenant != null)
+            {
+                // Clonar para comparar cambios
+                _originalTenant = _tenant;
+                
+                // Mapear a modelo de edición
+                _editModel.Name = _tenant.Name;
+                _editModel.ContactEmail = _tenant.ContactEmail;
+                _editModel.ContactPhone = ""; // TODO: Agregar al DTO cuando esté disponible
+                _editModel.LicenseType = _tenant.LicenseType;
+                _editModel.MaxEmployees = _tenant.MaxEmployees;
+                _editModel.Active = _tenant.Active;
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Error cargando información de la empresa");
+            Console.WriteLine($"Error loading tenant: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task HandleUpdateTenant()
+    {
+        try
+        {
+            _isSaving = true;
+
+            var request = new UpdateTenantRequest(
+                _editModel.Name,
+                _editModel.ContactEmail,
+                _editModel.ContactPhone,
+                _editModel.LicenseType,
+                _editModel.MaxEmployees,
+                _editModel.Active
+            );
+
+            var success = await ApiService.UpdateTenantAsync(TenantId, request);
+            
+            if (success)
+            {
+                NotificationService.ShowSuccess($"Empresa '{_editModel.Name}' actualizada correctamente");
+                Navigation.NavigateTo($"/tenants/{TenantId}");
+            }
+            else
+            {
+                NotificationService.ShowError("Error al actualizar la empresa");
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Error al actualizar la empresa");
+            Console.WriteLine($"Error updating tenant: {ex.Message}");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private bool HasChanges()
+    {
+        if (_originalTenant == null) return false;
+
+        return _editModel.Name != _originalTenant.Name ||
+               _editModel.ContactEmail != _originalTenant.ContactEmail ||
+               _editModel.LicenseType != _originalTenant.LicenseType ||
+               _editModel.MaxEmployees != _originalTenant.MaxEmployees ||
+               _editModel.Active != _originalTenant.Active;
+    }
+
+    private string GetEmployeeLimitHelperText()
+    {
+        return _editModel.LicenseType switch
+        {
+            "Trial" => "Máximo 5 empleados para plan Trial",
+            "Basic" => "Máximo 25 empleados para plan Basic",
+            "Professional" => "Máximo 100 empleados para plan Professional",
+            "Enterprise" => "Sin límite para plan Enterprise",
+            _ => "Selecciona un tipo de licencia"
+        };
+    }
+
+    private string GetLicenseIcon(string licenseType)
+    {
+        return licenseType switch
+        {
+            "Trial" => Icons.Material.Filled.Schedule,
+            "Basic" => Icons.Material.Filled.Star,
+            "Professional" => Icons.Material.Filled.StarRate,
+            "Enterprise" => Icons.Material.Filled.Diamond,
+            _ => Icons.Material.Filled.Help
+        };
+    }
+
+    private Color GetLicenseColor(string licenseType)
+    {
+        return licenseType switch
+        {
+            "Trial" => Color.Warning,
+            "Basic" => Color.Info,
+            "Professional" => Color.Primary,
+            "Enterprise" => Color.Secondary,
+            _ => Color.Default
+        };
+    }
+
+    private string GetLicenseDescription(string licenseType)
+    {
+        return licenseType switch
+        {
+            "Trial" => "30 días gratis para probar todas las funciones. Máximo 5 empleados.",
+            "Basic" => "Plan básico con funciones esenciales. €9.99/mes, máximo 25 empleados.",
+            "Professional" => "Plan completo con funciones avanzadas. €19.99/mes, máximo 100 empleados.",
+            "Enterprise" => "Plan empresarial sin límites. €39.99/mes, empleados ilimitados.",
+            _ => "Selecciona un tipo de licencia para ver los detalles"
+        };
+    }
+
+    public class EditTenantModel
+    {
+        [Required(ErrorMessage = "El nombre de la empresa es requerido")]
+        [MinLength(2, ErrorMessage = "El nombre debe tener al menos 2 caracteres")]
+        [MaxLength(100, ErrorMessage = "El nombre no puede tener más de 100 caracteres")]
+        public string Name { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "El email de contacto es requerido")]
+        [EmailAddress(ErrorMessage = "Formato de email inválido")]
+        public string ContactEmail { get; set; } = string.Empty;
+
+        [Phone(ErrorMessage = "Formato de teléfono inválido")]
+        public string ContactPhone { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "El tipo de licencia es requerido")]
+        public string LicenseType { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "El máximo de empleados es requerido")]
+        [Range(1, 10000, ErrorMessage = "El número de empleados debe estar entre 1 y 10000")]
+        public int MaxEmployees { get; set; } = 5;
+
+        public bool Active { get; set; } = true;
+    }
+}

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
+using Blazored.LocalStorage;
 using Sphere.Admin.Client;
 using Sphere.Admin.Client.Services;
 
@@ -9,10 +10,10 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Configurar HttpClient para comunicación con la API
+// Configuración del HttpClient para la API
 builder.Services.AddScoped(sp => new HttpClient 
 { 
-    BaseAddress = new Uri("https://localhost:7051") // URL del Sphere.Admin.Server
+    BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.BaseAddress) 
 });
 
 // Servicios de MudBlazor
@@ -28,20 +29,12 @@ builder.Services.AddMudServices(config =>
     config.SnackbarConfiguration.SnackbarVariant = MudBlazor.Variant.Filled;
 });
 
+// LocalStorage para tokens y configuración
+builder.Services.AddBlazoredLocalStorage();
+
 // Servicios personalizados
 builder.Services.AddScoped<ApiService>();
-builder.Services.AddScoped<AuthenticationService>();
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<NotificationService>();
 
-// Configuración de logging
-builder.Logging.SetMinimumLevel(LogLevel.Information);
-
-var app = builder.Build();
-
-// Inicializar autenticación
-using (var scope = app.Services.CreateScope())
-{
-    var authService = scope.ServiceProvider.GetRequiredService<AuthenticationService>();
-    await authService.InitializeAsync();
-}
-
-await app.RunAsync();
+await builder.Build().RunAsync();

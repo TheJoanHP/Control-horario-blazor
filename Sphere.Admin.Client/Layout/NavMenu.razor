@@ -1,15 +1,31 @@
-﻿@using MudBlazor
+﻿@inject NavigationManager Navigation
 
 <MudNavMenu>
+    <div class="d-flex flex-column align-center py-4">
+        <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mb-2">
+            <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Size="Size.Large" />
+        </MudAvatar>
+        <MudText Typo="Typo.h6" Class="mud-text-primary font-weight-bold">
+            SPHERE
+        </MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            Control Admin
+        </MudText>
+    </div>
+
+    <MudDivider Class="my-3" />
+
+    <!-- Dashboard -->
     <MudNavLink Href="/" 
-                Match="NavLinkMatch.All" 
+                Match="NavLinkMatch.All"
                 Icon="@Icons.Material.Filled.Dashboard">
         Dashboard
     </MudNavLink>
-    
-    <MudNavGroup Text="Gestión de Tenants" 
-                 Icon="@Icons.Material.Filled.Business" 
-                 Expanded="true">
+
+    <!-- Tenants/Empresas -->
+    <MudNavGroup Text="Empresas" 
+                 Icon="@Icons.Material.Filled.Business"
+                 Expanded="@IsExpanded("tenants")">
         <MudNavLink Href="/tenants" 
                     Icon="@Icons.Material.Filled.List">
             Lista de Empresas
@@ -19,31 +35,81 @@
             Nueva Empresa
         </MudNavLink>
     </MudNavGroup>
-    
-    <MudNavLink Href="/licenses" 
-                Icon="@Icons.Material.Filled.Badge">
-        Licencias
-    </MudNavLink>
-    
-    <MudNavLink Href="/billing" 
-                Icon="@Icons.Material.Filled.Receipt">
-        Facturación
-    </MudNavLink>
-    
-    <MudNavLink Href="/analytics" 
-                Icon="@Icons.Material.Filled.Analytics">
-        Analíticas
-    </MudNavLink>
-    
+
+    <!-- Licencias -->
+    <MudNavGroup Text="Licencias" 
+                 Icon="@Icons.Material.Filled.VerifiedUser"
+                 Expanded="@IsExpanded("licenses")">
+        <MudNavLink Href="/licenses" 
+                    Icon="@Icons.Material.Filled.License">
+            Gestión Licencias
+        </MudNavLink>
+        <MudNavLink Href="/licenses/config" 
+                    Icon="@Icons.Material.Filled.Settings">
+            Configurar Planes
+        </MudNavLink>
+    </MudNavGroup>
+
+    <!-- Facturación -->
+    <MudNavGroup Text="Facturación" 
+                 Icon="@Icons.Material.Filled.Payment"
+                 Expanded="@IsExpanded("billing")">
+        <MudNavLink Href="/billing" 
+                    Icon="@Icons.Material.Filled.Dashboard">
+            Dashboard Facturación
+        </MudNavLink>
+        <MudNavLink Href="/billing/invoices" 
+                    Icon="@Icons.Material.Filled.Receipt">
+            Facturas
+        </MudNavLink>
+    </MudNavGroup>
+
+    <!-- Analytics -->
+    <MudNavGroup Text="Estadísticas" 
+                 Icon="@Icons.Material.Filled.Analytics"
+                 Expanded="@IsExpanded("analytics")">
+        <MudNavLink Href="/analytics" 
+                    Icon="@Icons.Material.Filled.BarChart">
+            Estadísticas Globales
+        </MudNavLink>
+        <MudNavLink Href="/analytics/usage" 
+                    Icon="@Icons.Material.Filled.TrendingUp">
+            Reportes de Uso
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudDivider Class="my-3" />
+
+    <!-- Sistema -->
     <MudNavGroup Text="Sistema" 
-                 Icon="@Icons.Material.Filled.Settings">
+                 Icon="@Icons.Material.Filled.Settings"
+                 Expanded="@IsExpanded("system")">
         <MudNavLink Href="/system/config" 
                     Icon="@Icons.Material.Filled.Tune">
             Configuración
         </MudNavLink>
-        <MudNavLink Href="/system/admins" 
-                    Icon="@Icons.Material.Filled.SupervisorAccount">
-            Administradores
+        <MudNavLink Href="/system/logs" 
+                    Icon="@Icons.Material.Filled.BugReport">
+            Logs del Sistema
         </MudNavLink>
     </MudNavGroup>
+
+    <!-- Ayuda -->
+    <MudNavLink Href="/help" 
+                Icon="@Icons.Material.Filled.Help">
+        Ayuda
+    </MudNavLink>
 </MudNavMenu>
+
+@code {
+    private string GetCurrentPath()
+    {
+        return Navigation.ToBaseRelativePath(Navigation.Uri);
+    }
+
+    private bool IsExpanded(string section)
+    {
+        var currentPath = GetCurrentPath();
+        return currentPath.StartsWith(section, StringComparison.OrdinalIgnoreCase);
+    }
+}

@@ -4,25 +4,29 @@
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
     <NotFound>
-        <PageTitle>No encontrado</PageTitle>
+        <PageTitle>Página no encontrada</PageTitle>
         <LayoutView Layout="@typeof(MainLayout)">
-            <div class="d-flex align-center justify-center" style="min-height: 50vh;">
-                <MudCard Class="pa-8 text-center">
-                    <MudIcon Icon="@Icons.Material.Filled.SearchOff" 
-                             Size="Size.Large" 
-                             Color="Color.Secondary" 
-                             Class="mb-4" 
-                             Style="font-size: 4rem;" />
-                    <MudText Typo="Typo.h4" Class="mb-2">Página no encontrada</MudText>
-                    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-4">
-                        La página que buscas no existe o ha sido movida.
-                    </MudText>
-                    <MudButton Variant="Variant.Filled" 
-                               Color="Color.Primary" 
-                               StartIcon="@Icons.Material.Filled.Home"
-                               Href="/">
-                        Volver al Dashboard
-                    </MudButton>
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100vh;">
+                <MudCard Class="pa-8">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudIcon Icon="Icons.Material.Filled.Error" 
+                                   Color="Color.Error" 
+                                   Style="font-size: 3rem; margin-right: 16px;" />
+                            <MudText Typo="Typo.h4">Página no encontrada</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.body1" Class="mb-4">
+                            La página que estás buscando no existe.
+                        </MudText>
+                        <MudButton Variant="Variant.Filled" 
+                                 Color="Color.Primary" 
+                                 Href="/"
+                                 StartIcon="@Icons.Material.Filled.Home">
+                            Ir al inicio
+                        </MudButton>
+                    </MudCardContent>
                 </MudCard>
             </div>
         </LayoutView>
