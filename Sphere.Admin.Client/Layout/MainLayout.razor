@@ -1,76 +1,63 @@
-﻿@inherits LayoutComponentBase
-@inject AuthService AuthService
+﻿@using Shared.Models.DTOs.Auth
+@inherits LayoutComponentBase
 @inject IJSRuntime JSRuntime
+@inject AuthService AuthService
 @implements IDisposable
 
-<MudThemeProvider Theme="@_theme" />
+<MudThemeProvider @ref="@_mudThemeProvider" Theme="_theme" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
     @if (_isAuthenticated)
     {
-        <!-- Sidebar Navigation -->
+        <!-- Drawer/Sidebar -->
         <MudDrawer @bind-Open="_drawerOpen" 
-                   ClipMode="DrawerClipMode.Always" 
-                   Elevation="2"
-                   Variant="@DrawerVariant.Mini" 
-                   OpenMiniOnHover="true">
+                   Elevation="2" 
+                   Width="280px" 
+                   ClipMode="DrawerClipMode.Always">
             <NavMenu />
         </MudDrawer>
 
-        <!-- Top App Bar -->
-        <MudAppBar Elevation="1" Dense="true">
+        <!-- AppBar -->
+        <MudAppBar Elevation="4" Color="Color.Primary">
             <MudIconButton Icon="@Icons.Material.Filled.Menu" 
                          Color="Color.Inherit" 
                          Edge="Edge.Start" 
                          OnClick="@ToggleDrawer" />
             
-            <MudText Typo="Typo.h6" Class="ml-3">Sphere Control Admin</MudText>
-            
             <MudSpacer />
             
-            <!-- User Menu -->
             <MudMenu Icon="@Icons.Material.Filled.AccountCircle" 
-                     Color="Color.Inherit" 
-                     Direction="Origin.BottomLeft"
-                     OffsetX="true">
-                <MudMenuItem>
-                    <div class="d-flex flex-column">
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                            @(_userInfo?.Email ?? "Admin")
-                        </MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            @(_userInfo?.FirstName) @(_userInfo?.LastName)
-                        </MudText>
+                     Color="Color.Inherit">
+                <ChildContent>
+                    <div class="px-4 py-2">
+                        <MudText Typo="Typo.subtitle2">@(_userInfo?.DisplayName ?? "Usuario")</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@_userInfo?.Email</MudText>
                     </div>
-                </MudMenuItem>
-                <MudDivider />
-                <MudMenuItem Icon="@Icons.Material.Filled.Person" OnClick="GoToProfile">
-                    Mi perfil
-                </MudMenuItem>
-                <MudMenuItem Icon="@Icons.Material.Filled.Settings" OnClick="GoToSettings">
-                    Configuración
-                </MudMenuItem>
-                <MudDivider />
-                <MudMenuItem Icon="@Icons.Material.Filled.Logout" 
-                           OnClick="HandleLogout"
-                           Class="mud-error-text">
-                    Cerrar sesión
-                </MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem OnClick="GoToProfile" Icon="@Icons.Material.Filled.Person">
+                        Mi Perfil
+                    </MudMenuItem>
+                    <MudMenuItem OnClick="GoToSettings" Icon="@Icons.Material.Filled.Settings">
+                        Configuración
+                    </MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem OnClick="HandleLogout" Icon="@Icons.Material.Filled.Logout">
+                        Cerrar Sesión
+                    </MudMenuItem>
+                </ChildContent>
             </MudMenu>
         </MudAppBar>
 
         <!-- Main Content -->
-        <MudMainContent Class="pt-16 px-4">
-            <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
-                @Body
-            </MudContainer>
+        <MudMainContent Class="pa-4">
+            @Body
         </MudMainContent>
     }
     else
     {
-        <!-- Login Layout -->
+        <!-- Layout para páginas sin autenticación -->
         <MudMainContent>
             @Body
         </MudMainContent>
@@ -78,13 +65,14 @@
 </MudLayout>
 
 @code {
-    private bool _drawerOpen = false;
+    private MudThemeProvider? _mudThemeProvider;
+    private bool _drawerOpen = true;
     private bool _isAuthenticated = false;
     private UserInfo? _userInfo;
 
-    private readonly MudTheme _theme = new()
+    private readonly MudTheme _theme = new MudTheme()
     {
-        Palette = new PaletteLight()
+        PaletteLight = new PaletteLight()
         {
             Primary = "#1976d2",
             Secondary = "#424242",
@@ -107,7 +95,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Verificar autenticación
         _isAuthenticated = await AuthService.IsAuthenticatedAsync();
         
         if (_isAuthenticated)
@@ -115,7 +102,6 @@
             _userInfo = await AuthService.GetUserInfoAsync();
         }
 
-        // Suscribirse a cambios de estado de autenticación
         AuthService.AuthStateChanged += OnAuthStateChanged;
     }
 

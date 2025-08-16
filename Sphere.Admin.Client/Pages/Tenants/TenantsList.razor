@@ -39,7 +39,7 @@
                                 Adornment="Adornment.End"
                                 AdornmentIcon="@Icons.Material.Filled.Search"
                                 OnAdornmentClick="SearchTenants"
-                                OnKeyPress="@(async (e) => { if (e.Key == "Enter") await SearchTenants(); })"
+                                @onkeypress="@(async (e) => await HandleKeyPress(e))"
                                 FullWidth="true" />
                 </MudItem>
                 <MudItem xs="12" md="3">
@@ -106,7 +106,8 @@
             }
             else if (_filteredTenants?.Any() == true)
             {
-                <MudTable Items="@_filteredTenants" 
+                <MudTable T="TenantDto" 
+                        Items="@_filteredTenants" 
                         Hover="true" 
                         Breakpoint="Breakpoint.Sm"
                         Dense="true"
@@ -114,28 +115,28 @@
                         Height="600px">
                     <HeaderContent>
                         <MudTh>
-                            <MudTableSortLabel SortBy="new Func<TenantDto, object>(x => x.Name)">
+                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.Name))">
                                 Empresa
                             </MudTableSortLabel>
                         </MudTh>
                         <MudTh>
-                            <MudTableSortLabel SortBy="new Func<TenantDto, object>(x => x.ContactEmail)">
+                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.ContactEmail))">
                                 Email
                             </MudTableSortLabel>
                         </MudTh>
                         <MudTh>
-                            <MudTableSortLabel SortBy="new Func<TenantDto, object>(x => x.LicenseType)">
+                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.LicenseType))">
                                 Licencia
                             </MudTableSortLabel>
                         </MudTh>
                         <MudTh>Empleados</MudTh>
                         <MudTh>
-                            <MudTableSortLabel SortBy="new Func<TenantDto, object>(x => x.Active)">
+                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.Active))">
                                 Estado
                             </MudTableSortLabel>
                         </MudTh>
                         <MudTh>
-                            <MudTableSortLabel SortBy="new Func<TenantDto, object>(x => x.CreatedAt)">
+                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.CreatedAt))">
                                 Fecha Registro
                             </MudTableSortLabel>
                         </MudTh>
@@ -265,10 +266,18 @@
         }
     }
 
-    private Task SearchTenants()
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchTenants();
+        }
+    }
+
+    private async Task SearchTenants()
     {
         ApplyFilters();
-        return Task.CompletedTask;
+        await Task.CompletedTask;
     }
 
     private void ApplyFilters()
@@ -402,6 +411,7 @@
         {
             // TODO: Implementar exportación a CSV/Excel
             NotificationService.ShowInfo("Función de exportación en desarrollo");
+            await Task.CompletedTask;
         }
         catch (Exception ex)
         {

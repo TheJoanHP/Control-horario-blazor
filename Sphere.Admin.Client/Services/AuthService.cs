@@ -1,5 +1,6 @@
 using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
+using Shared.Models.DTOs.Auth;
 using static Sphere.Admin.Client.Services.ApiService;
 
 namespace Sphere.Admin.Client.Services
@@ -36,12 +37,17 @@ namespace Sphere.Admin.Client.Services
                 {
                     // Guardar token y info del usuario
                     await _localStorage.SetItemAsync(TOKEN_KEY, response.Token);
-                    await _localStorage.SetItemAsync(USER_KEY, new UserInfo(
-                        response.Email,
-                        response.FirstName,
-                        response.LastName,
-                        response.ExpiresAt
-                    ));
+                    
+                    // Crear UserInfo desde la respuesta
+                    var userInfo = new UserInfo
+                    {
+                        Email = response.Email,
+                        FirstName = response.FirstName,
+                        LastName = response.LastName,
+                        Active = true
+                    };
+                    
+                    await _localStorage.SetItemAsync(USER_KEY, userInfo);
 
                     // Configurar header de autorización
                     _apiService.SetAuthorizationHeader(response.Token);
@@ -61,45 +67,6 @@ namespace Sphere.Admin.Client.Services
             }
         }
 
-        public async Task<bool> IsAuthenticatedAsync()
-        {
-            try
-            {
-                var token = await _localStorage.GetItemAsync<string>(TOKEN_KEY);
-                var userInfo = await _localStorage.GetItemAsync<UserInfo>(USER_KEY);
-
-                if (string.IsNullOrEmpty(token) || userInfo == null)
-                    return false;
-
-                // Verificar si el token ha expirado
-                if (DateTime.UtcNow >= userInfo.ExpiresAt)
-                {
-                    await LogoutAsync();
-                    return false;
-                }
-
-                // Configurar header de autorización
-                _apiService.SetAuthorizationHeader(token);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public async Task<UserInfo?> GetUserInfoAsync()
-        {
-            try
-            {
-                return await _localStorage.GetItemAsync<UserInfo>(USER_KEY);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
         public async Task LogoutAsync()
         {
             try
@@ -114,12 +81,47 @@ namespace Sphere.Admin.Client.Services
                 // Notificar cambio de estado
                 AuthStateChanged?.Invoke(false);
 
-                // Navegar al login
-                _navigation.NavigateTo("/login", forceLoad: true);
+                // Redirigir al login
+                _navigation.NavigateTo("/login", replace: true);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error en logout: {ex.Message}");
+            }
+        }
+
+        public async Task<bool> IsAuthenticatedAsync()
+        {
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>(TOKEN_KEY);
+                
+                if (string.IsNullOrEmpty(token))
+                    return false;
+
+                // Configurar header si hay token válido
+                _apiService.SetAuthorizationHeader(token);
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error verificando autenticación: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<UserInfo?> GetUserInfoAsync()
+        {
+            try
+            {
+                var userInfo = await _localStorage.GetItemAsync<UserInfo>(USER_KEY);
+                return userInfo;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error obteniendo info del usuario: {ex.Message}");
+                return null;
             }
         }
 
@@ -129,17 +131,13 @@ namespace Sphere.Admin.Client.Services
             {
                 return await _localStorage.GetItemAsync<string>(TOKEN_KEY);
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error obteniendo token: {ex.Message}");
                 return null;
             }
         }
     }
 
-    public record UserInfo(
-        string Email,
-        string FirstName,
-        string LastName,
-        DateTime ExpiresAt
-    );
+    // CLASE UserInfo ELIMINADA - Ahora usa Shared.Models.DTOs.Auth.UserInfo
 }

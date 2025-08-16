@@ -1,0 +1,484 @@
+@page "/tenants/{TenantId:int}"
+@inject ApiService ApiService
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+
+<PageTitle>@(_tenant?.Name ?? "Empresa") - Sphere Admin</PageTitle>
+
+@if (_isLoading)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 50vh;">
+        <div class="text-center">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.h6" Class="mt-4">Cargando información de la empresa...</MudText>
+        </div>
+    </MudContainer>
+}
+else if (_tenant == null)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="text-center py-8">
+        <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Size="Size.Large" Color="Color.Error" />
+        <MudText Typo="Typo.h5" Class="mt-4">Empresa no encontrada</MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary mb-4">
+            La empresa solicitada no existe o no tienes permisos para verla.
+        </MudText>
+        <MudButton Variant="Variant.Filled" 
+                 Color="Color.Primary" 
+                 StartIcon="@Icons.Material.Filled.ArrowBack"
+                 Href="/tenants">
+            Volver a Empresas
+        </MudButton>
+    </MudContainer>
+}
+else
+{
+    <!-- Header de la empresa -->
+    <MudContainer MaxWidth="MaxWidth.False" Class="mb-6">
+        <div class="d-flex justify-space-between align-center flex-wrap">
+            <div class="d-flex align-center gap-4">
+                <MudButton Variant="Variant.Text" 
+                         Color="Color.Primary" 
+                         StartIcon="@Icons.Material.Filled.ArrowBack"
+                         Href="/tenants">
+                    Volver
+                </MudButton>
+                <div>
+                    <MudText Typo="Typo.h3" Class="mud-text-primary font-weight-bold">
+                        @_tenant.Name
+                    </MudText>
+                    <div class="d-flex align-center gap-2 mt-2">
+                        <MudChip T="string" Size="Size.Small" 
+                               Color="@(_tenant.Active ? Color.Success : Color.Error)">
+                            @(_tenant.Active ? "Activa" : "Inactiva")
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" 
+                               Color="@GetLicenseColor(_tenant.LicenseType)">
+                            @_tenant.LicenseType
+                        </MudChip>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Código: @_tenant.Code
+                        </MudText>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <MudButton Variant="Variant.Outlined" 
+                         Color="Color.Primary" 
+                         StartIcon="@Icons.Material.Filled.Edit"
+                         Href="@($"/tenants/edit/{TenantId}")">
+                    Editar
+                </MudButton>
+                <MudButton Variant="Variant.Filled" 
+                         Color="@(_tenant.Active ? Color.Error : Color.Success)"
+                         StartIcon="@(_tenant.Active ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                         OnClick="ToggleTenantStatus">
+                    @(_tenant.Active ? "Desactivar" : "Activar")
+                </MudButton>
+            </div>
+        </div>
+    </MudContainer>
+
+    <!-- Tabs -->
+    <MudContainer MaxWidth="MaxWidth.False">
+        <MudTabs Elevation="4" Rounded="true" Centered="true" Color="Color.Primary">
+            
+            <!-- Tab: Información General -->
+            <MudTabPanel Text="Información General" Icon="@Icons.Material.Filled.Info">
+                <MudGrid Class="mt-4">
+                    <!-- Información Básica -->
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="2" Class="full-height">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">
+                                        <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" />
+                                        Información Básica
+                                    </MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <div class="d-flex flex-column gap-3">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Nombre</MudText>
+                                        <MudText Typo="Typo.body1" Class="font-weight-bold">@_tenant.Name</MudText>
+                                    </div>
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Código</MudText>
+                                        <MudText Typo="Typo.body1" Class="font-weight-bold">@_tenant.Code</MudText>
+                                    </div>
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Email de Contacto</MudText>
+                                        <MudText Typo="Typo.body1">
+                                            <MudLink Href="@($"mailto:{_tenant.ContactEmail}")">
+                                                @_tenant.ContactEmail
+                                            </MudLink>
+                                        </MudText>
+                                    </div>
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Estado</MudText>
+                                        <MudChip T="string" Size="Size.Small" 
+                                               Color="@(_tenant.Active ? Color.Success : Color.Error)">
+                                            @(_tenant.Active ? "Activa" : "Inactiva")
+                                        </MudChip>
+                                    </div>
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Fecha de Creación</MudText>
+                                        <MudText Typo="Typo.body1">@_tenant.CreatedAt.ToString("dd/MM/yyyy HH:mm")</MudText>
+                                    </div>
+                                </div>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <!-- Información de Licencia -->
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="2" Class="full-height">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">
+                                        <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Class="mr-2" />
+                                        Licencia y Uso
+                                    </MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <div class="d-flex flex-column gap-3">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Tipo de Licencia</MudText>
+                                        <MudChip T="string" Size="Size.Medium" 
+                                               Color="@GetLicenseColor(_tenant.LicenseType)"
+                                               Icon="@GetLicenseIcon(_tenant.LicenseType)">
+                                            @_tenant.LicenseType
+                                        </MudChip>
+                                    </div>
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Límite de Empleados</MudText>
+                                        <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                            @(_tenant.MaxEmployees == int.MaxValue ? "Ilimitado" : _tenant.MaxEmployees.ToString())
+                                        </MudText>
+                                    </div>
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Uso Actual</MudText>
+                                        <div class="d-flex align-center gap-2">
+                                            <MudProgressLinear Color="@GetUsageColor()" 
+                                                             Value="@GetEmployeeUsagePercentage()" 
+                                                             Min="0" 
+                                                             Max="100" 
+                                                             Size="Size.Medium"
+                                                             Class="flex-grow-1" />
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                @(GetEmployeeUsagePercentage().ToString("F1"))%
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                    @if (_tenant.ExpiresAt.HasValue)
+                                    {
+                                        <div>
+                                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Vencimiento</MudText>
+                                            <MudText Typo="Typo.body1" Class="@GetExpirationTextColor()">
+                                                @_tenant.ExpiresAt.Value.ToString("dd/MM/yyyy")
+                                            </MudText>
+                                        </div>
+                                    }
+                                </div>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+
+            <!-- Tab: Estadísticas -->
+            <MudTabPanel Text="Estadísticas" Icon="@Icons.Material.Filled.Analytics">
+                <MudGrid Class="mt-4">
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info">
+                            <MudText>Las estadísticas detalladas estarán disponibles cuando se implemente la funcionalidad de empleados.</MudText>
+                        </MudAlert>
+                    </MudItem>
+                    
+                    <!-- Placeholder para estadísticas futuras -->
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudCard Elevation="2" Class="pa-4">
+                            <MudCardContent Class="text-center">
+                                <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Class="mt-2">0</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Empleados Activos</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudCard Elevation="2" Class="pa-4">
+                            <MudCardContent Class="text-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Large" Color="Color.Info" />
+                                <MudText Typo="Typo.h6" Class="mt-2">0</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Fichajes Hoy</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudCard Elevation="2" Class="pa-4">
+                            <MudCardContent Class="text-center">
+                                <MudIcon Icon="@Icons.Material.Filled.AccessTime" Size="Size.Large" Color="Color.Warning" />
+                                <MudText Typo="Typo.h6" Class="mt-2">0h</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Horas Trabajadas</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudCard Elevation="2" Class="pa-4">
+                            <MudCardContent Class="text-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Celebration" Size="Size.Large" Color="Color.Success" />
+                                <MudText Typo="Typo.h6" Class="mt-2">0</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Vacaciones Pendientes</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+
+            <!-- Tab: Configuración -->
+            <MudTabPanel Text="Configuración" Icon="@Icons.Material.Filled.Settings">
+                <MudGrid Class="mt-4">
+                    <MudItem xs="12">
+                        <MudCard Elevation="2">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">
+                                        <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" />
+                                        Acciones de Administración
+                                    </MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudGrid>
+                                    <MudItem xs="12" md="6">
+                                        <MudButton Variant="Variant.Outlined" 
+                                                 Color="Color.Primary" 
+                                                 FullWidth="true"
+                                                 StartIcon="@Icons.Material.Filled.Edit"
+                                                 Href="@($"/tenants/edit/{TenantId}")">
+                                            Editar Información
+                                        </MudButton>
+                                    </MudItem>
+
+                                    <MudItem xs="12" md="6">
+                                        <MudButton Variant="Variant.Outlined" 
+                                                 Color="Color.Warning" 
+                                                 FullWidth="true"
+                                                 StartIcon="@Icons.Material.Filled.Backup"
+                                                 OnClick="CreateBackup">
+                                            Crear Backup
+                                        </MudButton>
+                                    </MudItem>
+
+                                    <MudItem xs="12" md="6">
+                                        <MudButton Variant="Variant.Outlined" 
+                                                 Color="@(_tenant.Active ? Color.Error : Color.Success)"
+                                                 FullWidth="true"
+                                                 StartIcon="@(_tenant.Active ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                                                 OnClick="ToggleTenantStatus">
+                                            @(_tenant.Active ? "Desactivar Empresa" : "Activar Empresa")
+                                        </MudButton>
+                                    </MudItem>
+
+                                    <MudItem xs="12" md="6">
+                                        <MudButton Variant="Variant.Filled" 
+                                                 Color="Color.Error" 
+                                                 FullWidth="true"
+                                                 StartIcon="@Icons.Material.Filled.Delete"
+                                                 OnClick="DeleteTenant">
+                                            Eliminar Empresa
+                                        </MudButton>
+                                    </MudItem>
+                                </MudGrid>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+        </MudTabs>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public int TenantId { get; set; }
+
+    private TenantDto? _tenant;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTenant();
+    }
+
+    private async Task LoadTenant()
+    {
+        try
+        {
+            _isLoading = true;
+            _tenant = await ApiService.GetTenantAsync(TenantId);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Error cargando información de la empresa");
+            Console.WriteLine($"Error loading tenant: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ToggleTenantStatus()
+    {
+        if (_tenant == null) return;
+
+        var action = _tenant.Active ? "desactivar" : "activar";
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirmar acción",
+            $"¿Estás seguro de que quieres {action} la empresa '{_tenant.Name}'?",
+            yesText: "Sí", cancelText: "Cancelar");
+
+        if (confirm == true)
+        {
+            try
+            {
+                var updateRequest = new UpdateTenantRequest(
+                    _tenant.Name,
+                    _tenant.ContactEmail,
+                    "", // ContactPhone
+                    _tenant.LicenseType,
+                    _tenant.MaxEmployees,
+                    !_tenant.Active
+                );
+
+                var success = await ApiService.UpdateTenantAsync(_tenant.Id, updateRequest);
+                if (success)
+                {
+                    NotificationService.ShowSuccess($"Empresa {action}da correctamente");
+                    await LoadTenant();
+                }
+                else
+                {
+                    NotificationService.ShowError($"Error al {action} la empresa");
+                }
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowError($"Error al {action} la empresa");
+                Console.WriteLine($"Error toggling tenant status: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task DeleteTenant()
+    {
+        if (_tenant == null) return;
+
+        var confirm = await DialogService.ShowMessageBox(
+            "⚠️ Eliminar empresa",
+            $"¿Estás seguro de que quieres eliminar la empresa '{_tenant.Name}'?\n\nEsta acción:\n• Eliminará todos los datos de la empresa\n• No se puede deshacer\n• Afectará a todos los empleados\n\nEscribe 'ELIMINAR' para confirmar:",
+            yesText: "Eliminar definitivamente", cancelText: "Cancelar");
+
+        if (confirm == true)
+        {
+            try
+            {
+                var success = await ApiService.DeleteTenantAsync(_tenant.Id);
+                if (success)
+                {
+                    NotificationService.ShowSuccess("Empresa eliminada correctamente");
+                    Navigation.NavigateTo("/tenants");
+                }
+                else
+                {
+                    NotificationService.ShowError("Error al eliminar la empresa");
+                }
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowError("Error al eliminar la empresa");
+                Console.WriteLine($"Error deleting tenant: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task CreateBackup()
+    {
+        if (_tenant == null) return;
+        
+        try
+        {
+            NotificationService.ShowInfo("Creando backup de la empresa...");
+            // TODO: Implementar funcionalidad de backup
+            await Task.Delay(2000); // Simular proceso
+            NotificationService.ShowSuccess("Backup creado correctamente");
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Error al crear el backup");
+            Console.WriteLine($"Error creating backup: {ex.Message}");
+        }
+    }
+
+    private double GetEmployeeUsagePercentage()
+    {
+        if (_tenant == null || _tenant.MaxEmployees == 0) return 0;
+        // TODO: Obtener el número real de empleados
+        var currentEmployees = 0;
+        return Math.Min((double)currentEmployees / _tenant.MaxEmployees * 100, 100);
+    }
+
+    private Color GetUsageColor()
+    {
+        var percentage = GetEmployeeUsagePercentage();
+        return percentage switch
+        {
+            >= 90 => Color.Error,
+            >= 75 => Color.Warning,
+            _ => Color.Success
+        };
+    }
+
+    private string GetExpirationTextColor()
+    {
+        if (!_tenant?.ExpiresAt.HasValue == true) return "font-weight-bold";
+        
+        var daysUntilExpiration = (_tenant.ExpiresAt.Value - DateTime.Now).Days;
+        return daysUntilExpiration switch
+        {
+            < 0 => "mud-text-error font-weight-bold",
+            < 7 => "mud-text-warning font-weight-bold",
+            < 30 => "mud-text-info font-weight-bold",
+            _ => "font-weight-bold"
+        };
+    }
+
+    private Color GetLicenseColor(string licenseType)
+    {
+        return licenseType?.ToLower() switch
+        {
+            "trial" => Color.Warning,
+            "basic" => Color.Info,
+            "professional" => Color.Primary,
+            "enterprise" => Color.Secondary,
+            _ => Color.Default
+        };
+    }
+
+    private string GetLicenseIcon(string licenseType)
+    {
+        return licenseType?.ToLower() switch
+        {
+            "trial" => Icons.Material.Filled.Schedule,
+            "basic" => Icons.Material.Filled.Star,
+            "professional" => Icons.Material.Filled.StarRate,
+            "enterprise" => Icons.Material.Filled.Diamond,
+            _ => Icons.Material.Filled.Help
+        };
+    }
+}

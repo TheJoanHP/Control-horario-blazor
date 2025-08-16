@@ -1,4 +1,4 @@
-@page "/tenants/edit/{tenantId:int}"
+@page "/tenants/edit/{TenantId:int}"
 @inject ApiService ApiService
 @inject NotificationService NotificationService
 @inject NavigationManager Navigation
@@ -188,7 +188,7 @@ else
 
                         <!-- Estado -->
                         <MudItem xs="12" md="6">
-                            <MudSwitch @bind-Checked="_editModel.Active"
+                            <MudSwitch @bind-Value="_editModel.Active"
                                      For="@(() => _editModel.Active)"
                                      Label="@(_editModel.Active ? "Empresa Activa" : "Empresa Inactiva")"
                                      Color="@(_editModel.Active ? Color.Success : Color.Error)"
@@ -230,11 +230,11 @@ else
                                         <strong>Cambios detectados:</strong> Los cambios se aplicarán inmediatamente al guardar.
                                         @if (_editModel.LicenseType != _originalTenant?.LicenseType)
                                         {
-                                            <br />• El cambio de plan de licencia puede afectar la facturación.
+                                            @:El cambio de plan de licencia puede afectar la facturación.
                                         }
                                         @if (_editModel.MaxEmployees != _originalTenant?.MaxEmployees)
                                         {
-                                            <br />• El cambio en el límite de empleados se aplicará inmediatamente.
+                                            @:El cambio en el límite de empleados se aplicará inmediatamente.
                                         }
                                     </MudText>
                                 </MudAlert>

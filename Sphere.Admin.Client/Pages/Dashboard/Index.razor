@@ -1,4 +1,5 @@
 @page "/"
+@using Shared.Models.DTOs.Auth
 @inject ApiService ApiService
 @inject NotificationService NotificationService
 @inject AuthService AuthService
@@ -9,384 +10,207 @@
 <!-- Verificar autenticación -->
 @if (!_isAuthenticated)
 {
-    @{
-        Navigation.NavigateTo("/login", replace: true);
-        return;
-    }
-}
-
-<!-- Header del Dashboard -->
-<MudContainer MaxWidth="MaxWidth.False" Class="mb-6">
-    <MudGrid>
-        <MudItem xs="12">
-            <div class="d-flex justify-space-between align-center">
-                <div>
-                    <MudText Typo="Typo.h3" Class="mud-text-primary font-weight-bold">
-                        Dashboard
-                    </MudText>
-                    <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">
-                        Bienvenido, @(_userInfo?.FirstName ?? "Admin"). Panel de control principal de Sphere.
-                    </MudText>
-                </div>
-                <MudButton Variant="Variant.Filled" 
-                         Color="Color.Primary" 
-                         StartIcon="@Icons.Material.Filled.Refresh"
-                         OnClick="@LoadDashboardData"
-                         Disabled="@_isLoading">
-                    Actualizar
-                </MudButton>
-            </div>
-        </MudItem>
-    </MudGrid>
-</MudContainer>
-
-@if (_isLoading)
-{
-    <!-- Loading State -->
-    <MudContainer MaxWidth="MaxWidth.False">
-        <MudGrid>
-            <MudItem xs="12" Class="text-center py-8">
-                <MudProgressCircular Size="Size.Large" Indeterminate="true" />
-                <MudText Typo="Typo.h6" Class="mt-4">Cargando datos del dashboard...</MudText>
-            </MudItem>
-        </MudGrid>
+    <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 100vh;">
+        <div class="text-center">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.h6" Class="mt-4">Redirigiendo al login...</MudText>
+        </div>
     </MudContainer>
+    
+    <script>
+        window.location.href = '/login';
+    </script>
 }
 else
 {
-    <!-- Statistics Cards -->
+    <!-- Header del Dashboard -->
     <MudContainer MaxWidth="MaxWidth.False" Class="mb-6">
         <MudGrid>
-            <!-- Total Tenants -->
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent Class="pb-2">
-                        <div class="d-flex justify-space-between align-center">
-                            <div>
-                                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
-                                    Total Empresas
-                                </MudText>
-                                <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-primary">
-                                    @(_dashboardStats?.TotalTenants ?? 0)
-                                </MudText>
-                            </div>
-                            <MudAvatar Color="Color.Primary" Size="Size.Large">
-                                <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Medium" />
-                            </MudAvatar>
-                        </div>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-
-            <!-- Active Tenants -->
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent Class="pb-2">
-                        <div class="d-flex justify-space-between align-center">
-                            <div>
-                                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
-                                    Empresas Activas
-                                </MudText>
-                                <MudText Typo="Typo.h4" Class="font-weight-bold" Style="color: #4caf50;">
-                                    @(_dashboardStats?.ActiveTenants ?? 0)
-                                </MudText>
-                            </div>
-                            <MudAvatar Color="Color.Success" Size="Size.Large">
-                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Medium" />
-                            </MudAvatar>
-                        </div>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-
-            <!-- Total Users -->
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent Class="pb-2">
-                        <div class="d-flex justify-space-between align-center">
-                            <div>
-                                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
-                                    Total Usuarios
-                                </MudText>
-                                <MudText Typo="Typo.h4" Class="font-weight-bold" Style="color: #ff9800;">
-                                    @(_dashboardStats?.TotalUsers ?? 0)
-                                </MudText>
-                            </div>
-                            <MudAvatar Color="Color.Warning" Size="Size.Large">
-                                <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Medium" />
-                            </MudAvatar>
-                        </div>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-
-            <!-- Monthly Revenue -->
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent Class="pb-2">
-                        <div class="d-flex justify-space-between align-center">
-                            <div>
-                                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
-                                    Ingresos Mensuales
-                                </MudText>
-                                <MudText Typo="Typo.h4" Class="font-weight-bold" Style="color: #9c27b0;">
-                                    €@(_dashboardStats?.MonthlyRevenue.ToString("N0") ?? "0")
-                                </MudText>
-                            </div>
-                            <MudAvatar Color="Color.Secondary" Size="Size.Large">
-                                <MudIcon Icon="@Icons.Material.Filled.EuroSymbol" Size="Size.Medium" />
-                            </MudAvatar>
-                        </div>
-                    </MudCardContent>
-                </MudCard>
+            <MudItem xs="12">
+                <div class="d-flex justify-space-between align-center">
+                    <div>
+                        <MudText Typo="Typo.h3" Class="mud-text-primary font-weight-bold">
+                            Dashboard
+                        </MudText>
+                        <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">
+                            Bienvenido, @(_userInfo?.FirstName ?? "Admin"). Panel de control principal de Sphere.
+                        </MudText>
+                    </div>
+                    <MudButton Variant="Variant.Filled" 
+                             Color="Color.Primary" 
+                             StartIcon="@Icons.Material.Filled.Refresh"
+                             OnClick="@LoadDashboardData"
+                             Disabled="@_isLoading">
+                        Actualizar
+                    </MudButton>
+                </div>
             </MudItem>
         </MudGrid>
     </MudContainer>
 
-    <!-- Quick Actions -->
-    <MudContainer MaxWidth="MaxWidth.False" Class="mb-6">
-        <MudCard Elevation="4">
-            <MudCardHeader>
-                <CardHeaderContent>
-                    <MudText Typo="Typo.h6">Acciones Rápidas</MudText>
-                </CardHeaderContent>
-            </MudCardHeader>
-            <MudCardContent>
-                <MudGrid>
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudButton Variant="Variant.Outlined" 
-                                 Color="Color.Primary" 
-                                 FullWidth="true"
-                                 StartIcon="@Icons.Material.Filled.Add"
-                                 Href="/tenants/create"
-                                 Class="pa-4">
-                            <div class="d-flex flex-column align-center">
-                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
-                                    Nueva Empresa
-                                </MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                    Registrar nueva empresa
-                                </MudText>
+    @if (_isLoading)
+    {
+        <!-- Loading State -->
+        <MudContainer MaxWidth="MaxWidth.False">
+            <MudGrid>
+                <MudItem xs="12" Class="text-center py-8">
+                    <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+                    <MudText Typo="Typo.h6" Class="mt-4">Cargando datos del dashboard...</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
+    }
+    else
+    {
+        <!-- Statistics Cards -->
+        <MudContainer MaxWidth="MaxWidth.False" Class="mb-6">
+            <MudGrid>
+                <!-- Total Tenants -->
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent Class="pb-2">
+                            <div class="d-flex justify-space-between align-center">
+                                <div>
+                                    <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                                        Total Empresas
+                                    </MudText>
+                                    <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-primary">
+                                        @(_dashboardStats?.TotalTenants ?? 0)
+                                    </MudText>
+                                </div>
+                                <MudAvatar Color="Color.Primary" Size="Size.Large">
+                                    <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Medium" />
+                                </MudAvatar>
                             </div>
-                        </MudButton>
-                    </MudItem>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
 
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudButton Variant="Variant.Outlined" 
-                                 Color="Color.Success" 
-                                 FullWidth="true"
-                                 StartIcon="@Icons.Material.Filled.Business"
-                                 Href="/tenants"
-                                 Class="pa-4">
-                            <div class="d-flex flex-column align-center">
-                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
-                                    Gestionar Empresas
-                                </MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                    Ver todas las empresas
-                                </MudText>
+                <!-- Active Tenants -->
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent Class="pb-2">
+                            <div class="d-flex justify-space-between align-center">
+                                <div>
+                                    <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                                        Empresas Activas
+                                    </MudText>
+                                    <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-success">
+                                        @(_dashboardStats?.ActiveTenants ?? 0)
+                                    </MudText>
+                                </div>
+                                <MudAvatar Color="Color.Success" Size="Size.Large">
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Medium" />
+                                </MudAvatar>
                             </div>
-                        </MudButton>
-                    </MudItem>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
 
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudButton Variant="Variant.Outlined" 
-                                 Color="Color.Warning" 
-                                 FullWidth="true"
-                                 StartIcon="@Icons.Material.Filled.Analytics"
-                                 Href="/analytics"
-                                 Class="pa-4">
-                            <div class="d-flex flex-column align-center">
-                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
-                                    Ver Estadísticas
-                                </MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                    Análisis detallado
-                                </MudText>
+                <!-- Total Users -->
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent Class="pb-2">
+                            <div class="d-flex justify-space-between align-center">
+                                <div>
+                                    <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                                        Total Usuarios
+                                    </MudText>
+                                    <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-info">
+                                        @(_dashboardStats?.TotalUsers ?? 0)
+                                    </MudText>
+                                </div>
+                                <MudAvatar Color="Color.Warning" Size="Size.Large">
+                                    <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Medium" />
+                                </MudAvatar>
                             </div>
-                        </MudButton>
-                    </MudItem>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
 
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudButton Variant="Variant.Outlined" 
-                                 Color="Color.Secondary" 
-                                 FullWidth="true"
-                                 StartIcon="@Icons.Material.Filled.Settings"
-                                 Href="/system/config"
-                                 Class="pa-4">
-                            <div class="d-flex flex-column align-center">
-                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
-                                    Configuración
-                                </MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                    Ajustes del sistema
-                                </MudText>
+                <!-- Monthly Revenue -->
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent Class="pb-2">
+                            <div class="d-flex justify-space-between align-center">
+                                <div>
+                                    <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                                        Ingresos Mensuales
+                                    </MudText>
+                                    <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-secondary">
+                                        €@(_dashboardStats?.MonthlyRevenue.ToString("F2") ?? "0.00")
+                                    </MudText>
+                                </div>
+                                <MudAvatar Color="Color.Secondary" Size="Size.Large">
+                                    <MudIcon Icon="@Icons.Material.Filled.Euro" Size="Size.Medium" />
+                                </MudAvatar>
                             </div>
-                        </MudButton>
-                    </MudItem>
-                </MudGrid>
-            </MudCardContent>
-        </MudCard>
-    </MudContainer>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
 
-    <!-- Recent Activity & System Status -->
-    <MudContainer MaxWidth="MaxWidth.False">
-        <MudGrid>
-            <!-- Recent Tenants -->
-            <MudItem xs="12" md="8">
-                <MudCard Elevation="4" Class="full-height">
+        <!-- Recent Tenants -->
+        @if (_recentTenants?.Any() == true)
+        {
+            <MudContainer MaxWidth="MaxWidth.False">
+                <MudCard Elevation="4">
                     <MudCardHeader>
                         <CardHeaderContent>
-                            <MudText Typo="Typo.h6">Empresas Recientes</MudText>
+                            <MudText Typo="Typo.h6">
+                                <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
+                                Empresas Recientes
+                            </MudText>
                         </CardHeaderContent>
                         <CardHeaderActions>
-                            <MudIconButton Icon="@Icons.Material.Filled.MoreVert" 
-                                         Color="Color.Default" />
+                            <MudButton Variant="Variant.Text" 
+                                     Color="Color.Primary" 
+                                     Href="/tenants"
+                                     EndIcon="@Icons.Material.Filled.ArrowForward">
+                                Ver Todas
+                            </MudButton>
                         </CardHeaderActions>
                     </MudCardHeader>
                     <MudCardContent>
-                        @if (_recentTenants?.Any() == true)
-                        {
-                            <MudSimpleTable Elevation="0" Hover="true">
-                                <thead>
-                                    <tr>
-                                        <th>Empresa</th>
-                                        <th>Email</th>
-                                        <th>Licencia</th>
-                                        <th>Estado</th>
-                                        <th>Fecha Registro</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var tenant in _recentTenants.Take(5))
-                                    {
-                                        <tr style="cursor: pointer;" @onclick="() => NavigateToTenant(tenant.Id)">
-                                            <td>
-                                                <div class="d-flex align-center">
-                                                    <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-3">
-                                                        @tenant.Name.Substring(0, 1).ToUpper()
-                                                    </MudAvatar>
-                                                    <div>
-                                                        <MudText Typo="Typo.body2" Class="font-weight-bold">
-                                                            @tenant.Name
-                                                        </MudText>
-                                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                                            @tenant.Code
-                                                        </MudText>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>@tenant.ContactEmail</td>
-                                            <td>
-                                                <MudChip T="string" Size="Size.Small" 
-                                                       Color="@GetLicenseColor(tenant.LicenseType)">
-                                                    @tenant.LicenseType
-                                                </MudChip>
-                                            </td>
-                                            <td>
-                                                <MudChip T="string" Size="Size.Small" 
-                                                       Color="@(tenant.Active ? Color.Success : Color.Error)">
-                                                    @(tenant.Active ? "Activa" : "Inactiva")
-                                                </MudChip>
-                                            </td>
-                                            <td>@tenant.CreatedAt.ToString("dd/MM/yyyy")</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </MudSimpleTable>
-                        }
-                        else
-                        {
-                            <div class="text-center py-8">
-                                <MudIcon Icon="@Icons.Material.Filled.Business" 
-                                       Size="Size.Large" 
-                                       Class="mud-text-secondary mb-4" />
-                                <MudText Typo="Typo.body1" Class="mud-text-secondary">
-                                    No hay empresas registradas aún
-                                </MudText>
-                            </div>
-                        }
+                        <MudList T="string">
+                            @foreach (var tenant in _recentTenants.Take(5))
+                            {
+                                <MudListItem T="string" 
+                                           Text="@tenant.Name" 
+                                           SecondaryText="@($"Creada: {tenant.CreatedAt:dd/MM/yyyy}")"
+                                           Icon="@Icons.Material.Filled.Business"
+                                           OnClick="@(() => NavigateToTenant(tenant.Id))">
+                                    <NestedList>
+                                        <div class="d-flex gap-2">
+                                            <MudChip T="string" Size="Size.Small" 
+                                                   Color="@(tenant.Active ? Color.Success : Color.Error)">
+                                                @(tenant.Active ? "Activa" : "Inactiva")
+                                            </MudChip>
+                                            <MudChip T="string" Size="Size.Small" 
+                                                   Color="@GetLicenseColor(tenant.LicenseType)">
+                                                @tenant.LicenseType
+                                            </MudChip>
+                                        </div>
+                                    </NestedList>
+                                </MudListItem>
+                                @if (tenant != _recentTenants.Last())
+                                {
+                                    <MudDivider />
+                                }
+                            }
+                        </MudList>
                     </MudCardContent>
                 </MudCard>
-            </MudItem>
-
-            <!-- System Status -->
-            <MudItem xs="12" md="4">
-                <MudCard Elevation="4" Class="full-height">
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.h6">Estado del Sistema</MudText>
-                        </CardHeaderContent>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        <div class="d-flex flex-column gap-4">
-                            <!-- API Status -->
-                            <div class="d-flex justify-space-between align-center">
-                                <div class="d-flex align-center">
-                                    <MudIcon Icon="@Icons.Material.Filled.Cloud" 
-                                           Color="Color.Success" 
-                                           Class="mr-3" />
-                                    <MudText Typo="Typo.body2">API</MudText>
-                                </div>
-                                <MudChip Size="Size.Small" Color="Color.Success">Online</MudChip>
-                            </div>
-
-                            <!-- Database Status -->
-                            <div class="d-flex justify-space-between align-center">
-                                <div class="d-flex align-center">
-                                    <MudIcon Icon="@Icons.Material.Filled.Storage" 
-                                           Color="Color.Success" 
-                                           Class="mr-3" />
-                                    <MudText Typo="Typo.body2">Base de Datos</MudText>
-                                </div>
-                                <MudChip Size="Size.Small" Color="Color.Success">Conectada</MudChip>
-                            </div>
-
-                            <!-- License Status -->
-                            <div class="d-flex justify-space-between align-center">
-                                <div class="d-flex align-center">
-                                    <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" 
-                                           Color="Color.Info" 
-                                           Class="mr-3" />
-                                    <MudText Typo="Typo.body2">Licencias</MudText>
-                                </div>
-                                <MudChip Size="Size.Small" Color="Color.Info">Válidas</MudChip>
-                            </div>
-
-                            <MudDivider />
-
-                            <!-- Quick Stats -->
-                            <div>
-                                <MudText Typo="Typo.subtitle2" Class="mb-2">Resumen Rápido</MudText>
-                                <div class="d-flex justify-space-between mb-2">
-                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                        Empresas en prueba
-                                    </MudText>
-                                    <MudText Typo="Typo.body2" Class="font-weight-bold">
-                                        @(_dashboardStats?.TrialTenants ?? 0)
-                                    </MudText>
-                                </div>
-                                <div class="d-flex justify-space-between">
-                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                        Último backup
-                                    </MudText>
-                                    <MudText Typo="Typo.body2" Class="font-weight-bold">
-                                        Hoy
-                                    </MudText>
-                                </div>
-                            </div>
-                        </div>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-        </MudGrid>
-    </MudContainer>
+            </MudContainer>
+        }
+    }
 }
 
 @code {
     private bool _isAuthenticated = false;
     private bool _isLoading = true;
-    private UserInfo? _userInfo;
+    private Shared.Models.DTOs.Auth.UserInfo? _userInfo;
     private DashboardStats? _dashboardStats;
     private List<TenantDto>? _recentTenants;
 

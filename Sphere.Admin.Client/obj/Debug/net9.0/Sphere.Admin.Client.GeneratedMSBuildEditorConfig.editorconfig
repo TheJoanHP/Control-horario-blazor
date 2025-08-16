@@ -59,10 +59,6 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVGVuYW50c1xFZGl0VGVuYW50LnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Tenants/TenantDetails.razor]
-build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVGVuYW50c1xUZW5hbnREZXRhaWxzLnJhem9y
-build_metadata.AdditionalFiles.CssScope = 
-
 [C:/Users/Joan-PC/Desktop/Programacion/control-horario-app/control-horario-blazor/SphereTimeControl/Sphere.Admin.Client/Pages/Tenants/TenantsList.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVGVuYW50c1xUZW5hbnRzTGlzdC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
