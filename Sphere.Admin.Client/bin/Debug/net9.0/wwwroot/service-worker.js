@@ -1,4 +1,4 @@
-/* Manifest version: LzWROcDi */
+/* Manifest version: hs5Bnj4n */
 // Service Worker para Sphere Admin PWA
 const CACHE_NAME = 'sphere-admin-v1.0.0';
 const STATIC_CACHE_URLS = [

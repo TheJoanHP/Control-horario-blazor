@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Sphere.Admin.Server.Migrations
 {
     /// <inheritdoc />
-    public partial class AddLicensesTable : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -72,10 +72,10 @@ namespace Sphere.Admin.Server.Migrations
                     TaxId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
                     Website = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     LogoUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    Active = table.Column<bool>(type: "boolean", nullable: false),
                     LicenseType = table.Column<int>(type: "integer", nullable: false),
                     MaxEmployees = table.Column<int>(type: "integer", nullable: false),
-                    MonthlyPrice = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    MonthlyPrice = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 0.00m),
                     Currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     TrialStartedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     TrialEndedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -122,14 +122,10 @@ namespace Sphere.Admin.Server.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Licenses_Active",
-                table: "Licenses",
-                column: "Active");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Licenses_TenantId",
                 table: "Licenses",
-                column: "TenantId");
+                column: "TenantId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_SphereAdmins_Email",

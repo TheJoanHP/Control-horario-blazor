@@ -12,8 +12,8 @@ using Sphere.Admin.Server.Data;
 namespace Sphere.Admin.Server.Migrations
 {
     [DbContext(typeof(SphereDbContext))]
-    [Migration("20250816115726_AddLicensesTable")]
-    partial class AddLicensesTable
+    [Migration("20250816122602_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -89,9 +89,8 @@ namespace Sphere.Admin.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Active");
-
-                    b.HasIndex("TenantId");
+                    b.HasIndex("TenantId")
+                        .IsUnique();
 
                     b.ToTable("Licenses", (string)null);
                 });
@@ -207,9 +206,7 @@ namespace Sphere.Admin.Server.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<bool>("Active")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Address")
                         .HasMaxLength(500)
@@ -271,7 +268,9 @@ namespace Sphere.Admin.Server.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("MonthlyPrice")
-                        .HasColumnType("decimal(10,2)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(10,2)")
+                        .HasDefaultValue(0.00m);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -320,11 +319,18 @@ namespace Sphere.Admin.Server.Migrations
 
             modelBuilder.Entity("Shared.Models.Core.License", b =>
                 {
-                    b.HasOne("Shared.Models.Core.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
+                    b.HasOne("Shared.Models.Core.Tenant", "Tenant")
+                        .WithOne("License")
+                        .HasForeignKey("Shared.Models.Core.License", "TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Shared.Models.Core.Tenant", b =>
+                {
+                    b.Navigation("License");
                 });
 #pragma warning restore 612, 618
         }
