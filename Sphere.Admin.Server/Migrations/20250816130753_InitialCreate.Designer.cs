@@ -12,7 +12,7 @@ using Sphere.Admin.Server.Data;
 namespace Sphere.Admin.Server.Migrations
 {
     [DbContext(typeof(SphereDbContext))]
-    [Migration("20250816122602_InitialCreate")]
+    [Migration("20250816130753_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

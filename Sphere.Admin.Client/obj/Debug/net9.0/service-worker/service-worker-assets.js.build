@@ -1,5 +1,5 @@
 self.assetsManifest = {
-  "version": "hs5Bnj4n",
+  "version": "y2eyn3YW",
   "assets": [
     {
       "hash": "sha256-YKJlO7zICu/0RvpMuakayf0RzP9pRQ/i2moEnRUD2JQ=",
@@ -170,20 +170,20 @@ self.assetsManifest = {
       "url": "_framework/MudBlazor.eiyoirc8xd.wasm"
     },
     {
-      "hash": "sha256-y1ibKwaDH1/4xJWJz/CxDm3MqDMkwPb4LvSdqHxtJGc=",
-      "url": "_framework/Shared.Models.9bakey22nd.wasm"
+      "hash": "sha256-HDhSMmAV5c4w1DKqk53KQ0QWdEeVEb7bcxil9pAeshw=",
+      "url": "_framework/Shared.Models.o5153gsvwa.pdb"
     },
     {
-      "hash": "sha256-RzMP+M0lHnn8roeoAkAUVgt66/sf65C8ck99JFiLevE=",
-      "url": "_framework/Shared.Models.llnp5lnm3i.pdb"
+      "hash": "sha256-4L1bkI7REioLhakI9TpEohlx697vcYdz8CyzNcw2wa0=",
+      "url": "_framework/Shared.Models.ww01bi5xsh.wasm"
     },
     {
-      "hash": "sha256-8KvvVpWotmei1aFYkwZCCiN9f8GqZ4p+sMq02rlAz+k=",
-      "url": "_framework/Sphere.Admin.Client.s5kgmpnp4l.pdb"
+      "hash": "sha256-SGT7OArIeYt6LO1vUcsdm3VEkZQU3fuM6s5PSkyzF8Q=",
+      "url": "_framework/Sphere.Admin.Client.0i460qixle.wasm"
     },
     {
-      "hash": "sha256-Hwsa78FJxTO85AFOrijxAUVxP4VMskmFMq/kFSZqFnM=",
-      "url": "_framework/Sphere.Admin.Client.x43ozbc496.wasm"
+      "hash": "sha256-0Fk2ckjHdRUoz3oY3vSIyzyqKL+yoV4iULwWA+ppLfs=",
+      "url": "_framework/Sphere.Admin.Client.wkeg46lg8j.pdb"
     },
     {
       "hash": "sha256-pVYXVmD3yiBwzyz9nJsDKcDn+qq4r72Hf4g0ddi6dec=",
@@ -834,7 +834,7 @@ self.assetsManifest = {
       "url": "_framework/WindowsBase.pg3o6xzigg.wasm"
     },
     {
-      "hash": "sha256-wofnVwO+PwzjCIO1LkzaTqz11qKxvaCBrVxGc2LmMmI=",
+      "hash": "sha256-s1XX/8CrqORHh5TL2ZJUaOT6AZfQCedzZUHhgT6aPYk=",
       "url": "_framework/blazor.boot.json"
     },
     {
