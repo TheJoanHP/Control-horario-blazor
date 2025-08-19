@@ -70,15 +70,33 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowSphereClients", policy =>
     {
         policy.WithOrigins(
-                "https://localhost:7001",
+                // Puertos del SERVER
+                "https://localhost:7051",
+                "http://localhost:5110",
+                
+                // Puertos del CLIENT
+                "https://localhost:7001", 
                 "http://localhost:5001",
-                "https://localhost:7156",  // Puerto del cliente Blazor
+                
+                // Puertos adicionales de desarrollo
+                "https://localhost:7156",
                 "http://localhost:5156"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
     });
+    
+    // Política más permisiva para desarrollo
+    if (builder.Environment.IsDevelopment())
+    {
+        options.AddPolicy("DevelopmentCors", policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+    }
 });
 
 // Configuración de Entity Framework
@@ -160,10 +178,17 @@ if (app.Environment.IsDevelopment())
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Sphere Admin API v1");
         c.RoutePrefix = "swagger";
     });
+    
+    // Usar política permisiva en desarrollo
+    app.UseCors("DevelopmentCors");
+}
+else
+{
+    // Usar política restrictiva en producción
+    app.UseCors("AllowSphereClients");
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowSphereClients");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

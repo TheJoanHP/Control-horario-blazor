@@ -1,0 +1,65 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex align-center mb-4">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" 
+                     Color="@Color" 
+                     Size="Size.Large" 
+                     Class="mr-3" />
+            <MudText Typo="Typo.h6">@Title</MudText>
+        </div>
+        
+        <MudText Typo="Typo.body1" Class="mb-4">
+            @ContentText
+        </MudText>
+        
+        @if (!string.IsNullOrEmpty(DetailText))
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-4">
+                @DetailText
+            </MudAlert>
+        }
+    </DialogContent>
+    
+    <DialogActions>
+        <MudButton OnClick="Cancel" 
+                   Variant="Variant.Text" 
+                   Color="Color.Default">
+            Cancelar
+        </MudButton>
+        
+        <MudButton OnClick="Submit" 
+                   Variant="Variant.Filled" 
+                   Color="@Color"
+                   StartIcon="@ButtonIcon">
+            @ButtonText
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    public IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] 
+    public string Title { get; set; } = "Confirmar Acción";
+
+    [Parameter] 
+    public string ContentText { get; set; } = string.Empty;
+
+    [Parameter] 
+    public string DetailText { get; set; } = string.Empty;
+
+    [Parameter] 
+    public string ButtonText { get; set; } = "Confirmar";
+
+    [Parameter] 
+    public string ButtonIcon { get; set; } = Icons.Material.Filled.Check;
+
+    [Parameter] 
+    public Color Color { get; set; } = Color.Primary;
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(true));
+    private void Cancel() => MudDialog.Cancel();
+}

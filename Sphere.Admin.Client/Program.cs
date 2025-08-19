@@ -27,14 +27,31 @@ builder.Services.AddMudServices(config =>
     config.SnackbarConfiguration.HideTransitionDuration = 500;
     config.SnackbarConfiguration.ShowTransitionDuration = 500;
     config.SnackbarConfiguration.SnackbarVariant = MudBlazor.Variant.Filled;
+    config.SnackbarConfiguration.MaxDisplayedSnackbars = 5;
 });
 
 // LocalStorage para tokens y configuración
-builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddBlazoredLocalStorage(config =>
+{
+    config.JsonSerializerOptions.DictionaryKeyPolicy = null;
+    config.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+    config.JsonSerializerOptions.IgnoreReadOnlyProperties = false;
+    config.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+});
 
 // Servicios personalizados
 builder.Services.AddScoped<ApiService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<NotificationService>();
 
-await builder.Build().RunAsync();
+// Configuración de logging
+builder.Logging.SetMinimumLevel(LogLevel.Information);
+
+var app = builder.Build();
+
+// Configurar cultura por defecto
+var culture = new System.Globalization.CultureInfo("es-ES");
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = culture;
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = culture;
+
+await app.RunAsync();

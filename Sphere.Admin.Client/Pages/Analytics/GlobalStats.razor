@@ -1,0 +1,542 @@
+@page "/analytics"
+@inject ApiService ApiService
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+
+<PageTitle>Estadísticas Globales - Sphere Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="py-4">
+    
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                Estadísticas Globales
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Análisis completo del rendimiento del sistema
+            </MudText>
+        </div>
+        
+        <MudButtonGroup Variant="Variant.Filled">
+            <MudButton Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.BarChart"
+                       OnClick="@(() => Navigation.NavigateTo("/analytics/usage"))">
+                Reportes de Uso
+            </MudButton>
+            <MudButton Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.FileDownload"
+                       OnClick="ExportReport">
+                Exportar Reporte
+            </MudButton>
+        </MudButtonGroup>
+    </div>
+
+    <!-- Selector de período -->
+    <MudCard Class="mb-6">
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" md="3">
+                    <MudSelect @bind-Value="_selectedPeriod"
+                               Label="Período de análisis"
+                               Variant="Variant.Outlined"
+                               T="string">
+                        <MudSelectItem Value="@("last_7_days")">Últimos 7 días</MudSelectItem>
+                        <MudSelectItem Value="@("last_30_days")">Últimos 30 días</MudSelectItem>
+                        <MudSelectItem Value="@("last_3_months")">Últimos 3 meses</MudSelectItem>
+                        <MudSelectItem Value="@("last_6_months")">Últimos 6 meses</MudSelectItem>
+                        <MudSelectItem Value="@("last_12_months")">Último año</MudSelectItem>
+                        <MudSelectItem Value="@("current_year")">Año actual</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudDateRangePicker @bind-DateRange="_customDateRange"
+                                        Label="Período personalizado"
+                                        Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               OnClick="LoadAnalytics">
+                        Actualizar
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- KPIs principales -->
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-primary">
+                                @_kpis.TotalUsers
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Total Usuarios
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="@(_kpis.UserGrowth >= 0 ? "mud-success-text" : "mud-error-text")">
+                                @(_kpis.UserGrowth >= 0 ? "+" : "")@_kpis.UserGrowth.ToString("F1")% vs período anterior
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Primary" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Group" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-success">
+                                @_kpis.ActiveCompanies
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Empresas Activas
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="@(_kpis.CompanyGrowth >= 0 ? "mud-success-text" : "mud-error-text")">
+                                @(_kpis.CompanyGrowth >= 0 ? "+" : "")@_kpis.CompanyGrowth.ToString("F1")% vs período anterior
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Success" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Business" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-info">
+                                @_kpis.TotalRevenue.ToString("C")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Ingresos Totales
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="@(_kpis.RevenueGrowth >= 0 ? "mud-success-text" : "mud-error-text")">
+                                @(_kpis.RevenueGrowth >= 0 ? "+" : "")@_kpis.RevenueGrowth.ToString("F1")% vs período anterior
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Info" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.AttachMoney" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-warning">
+                                @_kpis.TotalTimeRecords.ToString("N0")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Registros de Tiempo
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="@(_kpis.RecordsGrowth >= 0 ? "mud-success-text" : "mud-error-text")">
+                                @(_kpis.RecordsGrowth >= 0 ? "+" : "")@_kpis.RecordsGrowth.ToString("F1")% vs período anterior
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Warning" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.AccessTime" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <!-- Gráfico de crecimiento -->
+        <MudItem xs="12" md="8">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Crecimiento del Sistema</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <div style="height: 400px; display: flex; align-items: center; justify-content: center;">
+                        <div class="text-center">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Large" Class="mud-text-secondary mb-2" />
+                            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                                Gráfico de Crecimiento (Chart.js)
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Empresas, usuarios e ingresos a lo largo del tiempo
+                            </MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Distribución por planes -->
+        <MudItem xs="12" md="4">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Distribución por Planes</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @foreach (var plan in _planDistribution)
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex justify-space-between align-center mb-1">
+                                <MudText Typo="Typo.body2">@plan.PlanName</MudText>
+                                <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                    @plan.Count (@plan.Percentage.ToString("F1")%)
+                                </MudText>
+                            </div>
+                            <MudProgressLinear Value="@plan.Percentage" 
+                                               Color="@plan.Color" 
+                                               Size="Size.Small" />
+                        </div>
+                    }
+                    
+                    <MudDivider Class="my-3" />
+                    
+                    <div class="text-center">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            @_planDistribution.Sum(p => p.Count)
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Total Suscripciones Activas
+                        </MudText>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Métricas de uso -->
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Métricas de Uso</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="6">
+                            <div class="text-center pa-3">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold mud-primary-text">
+                                    @_usageMetrics.DailyActiveUsers
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    Usuarios Activos Diarios
+                                </MudText>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <div class="text-center pa-3">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold mud-success-text">
+                                    @_usageMetrics.WeeklyActiveUsers
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    Usuarios Activos Semanales
+                                </MudText>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <div class="text-center pa-3">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold mud-info-text">
+                                    @_usageMetrics.AverageSessionDuration.ToString("F1")min
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    Duración Promedio Sesión
+                                </MudText>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <div class="text-center pa-3">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold mud-warning-text">
+                                    @_usageMetrics.BounceRate.ToString("F1")%
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    Tasa de Rebote
+                                </MudText>
+                            </div>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Top empresas por actividad -->
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Top Empresas por Actividad</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_topActiveCompanies?.Any() == true)
+                    {
+                        @foreach (var company in _topActiveCompanies.Take(5))
+                        {
+                            <div class="d-flex justify-space-between align-center mb-3">
+                                <div class="d-flex align-center">
+                                    <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-3">
+                                        @(company.Name.Length > 0 ? company.Name.Substring(0, 1).ToUpper() : "?")
+                                    </MudAvatar>
+                                    <div>
+                                        <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                            @company.Name
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @company.EmployeeCount empleados
+                                        </MudText>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                        @company.DailyRecords
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        registros/día
+                                    </MudText>
+                                </div>
+                            </div>
+                        }
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Resumen financiero -->
+        <MudItem xs="12">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Resumen Financiero</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" sm="6" md="3">
+                            <div class="text-center pa-3">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold mud-success-text">
+                                    @_financialSummary.ARR.ToString("C")
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    ARR (Ingresos Anuales Recurrentes)
+                                </MudText>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <div class="text-center pa-3">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold mud-primary-text">
+                                    @_financialSummary.MRR.ToString("C")
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    MRR (Ingresos Mensuales Recurrentes)
+                                </MudText>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <div class="text-center pa-3">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold mud-info-text">
+                                    @_financialSummary.ARPU.ToString("C")
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    ARPU (Ingreso Promedio por Usuario)
+                                </MudText>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <div class="text-center pa-3">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold mud-warning-text">
+                                    @_financialSummary.ChurnRate.ToString("F1")%
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    Tasa de Cancelación
+                                </MudText>
+                            </div>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private string _selectedPeriod = "last_30_days";
+    private DateRange? _customDateRange;
+    
+    private GlobalKPIs _kpis = new();
+    private UsageMetrics _usageMetrics = new();
+    private FinancialSummary _financialSummary = new();
+    private List<PlanDistribution>? _planDistribution;
+    private List<TopActiveCompany>? _topActiveCompanies;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnalytics();
+    }
+
+    private async Task LoadAnalytics()
+    {
+        try
+        {
+            // TODO: Implementar llamadas a la API
+            await LoadKPIs();
+            await LoadUsageMetrics();
+            await LoadFinancialSummary();
+            await LoadPlanDistribution();
+            await LoadTopActiveCompanies();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al cargar estadísticas: {ex.Message}");
+        }
+    }
+
+    private async Task LoadKPIs()
+    {
+        await Task.Delay(500);
+        
+        _kpis = new GlobalKPIs
+        {
+            TotalUsers = 1847,
+            UserGrowth = 15.3,
+            ActiveCompanies = 42,
+            CompanyGrowth = 8.7,
+            TotalRevenue = 187450.50m,
+            RevenueGrowth = 23.1,
+            TotalTimeRecords = 98750,
+            RecordsGrowth = 12.5
+        };
+    }
+
+    private async Task LoadUsageMetrics()
+    {
+        await Task.Delay(300);
+        
+        _usageMetrics = new UsageMetrics
+        {
+            DailyActiveUsers = 1205,
+            WeeklyActiveUsers = 1650,
+            AverageSessionDuration = 24.5,
+            BounceRate = 8.2
+        };
+    }
+
+    private async Task LoadFinancialSummary()
+    {
+        await Task.Delay(400);
+        
+        _financialSummary = new FinancialSummary
+        {
+            ARR = 2249406.00m,
+            MRR = 187450.50m,
+            ARPU = 101.50m,
+            ChurnRate = 3.2
+        };
+    }
+
+    private async Task LoadPlanDistribution()
+    {
+        await Task.Delay(200);
+        
+        _planDistribution = new List<PlanDistribution>
+        {
+            new() { PlanName = "Profesional", Count = 18, Percentage = 42.9, Color = Color.Warning },
+            new() { PlanName = "Básico", Count = 15, Percentage = 35.7, Color = Color.Info },
+            new() { PlanName = "Empresarial", Count = 9, Percentage = 21.4, Color = Color.Error }
+        };
+    }
+
+    private async Task LoadTopActiveCompanies()
+    {
+        await Task.Delay(300);
+        
+        _topActiveCompanies = new List<TopActiveCompany>
+        {
+            new() { Name = "Tech Solutions", EmployeeCount = 150, DailyRecords = 1200 },
+            new() { Name = "Digital Corp", EmployeeCount = 80, DailyRecords = 640 },
+            new() { Name = "Innovation Hub", EmployeeCount = 65, DailyRecords = 520 },
+            new() { Name = "Creative Agency", EmployeeCount = 45, DailyRecords = 360 },
+            new() { Name = "StartUp Labs", EmployeeCount = 25, DailyRecords = 200 }
+        };
+    }
+
+    private async Task ExportReport()
+    {
+        try
+        {
+            NotificationService.ShowLoading("Generando reporte...");
+            
+            // TODO: Implementar exportación
+            await Task.Delay(2000);
+            
+            NotificationService.ShowSuccess("Reporte exportado correctamente.");
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al exportar reporte: {ex.Message}");
+        }
+    }
+
+    // Clases modelo
+    public class GlobalKPIs
+    {
+        public int TotalUsers { get; set; }
+        public double UserGrowth { get; set; }
+        public int ActiveCompanies { get; set; }
+        public double CompanyGrowth { get; set; }
+        public decimal TotalRevenue { get; set; }
+        public double RevenueGrowth { get; set; }
+        public int TotalTimeRecords { get; set; }
+        public double RecordsGrowth { get; set; }
+    }
+
+    public class UsageMetrics
+    {
+        public int DailyActiveUsers { get; set; }
+        public int WeeklyActiveUsers { get; set; }
+        public double AverageSessionDuration { get; set; }
+        public double BounceRate { get; set; }
+    }
+
+    public class FinancialSummary
+    {
+        public decimal ARR { get; set; }
+        public decimal MRR { get; set; }
+        public decimal ARPU { get; set; }
+        public double ChurnRate { get; set; }
+    }
+
+    public class PlanDistribution
+    {
+        public string PlanName { get; set; } = string.Empty;
+        public int Count { get; set; }
+        public double Percentage { get; set; }
+        public Color Color { get; set; }
+    }
+
+    public class TopActiveCompany
+    {
+        public string Name { get; set; } = string.Empty;
+        public int EmployeeCount { get; set; }
+        public int DailyRecords { get; set; }
+    }
+}

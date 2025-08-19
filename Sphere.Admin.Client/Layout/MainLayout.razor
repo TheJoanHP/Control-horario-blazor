@@ -1,147 +1,147 @@
-﻿@using Shared.Models.DTOs.Auth
-@inherits LayoutComponentBase
-@inject IJSRuntime JSRuntime
-@inject AuthService AuthService
+﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components
 @implements IDisposable
+@inject AuthService AuthService
+@inject NavigationManager Navigation
 
-<MudThemeProvider @ref="@_mudThemeProvider" Theme="_theme" />
+<MudThemeProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    @if (_isAuthenticated)
-    {
-        <!-- Drawer/Sidebar -->
-        <MudDrawer @bind-Open="_drawerOpen" 
-                   Elevation="2" 
-                   Width="280px" 
-                   ClipMode="DrawerClipMode.Always">
-            <NavMenu />
-        </MudDrawer>
+    <!-- Sidebar -->
+    <MudDrawer @bind-Open="_drawerOpen" 
+               Elevation="2" 
+               Variant="@DrawerVariant.Mini" 
+               OpenMiniOnHover="true"
+               ClipMode="DrawerClipMode.Always">
+        <NavMenu />
+    </MudDrawer>
 
-        <!-- AppBar -->
-        <MudAppBar Elevation="4" Color="Color.Primary">
-            <MudIconButton Icon="@Icons.Material.Filled.Menu" 
-                         Color="Color.Inherit" 
-                         Edge="Edge.Start" 
-                         OnClick="@ToggleDrawer" />
-            
-            <MudSpacer />
-            
-            <MudMenu Icon="@Icons.Material.Filled.AccountCircle" 
-                     Color="Color.Inherit">
-                <ChildContent>
-                    <div class="px-4 py-2">
-                        <MudText Typo="Typo.subtitle2">@(_userInfo?.DisplayName ?? "Usuario")</MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@_userInfo?.Email</MudText>
+    <!-- Top Bar -->
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                       Color="Color.Inherit" 
+                       Edge="Edge.Start" 
+                       OnClick="@((e) => DrawerToggle())" />
+        <MudSpacer />
+        <TopBar />
+    </MudAppBar>
+
+    <!-- Main Content -->
+    <MudMainContent>
+        <div class="ma-4">
+            @if (_isCheckingAuth)
+            {
+                <!-- Loading mientras verifica autenticación -->
+                <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 70vh;">
+                    <div class="text-center">
+                        <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+                        <MudText Typo="Typo.h6" Class="mt-4">Verificando autenticación...</MudText>
                     </div>
-                    <MudDivider />
-                    <MudMenuItem OnClick="GoToProfile" Icon="@Icons.Material.Filled.Person">
-                        Mi Perfil
-                    </MudMenuItem>
-                    <MudMenuItem OnClick="GoToSettings" Icon="@Icons.Material.Filled.Settings">
-                        Configuración
-                    </MudMenuItem>
-                    <MudDivider />
-                    <MudMenuItem OnClick="HandleLogout" Icon="@Icons.Material.Filled.Logout">
-                        Cerrar Sesión
-                    </MudMenuItem>
-                </ChildContent>
-            </MudMenu>
-        </MudAppBar>
-
-        <!-- Main Content -->
-        <MudMainContent Class="pa-4">
-            @Body
-        </MudMainContent>
-    }
-    else
-    {
-        <!-- Layout para páginas sin autenticación -->
-        <MudMainContent>
-            @Body
-        </MudMainContent>
-    }
+                </MudContainer>
+            }
+            else if (!_isAuthenticated)
+            {
+                <!-- Redirigir al login -->
+                <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 70vh;">
+                    <div class="text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" Class="mud-text-secondary mb-4" />
+                        <MudText Typo="Typo.h6" Class="mb-4">Sesión no válida</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+                            Redirigiendo al inicio de sesión...
+                        </MudText>
+                        <MudProgressLinear Indeterminate="true" />
+                    </div>
+                </MudContainer>
+            }
+            else
+            {
+                <!-- Contenido principal -->
+                <CascadingValue Value="this">
+                    @Body
+                </CascadingValue>
+            }
+        </div>
+    </MudMainContent>
 </MudLayout>
 
+<!-- Error UI -->
+<div id="blazor-error-ui">
+    <div class="d-flex align-center">
+        <MudIcon Icon="@Icons.Material.Filled.Error" Class="mr-2" />
+        <span>Ha ocurrido un error. La aplicación puede no responder hasta que se recargue.</span>
+        <MudButton Variant="Variant.Text" 
+                   Color="Color.Primary" 
+                   Size="Size.Small"
+                   Class="ml-2"
+                   OnClick="ReloadPage">
+            Recargar
+        </MudButton>
+        <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                       Size="Size.Small"
+                       Class="ml-2 dismiss" />
+    </div>
+</div>
+
 @code {
-    private MudThemeProvider? _mudThemeProvider;
     private bool _drawerOpen = true;
     private bool _isAuthenticated = false;
-    private UserInfo? _userInfo;
-
-    private readonly MudTheme _theme = new MudTheme()
-    {
-        PaletteLight = new PaletteLight()
-        {
-            Primary = "#1976d2",
-            Secondary = "#424242",
-            AppbarBackground = "#1976d2",
-            Background = "#f5f5f5",
-            DrawerBackground = "#ffffff",
-            DrawerText = "rgba(0,0,0, 0.87)",
-            Success = "#4caf50"
-        },
-        PaletteDark = new PaletteDark()
-        {
-            Primary = "#90caf9",
-            Secondary = "#ce93d8",
-            AppbarBackground = "#1976d2",
-            Background = "#121212",
-            DrawerBackground = "#1e1e1e",
-            DrawerText = "rgba(255,255,255, 0.87)"
-        }
-    };
+    private bool _isCheckingAuth = true;
 
     protected override async Task OnInitializedAsync()
     {
-        _isAuthenticated = await AuthService.IsAuthenticatedAsync();
+        // Verificar autenticación al cargar
+        await CheckAuthentication();
         
-        if (_isAuthenticated)
-        {
-            _userInfo = await AuthService.GetUserInfoAsync();
-        }
-
+        // Suscribirse a cambios de estado de autenticación
         AuthService.AuthStateChanged += OnAuthStateChanged;
+    }
+
+    private async Task CheckAuthentication()
+    {
+        try
+        {
+            _isAuthenticated = await AuthService.IsAuthenticatedAsync();
+            
+            if (!_isAuthenticated)
+            {
+                // Redirigir al login si no está autenticado
+                Navigation.NavigateTo("/login");
+            }
+        }
+        catch (Exception)
+        {
+            _isAuthenticated = false;
+            Navigation.NavigateTo("/login");
+        }
+        finally
+        {
+            _isCheckingAuth = false;
+            StateHasChanged();
+        }
     }
 
     private void OnAuthStateChanged(bool isAuthenticated)
     {
         _isAuthenticated = isAuthenticated;
         
-        if (isAuthenticated)
+        if (!isAuthenticated)
         {
-            InvokeAsync(async () =>
-            {
-                _userInfo = await AuthService.GetUserInfoAsync();
-                StateHasChanged();
-            });
+            Navigation.NavigateTo("/login");
         }
-        else
-        {
-            _userInfo = null;
-            StateHasChanged();
-        }
+        
+        StateHasChanged();
     }
 
-    private void ToggleDrawer()
+    private void DrawerToggle()
     {
         _drawerOpen = !_drawerOpen;
     }
 
-    private void GoToProfile()
+    private void ReloadPage()
     {
-        // TODO: Implementar página de perfil
-    }
-
-    private void GoToSettings()
-    {
-        // TODO: Implementar página de configuración
-    }
-
-    private async Task HandleLogout()
-    {
-        await AuthService.LogoutAsync();
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
     }
 
     public void Dispose()

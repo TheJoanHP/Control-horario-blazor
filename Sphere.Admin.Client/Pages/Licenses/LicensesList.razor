@@ -1,0 +1,559 @@
+@page "/licenses"
+@inject ApiService ApiService
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+
+<PageTitle>Gestión de Licencias - Sphere Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="py-4">
+    
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                Gestión de Licencias
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Administre planes, límites y configuraciones de licencias
+            </MudText>
+        </div>
+        
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Navigation.NavigateTo("/licenses/config"))">
+            Configurar Planes
+        </MudButton>
+    </div>
+
+    <!-- Estadísticas de licencias -->
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-info">
+                                @_stats.TotalLicenses
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Licencias Activas
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Info" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-success">
+                                @_stats.BasicLicenses
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Plan Básico
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Success" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Star" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-warning">
+                                @_stats.ProfessionalLicenses
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Plan Profesional
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Warning" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Business" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-error">
+                                @_stats.EnterpriseLicenses
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Plan Empresarial
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Error" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Diamond" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Filtros -->
+    <MudCard Class="mb-4">
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_searchTerm"
+                                  Label="Buscar empresa"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  OnKeyUp="OnSearchChanged"
+                                  Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudSelect @bind-Value="_planFilter"
+                               Label="Tipo de Plan"
+                               Variant="Variant.Outlined"
+                               T="string">
+                        <MudSelectItem Value="@("todos")">Todos los planes</MudSelectItem>
+                        <MudSelectItem Value="@("basic")">Básico</MudSelectItem>
+                        <MudSelectItem Value="@("professional")">Profesional</MudSelectItem>
+                        <MudSelectItem Value="@("enterprise")">Empresarial</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudSelect @bind-Value="_statusFilter"
+                               Label="Estado"
+                               Variant="Variant.Outlined"
+                               T="string">
+                        <MudSelectItem Value="@("todos")">Todos los estados</MudSelectItem>
+                        <MudSelectItem Value="@("active")">Activas</MudSelectItem>
+                        <MudSelectItem Value="@("expired")">Expiradas</MudSelectItem>
+                        <MudSelectItem Value="@("suspended")">Suspendidas</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Secondary"
+                               FullWidth="true"
+                               OnClick="ClearFilters">
+                        Limpiar Filtros
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- Tabla de licencias -->
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <div class="d-flex justify-space-between align-center">
+                    <MudText Typo="Typo.h6">
+                        Licencias Asignadas (@(_filteredLicenses?.Count ?? 0))
+                    </MudText>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Refresh"
+                               OnClick="LoadLicenses">
+                        Actualizar
+                    </MudButton>
+                </div>
+            </CardHeaderContent>
+        </MudCardHeader>
+        
+        <MudCardContent Class="pa-0">
+            @if (_isLoading)
+            {
+                <div class="d-flex justify-center align-center pa-8">
+                    <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+                </div>
+            }
+            else if (_filteredLicenses?.Any() == true)
+            {
+                <MudTable Items="@_filteredLicenses"
+                          Hover="true"
+                          FixedHeader="true"
+                          Height="600px"
+                          Dense="true">
+                    <HeaderContent>
+                        <MudTh>Empresa</MudTh>
+                        <MudTh>Plan</MudTh>
+                        <MudTh>Empleados</MudTh>
+                        <MudTh>Precio</MudTh>
+                        <MudTh>Fecha Inicio</MudTh>
+                        <MudTh>Fecha Vencimiento</MudTh>
+                        <MudTh>Estado</MudTh>
+                        <MudTh Style="text-align: center;">Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Empresa">
+                            <div class="d-flex align-center">
+                                <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-3">
+                                    @context.CompanyName.Substring(0, 1).ToUpper()
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                        @context.CompanyName
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        ID: @context.TenantId
+                                    </MudText>
+                                </div>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="Plan">
+                            <MudChip T="string" Size="Size.Small" 
+                                     Color="@GetPlanColor(context.PlanType)">
+                                @GetPlanText(context.PlanType)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Empleados">
+                            <div class="text-center">
+                                <MudText Typo="Typo.body2">
+                                    @context.CurrentEmployees / @(context.MaxEmployees == 0 ? "∞" : context.MaxEmployees.ToString())
+                                </MudText>
+                                <MudProgressLinear Value="@GetUsagePercentage(context.CurrentEmployees, context.MaxEmployees)" 
+                                                   Color="@GetUsageColor(context.CurrentEmployees, context.MaxEmployees)"
+                                                   Size="Size.Small" />
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="Precio">
+                            <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                @context.MonthlyPrice.ToString("C")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Fecha Inicio">
+                            <MudText Typo="Typo.body2">
+                                @context.StartDate.ToString("dd/MM/yyyy")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Fecha Vencimiento">
+                            <MudText Typo="Typo.body2" 
+                                     Class="@(context.ExpiryDate < DateTime.Now ? "mud-error-text" : "")">
+                                @context.ExpiryDate.ToString("dd/MM/yyyy")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Estado">
+                            <MudChip T="string" Size="Size.Small" 
+                                     Color="@GetStatusColor(context.IsActive, context.ExpiryDate)">
+                                @GetStatusText(context.IsActive, context.ExpiryDate)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Acciones" Style="text-align: center;">
+                            <MudButtonGroup Variant="Variant.Text" Size="Size.Small">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Color="Color.Info"
+                                               Title="Editar licencia"
+                                               OnClick="@(() => EditLicense(context.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.History"
+                                               Color="Color.Primary"
+                                               Title="Ver historial"
+                                               OnClick="@(() => ViewHistory(context.Id))" />
+                                <MudIconButton Icon="@(context.IsActive ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)"
+                                               Color="@(context.IsActive ? Color.Warning : Color.Success)"
+                                               Title="@(context.IsActive ? "Suspender" : "Activar")"
+                                               OnClick="@(() => ToggleLicense(context))" />
+                            </MudButtonGroup>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <div class="d-flex flex-column justify-center align-center pa-8">
+                    <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" 
+                             Size="Size.Large" 
+                             Class="mud-text-secondary mb-4" />
+                    <MudText Typo="Typo.h6" Class="mud-text-secondary mb-2">
+                        No se encontraron licencias
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+                        No hay licencias que coincidan con los filtros aplicados
+                    </MudText>
+                </div>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private List<LicenseDto>? _licenses;
+    private List<LicenseDto>? _filteredLicenses;
+    private LicenseStats _stats = new();
+    private bool _isLoading = true;
+    
+    private string _searchTerm = string.Empty;
+    private string _planFilter = "todos";
+    private string _statusFilter = "todos";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLicenses();
+    }
+
+    private async Task LoadLicenses()
+    {
+        _isLoading = true;
+        try
+        {
+            // TODO: Implementar llamada a la API
+            _licenses = await GetMockLicenses();
+            CalculateStats();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al cargar licencias: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSearchChanged()
+    {
+        ApplyFilters();
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (_licenses == null) return;
+
+        _filteredLicenses = _licenses.Where(l =>
+        {
+            // Filtro de búsqueda
+            if (!string.IsNullOrEmpty(_searchTerm))
+            {
+                var searchLower = _searchTerm.ToLower();
+                if (!l.CompanyName.ToLower().Contains(searchLower))
+                    return false;
+            }
+
+            // Filtro de plan
+            if (_planFilter != "todos" && l.PlanType.ToLower() != _planFilter)
+                return false;
+
+            // Filtro de estado
+            if (_statusFilter != "todos")
+            {
+                var isExpired = l.ExpiryDate < DateTime.Now;
+                if (_statusFilter == "active" && (!l.IsActive || isExpired)) return false;
+                if (_statusFilter == "expired" && !isExpired) return false;
+                if (_statusFilter == "suspended" && l.IsActive) return false;
+            }
+
+            return true;
+        }).ToList();
+
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        _planFilter = "todos";
+        _statusFilter = "todos";
+        ApplyFilters();
+    }
+
+    private void CalculateStats()
+    {
+        if (_licenses == null) return;
+
+        _stats = new LicenseStats
+        {
+            TotalLicenses = _licenses.Count(l => l.IsActive && l.ExpiryDate >= DateTime.Now),
+            BasicLicenses = _licenses.Count(l => l.PlanType == "Basic" && l.IsActive),
+            ProfessionalLicenses = _licenses.Count(l => l.PlanType == "Professional" && l.IsActive),
+            EnterpriseLicenses = _licenses.Count(l => l.PlanType == "Enterprise" && l.IsActive)
+        };
+    }
+
+    private void EditLicense(int licenseId)
+    {
+        Navigation.NavigateTo($"/licenses/{licenseId}/edit");
+    }
+
+    private void ViewHistory(int licenseId)
+    {
+        Navigation.NavigateTo($"/licenses/{licenseId}/history");
+    }
+
+    private async Task ToggleLicense(LicenseDto license)
+    {
+        var action = license.IsActive ? "suspender" : "activar";
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"¿Está seguro que desea {action} la licencia de '{license.CompanyName}'?",
+            ["ButtonText"] = action.ToUpper(),
+            ["Color"] = license.IsActive ? Color.Warning : Color.Success
+        };
+
+        var dialog = await DialogService.ShowAsync<Sphere.Admin.Client.Components.Common.ConfirmDialog>($"Confirmar {action}", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                // TODO: Implementar llamada a la API
+                license.IsActive = !license.IsActive;
+                NotificationService.ShowSuccess($"Licencia {action}da correctamente.");
+                CalculateStats();
+                ApplyFilters();
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowError($"Error al {action} licencia: {ex.Message}");
+            }
+        }
+    }
+
+    private Color GetPlanColor(string planType)
+    {
+        return planType.ToLower() switch
+        {
+            "basic" => Color.Info,
+            "professional" => Color.Warning,
+            "enterprise" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetPlanText(string planType)
+    {
+        return planType.ToLower() switch
+        {
+            "basic" => "Básico",
+            "professional" => "Profesional",
+            "enterprise" => "Empresarial",
+            _ => planType
+        };
+    }
+
+    private double GetUsagePercentage(int current, int max)
+    {
+        if (max == 0) return 0;
+        return Math.Min((double)current / max * 100, 100);
+    }
+
+    private Color GetUsageColor(int current, int max)
+    {
+        if (max == 0) return Color.Success;
+        var percentage = (double)current / max;
+        return percentage switch
+        {
+            <= 0.7 => Color.Success,
+            <= 0.9 => Color.Warning,
+            _ => Color.Error
+        };
+    }
+
+    private Color GetStatusColor(bool isActive, DateTime expiryDate)
+    {
+        if (!isActive) return Color.Default;
+        if (expiryDate < DateTime.Now) return Color.Error;
+        if (expiryDate < DateTime.Now.AddDays(30)) return Color.Warning;
+        return Color.Success;
+    }
+
+    private string GetStatusText(bool isActive, DateTime expiryDate)
+    {
+        if (!isActive) return "Suspendida";
+        if (expiryDate < DateTime.Now) return "Expirada";
+        if (expiryDate < DateTime.Now.AddDays(30)) return "Por Vencer";
+        return "Activa";
+    }
+
+    // Mock data - TODO: Reemplazar con API real
+    private async Task<List<LicenseDto>> GetMockLicenses()
+    {
+        await Task.Delay(800);
+        
+        return new List<LicenseDto>
+        {
+            new()
+            {
+                Id = 1,
+                TenantId = 1,
+                CompanyName = "Empresa Demo S.L.",
+                PlanType = "Professional",
+                MaxEmployees = 50,
+                CurrentEmployees = 25,
+                MonthlyPrice = 99.99m,
+                StartDate = DateTime.Now.AddMonths(-6),
+                ExpiryDate = DateTime.Now.AddMonths(6),
+                IsActive = true
+            },
+            new()
+            {
+                Id = 2,
+                TenantId = 2,
+                CompanyName = "Tech Solutions",
+                PlanType = "Enterprise",
+                MaxEmployees = 0,
+                CurrentEmployees = 150,
+                MonthlyPrice = 299.99m,
+                StartDate = DateTime.Now.AddMonths(-12),
+                ExpiryDate = DateTime.Now.AddMonths(12),
+                IsActive = true
+            },
+            new()
+            {
+                Id = 3,
+                TenantId = 3,
+                CompanyName = "StartUp Inc",
+                PlanType = "Basic",
+                MaxEmployees = 10,
+                CurrentEmployees = 5,
+                MonthlyPrice = 29.99m,
+                StartDate = DateTime.Now.AddMonths(-2),
+                ExpiryDate = DateTime.Now.AddDays(15),
+                IsActive = true
+            }
+        };
+    }
+
+    // DTOs temporales
+    public class LicenseDto
+    {
+        public int Id { get; set; }
+        public int TenantId { get; set; }
+        public string CompanyName { get; set; } = string.Empty;
+        public string PlanType { get; set; } = string.Empty;
+        public int MaxEmployees { get; set; }
+        public int CurrentEmployees { get; set; }
+        public decimal MonthlyPrice { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime ExpiryDate { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    public class LicenseStats
+    {
+        public int TotalLicenses { get; set; }
+        public int BasicLicenses { get; set; }
+        public int ProfessionalLicenses { get; set; }
+        public int EnterpriseLicenses { get; set; }
+    }
+}

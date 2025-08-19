@@ -1,7 +1,7 @@
 using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
 using Shared.Models.DTOs.Auth;
-using static Sphere.Admin.Client.Services.ApiService;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace Sphere.Admin.Client.Services
 {
@@ -60,9 +60,8 @@ namespace Sphere.Admin.Client.Services
 
                 return false;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"Error en login: {ex.Message}");
                 return false;
             }
         }
@@ -80,13 +79,13 @@ namespace Sphere.Admin.Client.Services
 
                 // Notificar cambio de estado
                 AuthStateChanged?.Invoke(false);
-
-                // Redirigir al login
-                _navigation.NavigateTo("/login", replace: true);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"Error en logout: {ex.Message}");
+                // En caso de error, forzar limpieza
+                await _localStorage.ClearAsync();
+                _apiService.ClearAuthorizationHeader();
+                AuthStateChanged?.Invoke(false);
             }
         }
 
@@ -99,14 +98,19 @@ namespace Sphere.Admin.Client.Services
                 if (string.IsNullOrEmpty(token))
                     return false;
 
-                // Configurar header si hay token válido
+                // Verificar si el token ha expirado
+                if (IsTokenExpired(token))
+                {
+                    await LogoutAsync();
+                    return false;
+                }
+
+                // Configurar header de autorización si el token es válido
                 _apiService.SetAuthorizationHeader(token);
-                
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"Error verificando autenticación: {ex.Message}");
                 return false;
             }
         }
@@ -115,12 +119,10 @@ namespace Sphere.Admin.Client.Services
         {
             try
             {
-                var userInfo = await _localStorage.GetItemAsync<UserInfo>(USER_KEY);
-                return userInfo;
+                return await _localStorage.GetItemAsync<UserInfo>(USER_KEY);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"Error obteniendo info del usuario: {ex.Message}");
                 return null;
             }
         }
@@ -131,13 +133,91 @@ namespace Sphere.Admin.Client.Services
             {
                 return await _localStorage.GetItemAsync<string>(TOKEN_KEY);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"Error obteniendo token: {ex.Message}");
                 return null;
             }
         }
-    }
 
-    // CLASE UserInfo ELIMINADA - Ahora usa Shared.Models.DTOs.Auth.UserInfo
+        public async Task UpdateUserInfoAsync(UserInfo userInfo)
+        {
+            try
+            {
+                await _localStorage.SetItemAsync(USER_KEY, userInfo);
+            }
+            catch (Exception)
+            {
+                // Log error but don't throw
+            }
+        }
+
+        private bool IsTokenExpired(string token)
+        {
+            try
+            {
+                var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+                return jwt.ValidTo <= DateTime.UtcNow;
+            }
+            catch (Exception)
+            {
+                // Si no se puede leer el token, asumir que ha expirado
+                return true;
+            }
+        }
+
+        public async Task<bool> RefreshTokenAsync()
+        {
+            try
+            {
+                var currentToken = await GetTokenAsync();
+                if (string.IsNullOrEmpty(currentToken))
+                    return false;
+
+                // TODO: Implementar refresh token con la API
+                // var refreshResponse = await _apiService.RefreshTokenAsync(currentToken);
+                
+                // Por ahora, solo verificamos si el token actual sigue siendo válido
+                return !IsTokenExpired(currentToken);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> ChangePasswordAsync(string currentPassword, string newPassword)
+        {
+            try
+            {
+                // TODO: Implementar cambio de contraseña con la API
+                // var request = new ChangePasswordRequest(currentPassword, newPassword);
+                // var success = await _apiService.ChangePasswordAsync(request);
+                
+                // Por ahora retornamos true simulando éxito
+                await Task.Delay(1000);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> RequestPasswordResetAsync(string email)
+        {
+            try
+            {
+                // TODO: Implementar solicitud de reset de contraseña
+                // var request = new PasswordResetRequest(email);
+                // var success = await _apiService.RequestPasswordResetAsync(request);
+                
+                await Task.Delay(1000);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
 }

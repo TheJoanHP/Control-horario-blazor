@@ -1,0 +1,483 @@
+@page "/billing"
+@inject ApiService ApiService
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+
+<PageTitle>Dashboard de Facturación - Sphere Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="py-4">
+    
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                Dashboard de Facturación
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Gestione ingresos, facturas y métricas financieras
+            </MudText>
+        </div>
+        
+        <MudButtonGroup Variant="Variant.Filled">
+            <MudButton Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Receipt"
+                       OnClick="@(() => Navigation.NavigateTo("/billing/invoices"))">
+                Ver Facturas
+            </MudButton>
+            <MudButton Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="GenerateInvoices">
+                Generar Facturas
+            </MudButton>
+        </MudButtonGroup>
+    </div>
+
+    <!-- Métricas principales -->
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-success">
+                                @_metrics.MonthlyRevenue.ToString("C")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Ingresos del Mes
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="@(_metrics.RevenueGrowth >= 0 ? "mud-success-text" : "mud-error-text")">
+                                @(_metrics.RevenueGrowth >= 0 ? "+" : "")@_metrics.RevenueGrowth.ToString("F1")% vs mes anterior
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Success" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.AttachMoney" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-info">
+                                @_metrics.PendingInvoices
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Facturas Pendientes
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @_metrics.PendingAmount.ToString("C") por cobrar
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Info" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Receipt" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-warning">
+                                @_metrics.OverdueInvoices
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Facturas Vencidas
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-error-text">
+                                @_metrics.OverdueAmount.ToString("C") vencido
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Warning" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold mud-text-primary">
+                                @_metrics.ActiveSubscriptions
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Suscripciones Activas
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @_metrics.MRR.ToString("C") MRR
+                            </MudText>
+                        </div>
+                        <MudAvatar Color="Color.Primary" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Subscriptions" />
+                        </MudAvatar>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <!-- Gráfico de ingresos -->
+        <MudItem xs="12" md="8">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex justify-space-between align-center">
+                            <MudText Typo="Typo.h6">Evolución de Ingresos</MudText>
+                            <MudSelect @bind-Value="_selectedPeriod" 
+                                       T="string" 
+                                       Variant="Variant.Outlined"
+                                       Dense="true"
+                                       Class="mr-2">
+                                <MudSelectItem Value="@("last_6_months")">Últimos 6 meses</MudSelectItem>
+                                <MudSelectItem Value="@("last_12_months")">Último año</MudSelectItem>
+                                <MudSelectItem Value="@("current_year")">Año actual</MudSelectItem>
+                            </MudSelect>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+                        <div class="text-center">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Large" Class="mud-text-secondary mb-2" />
+                            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                                Gráfico de ingresos (Chart.js)
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Se implementará con la integración de Chart.js
+                            </MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Top empresas por facturación -->
+        <MudItem xs="12" md="4">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Top Empresas</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_topCompanies?.Any() == true)
+                    {
+                        @foreach (var company in _topCompanies)
+                        {
+                            <div class="d-flex justify-space-between align-center mb-3">
+                                <div class="d-flex align-center">
+                                    <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-3">
+                                        @company.Name.Substring(0, 1).ToUpper()
+                                    </MudAvatar>
+                                    <div>
+                                        <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                            @company.Name
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @company.PlanType
+                                        </MudText>
+                                    </div>
+                                </div>
+                                <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                    @company.MonthlyRevenue.ToString("C")
+                                </MudText>
+                            </div>
+                        }
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Facturas recientes -->
+        <MudItem xs="12" md="8">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex justify-space-between align-center">
+                            <MudText Typo="Typo.h6">Facturas Recientes</MudText>
+                            <MudButton Variant="Variant.Text" 
+                                       Color="Color.Primary"
+                                       OnClick="@(() => Navigation.NavigateTo("/billing/invoices"))">
+                                Ver Todas
+                            </MudButton>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="pa-0">
+                    @if (_recentInvoices?.Any() == true)
+                    {
+                        <MudTable Items="@_recentInvoices" Dense="true">
+                            <HeaderContent>
+                                <MudTh>Factura</MudTh>
+                                <MudTh>Empresa</MudTh>
+                                <MudTh>Importe</MudTh>
+                                <MudTh>Fecha</MudTh>
+                                <MudTh>Estado</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Factura">
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                        #@context.InvoiceNumber
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Empresa">@context.CompanyName</MudTd>
+                                <MudTd DataLabel="Importe">
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                        @context.Amount.ToString("C")
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Fecha">@context.IssueDate.ToString("dd/MM/yyyy")</MudTd>
+                                <MudTd DataLabel="Estado">
+                                    <MudChip T="string" Size="Size.Small" 
+                                             Color="@GetInvoiceStatusColor(context.Status)">
+                                        @GetInvoiceStatusText(context.Status)
+                                    </MudChip>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Estado de cobros -->
+        <MudItem xs="12" md="4">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Estado de Cobros</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <div class="mb-4">
+                        <div class="d-flex justify-space-between align-center mb-2">
+                            <MudText Typo="Typo.body2">Cobrado</MudText>
+                            <MudText Typo="Typo.body2" Class="font-weight-bold mud-success-text">
+                                @_collectionStats.PaidAmount.ToString("C")
+                            </MudText>
+                        </div>
+                        <MudProgressLinear Value="@_collectionStats.PaidPercentage" 
+                                           Color="Color.Success" 
+                                           Size="Size.Small" />
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="d-flex justify-space-between align-center mb-2">
+                            <MudText Typo="Typo.body2">Pendiente</MudText>
+                            <MudText Typo="Typo.body2" Class="font-weight-bold mud-info-text">
+                                @_collectionStats.PendingAmount.ToString("C")
+                            </MudText>
+                        </div>
+                        <MudProgressLinear Value="@_collectionStats.PendingPercentage" 
+                                           Color="Color.Info" 
+                                           Size="Size.Small" />
+                    </div>
+                    
+                    <div>
+                        <div class="d-flex justify-space-between align-center mb-2">
+                            <MudText Typo="Typo.body2">Vencido</MudText>
+                            <MudText Typo="Typo.body2" Class="font-weight-bold mud-error-text">
+                                @_collectionStats.OverdueAmount.ToString("C")
+                            </MudText>
+                        </div>
+                        <MudProgressLinear Value="@_collectionStats.OverduePercentage" 
+                                           Color="Color.Error" 
+                                           Size="Size.Small" />
+                    </div>
+                    
+                    <MudDivider Class="my-3" />
+                    
+                    <div class="text-center">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            @((_collectionStats.PaidAmount + _collectionStats.PendingAmount + _collectionStats.OverdueAmount).ToString("C"))
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Total Facturado
+                        </MudText>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private BillingMetrics _metrics = new();
+    private CollectionStats _collectionStats = new();
+    private List<TopCompany>? _topCompanies;
+    private List<RecentInvoice>? _recentInvoices;
+    private string _selectedPeriod = "last_6_months";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBillingData();
+    }
+
+    private async Task LoadBillingData()
+    {
+        try
+        {
+            // TODO: Implementar llamadas a la API
+            await LoadMetrics();
+            await LoadTopCompanies();
+            await LoadRecentInvoices();
+            await LoadCollectionStats();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al cargar datos de facturación: {ex.Message}");
+        }
+    }
+
+    private async Task LoadMetrics()
+    {
+        await Task.Delay(500);
+        
+        _metrics = new BillingMetrics
+        {
+            MonthlyRevenue = 15750.50m,
+            RevenueGrowth = 12.5,
+            PendingInvoices = 8,
+            PendingAmount = 2340.00m,
+            OverdueInvoices = 3,
+            OverdueAmount = 890.50m,
+            ActiveSubscriptions = 42,
+            MRR = 18500.00m
+        };
+    }
+
+    private async Task LoadTopCompanies()
+    {
+        await Task.Delay(300);
+        
+        _topCompanies = new List<TopCompany>
+        {
+            new() { Name = "Tech Solutions", PlanType = "Enterprise", MonthlyRevenue = 299.99m },
+            new() { Name = "Digital Corp", PlanType = "Professional", MonthlyRevenue = 199.99m },
+            new() { Name = "Innovation Hub", PlanType = "Professional", MonthlyRevenue = 199.99m },
+            new() { Name = "StartUp Labs", PlanType = "Professional", MonthlyRevenue = 99.99m },
+            new() { Name = "Creative Agency", PlanType = "Basic", MonthlyRevenue = 29.99m }
+        };
+    }
+
+    private async Task LoadRecentInvoices()
+    {
+        await Task.Delay(400);
+        
+        _recentInvoices = new List<RecentInvoice>
+        {
+            new() { InvoiceNumber = "INV-2025-001", CompanyName = "Tech Solutions", Amount = 299.99m, IssueDate = DateTime.Now.AddDays(-2), Status = "Paid" },
+            new() { InvoiceNumber = "INV-2025-002", CompanyName = "Digital Corp", Amount = 199.99m, IssueDate = DateTime.Now.AddDays(-1), Status = "Pending" },
+            new() { InvoiceNumber = "INV-2025-003", CompanyName = "Innovation Hub", Amount = 199.99m, IssueDate = DateTime.Now, Status = "Pending" },
+            new() { InvoiceNumber = "INV-2024-456", CompanyName = "StartUp Labs", Amount = 99.99m, IssueDate = DateTime.Now.AddDays(-15), Status = "Overdue" }
+        };
+    }
+
+    private async Task LoadCollectionStats()
+    {
+        await Task.Delay(200);
+        
+        _collectionStats = new CollectionStats
+        {
+            PaidAmount = 7500m,
+            PendingAmount = 1650m,
+            OverdueAmount = 850m,
+            PaidPercentage = 75,
+            PendingPercentage = 16.5,
+            OverduePercentage = 8.5
+        };
+    }
+
+    private async Task GenerateInvoices()
+    {
+        try
+        {
+            NotificationService.ShowLoading("Generando facturas mensuales...");
+            
+            // TODO: Implementar generación de facturas
+            await Task.Delay(2000);
+            
+            NotificationService.ShowSuccess("Facturas generadas correctamente. Se han enviado 15 facturas por email.");
+            await LoadBillingData(); // Recargar datos
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al generar facturas: {ex.Message}");
+        }
+    }
+
+    private Color GetInvoiceStatusColor(string status)
+    {
+        return status.ToLower() switch
+        {
+            "paid" => Color.Success,
+            "pending" => Color.Info,
+            "overdue" => Color.Error,
+            "cancelled" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private string GetInvoiceStatusText(string status)
+    {
+        return status.ToLower() switch
+        {
+            "paid" => "Pagada",
+            "pending" => "Pendiente",
+            "overdue" => "Vencida",
+            "cancelled" => "Cancelada",
+            _ => status
+        };
+    }
+
+    // Clases modelo
+    public class BillingMetrics
+    {
+        public decimal MonthlyRevenue { get; set; }
+        public double RevenueGrowth { get; set; }
+        public int PendingInvoices { get; set; }
+        public decimal PendingAmount { get; set; }
+        public int OverdueInvoices { get; set; }
+        public decimal OverdueAmount { get; set; }
+        public int ActiveSubscriptions { get; set; }
+        public decimal MRR { get; set; }
+    }
+
+    public class TopCompany
+    {
+        public string Name { get; set; } = string.Empty;
+        public string PlanType { get; set; } = string.Empty;
+        public decimal MonthlyRevenue { get; set; }
+    }
+
+    public class RecentInvoice
+    {
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string CompanyName { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public DateTime IssueDate { get; set; }
+        public string Status { get; set; } = string.Empty;
+    }
+
+    public class CollectionStats
+    {
+        public decimal PaidAmount { get; set; }
+        public decimal PendingAmount { get; set; }
+        public decimal OverdueAmount { get; set; }
+        public double PaidPercentage { get; set; }
+        public double PendingPercentage { get; set; }
+        public double OverduePercentage { get; set; }
+    }
+}

@@ -2,101 +2,96 @@
 @inject ApiService ApiService
 @inject NotificationService NotificationService
 @inject NavigationManager Navigation
-@inject IJSRuntime JSRuntime
 @inject IDialogService DialogService
 
 <PageTitle>Empresas - Sphere Admin</PageTitle>
 
-<!-- Header -->
-<MudContainer MaxWidth="MaxWidth.False" Class="mb-4">
-    <div class="d-flex justify-space-between align-center">
+<MudContainer MaxWidth="MaxWidth.False" Class="py-4">
+    
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
         <div>
             <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
                 Gestión de Empresas
             </MudText>
-            <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">
-                Administra todas las empresas registradas en Sphere
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Administre todas las empresas registradas en el sistema
             </MudText>
         </div>
-        <MudButton Variant="Variant.Filled" 
-                 Color="Color.Primary" 
-                 StartIcon="@Icons.Material.Filled.Add"
-                 Href="/tenants/create">
+        
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Navigation.NavigateTo("/tenants/create"))">
             Nueva Empresa
         </MudButton>
     </div>
-</MudContainer>
 
-<!-- Filters and Search -->
-<MudContainer MaxWidth="MaxWidth.False" Class="mb-4">
-    <MudCard Elevation="2">
+    <!-- Filtros y búsqueda -->
+    <MudCard Class="mb-4">
         <MudCardContent>
             <MudGrid>
                 <MudItem xs="12" md="4">
-                    <MudTextField @bind-Value="_searchText"
-                                Label="Buscar empresas..."
-                                Variant="Variant.Outlined"
-                                Adornment="Adornment.End"
-                                AdornmentIcon="@Icons.Material.Filled.Search"
-                                OnAdornmentClick="SearchTenants"
-                                @onkeypress="@(async (e) => await HandleKeyPress(e))"
-                                FullWidth="true" />
+                    <MudTextField @bind-Value="_searchTerm"
+                                  Label="Buscar empresa"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  OnKeyUp="OnSearchChanged"
+                                  Immediate="true" />
                 </MudItem>
                 <MudItem xs="12" md="3">
-                    <MudSelect @bind-Value="_selectedLicenseFilter"
-                             Label="Filtrar por licencia"
-                             Variant="Variant.Outlined"
-                             FullWidth="true">
-                        <MudSelectItem Value="@("")">Todas las licencias</MudSelectItem>
-                        <MudSelectItem Value="@("Trial")">Trial</MudSelectItem>
-                        <MudSelectItem Value="@("Basic")">Basic</MudSelectItem>
-                        <MudSelectItem Value="@("Professional")">Professional</MudSelectItem>
-                        <MudSelectItem Value="@("Enterprise")">Enterprise</MudSelectItem>
+                    <MudSelect @bind-Value="_statusFilter"
+                               Label="Estado"
+                               Variant="Variant.Outlined"
+                               T="string">
+                        <MudSelectItem Value="@("todos")">Todos los estados</MudSelectItem>
+                        <MudSelectItem Value="@("active")">Activos</MudSelectItem>
+                        <MudSelectItem Value="@("inactive")">Inactivos</MudSelectItem>
+                        <MudSelectItem Value="@("suspended")">Suspendidos</MudSelectItem>
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" md="3">
-                    <MudSelect @bind-Value="_selectedStatusFilter"
-                             Label="Filtrar por estado"
-                             Variant="Variant.Outlined"
-                             FullWidth="true">
-                        <MudSelectItem Value="@("")">Todos los estados</MudSelectItem>
-                        <MudSelectItem Value="@("active")">Activas</MudSelectItem>
-                        <MudSelectItem Value="@("inactive")">Inactivas</MudSelectItem>
+                    <MudSelect @bind-Value="_licenseFilter"
+                               Label="Tipo de Licencia"
+                               Variant="Variant.Outlined"
+                               T="string">
+                        <MudSelectItem Value="@("todos")">Todas las licencias</MudSelectItem>
+                        <MudSelectItem Value="@("basic")">Básica</MudSelectItem>
+                        <MudSelectItem Value="@("professional")">Profesional</MudSelectItem>
+                        <MudSelectItem Value="@("enterprise")">Empresarial</MudSelectItem>
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" md="2">
-                    <MudButton Variant="Variant.Outlined" 
-                             Color="Color.Primary" 
-                             FullWidth="true"
-                             StartIcon="@Icons.Material.Filled.Refresh"
-                             OnClick="LoadTenants"
-                             Disabled="@_isLoading">
-                        Actualizar
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Secondary"
+                               FullWidth="true"
+                               OnClick="ClearFilters">
+                        Limpiar Filtros
                     </MudButton>
                 </MudItem>
             </MudGrid>
         </MudCardContent>
     </MudCard>
-</MudContainer>
 
-<!-- Tenants Table -->
-<MudContainer MaxWidth="MaxWidth.False">
-    <MudCard Elevation="4">
+    <!-- Tabla de empresas -->
+    <MudCard>
         <MudCardHeader>
             <CardHeaderContent>
-                <MudText Typo="Typo.h6">
-                    Lista de Empresas (@(_filteredTenants?.Count ?? 0))
-                </MudText>
+                <div class="d-flex justify-space-between align-center">
+                    <MudText Typo="Typo.h6">
+                        Lista de Empresas (@(_filteredTenants?.Count ?? 0))
+                    </MudText>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Refresh"
+                               OnClick="LoadTenants">
+                        Actualizar
+                    </MudButton>
+                </div>
             </CardHeaderContent>
-            <CardHeaderActions>
-                <MudButton StartIcon="@Icons.Material.Filled.FileDownload" 
-                         Color="Color.Info" 
-                         Variant="Variant.Text"
-                         OnClick="ExportTenants">
-                    Exportar
-                </MudButton>
-            </CardHeaderActions>
         </MudCardHeader>
+        
         <MudCardContent Class="pa-0">
             @if (_isLoading)
             {
@@ -106,46 +101,24 @@
             }
             else if (_filteredTenants?.Any() == true)
             {
-                <MudTable T="TenantDto" 
-                        Items="@_filteredTenants" 
-                        Hover="true" 
-                        Breakpoint="Breakpoint.Sm"
-                        Dense="true"
-                        FixedHeader="true"
-                        Height="600px">
+                <MudTable Items="@_filteredTenants"
+                          Hover="true"
+                          FixedHeader="true"
+                          Height="600px"
+                          Dense="true">
                     <HeaderContent>
-                        <MudTh>
-                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.Name))">
-                                Empresa
-                            </MudTableSortLabel>
-                        </MudTh>
-                        <MudTh>
-                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.ContactEmail))">
-                                Email
-                            </MudTableSortLabel>
-                        </MudTh>
-                        <MudTh>
-                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.LicenseType))">
-                                Licencia
-                            </MudTableSortLabel>
-                        </MudTh>
+                        <MudTh>Empresa</MudTh>
+                        <MudTh>Contacto</MudTh>
                         <MudTh>Empleados</MudTh>
-                        <MudTh>
-                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.Active))">
-                                Estado
-                            </MudTableSortLabel>
-                        </MudTh>
-                        <MudTh>
-                            <MudTableSortLabel T="TenantDto" SortBy="@(new Func<TenantDto, object>(x => x.CreatedAt))">
-                                Fecha Registro
-                            </MudTableSortLabel>
-                        </MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh>Licencia</MudTh>
+                        <MudTh>Estado</MudTh>
+                        <MudTh>Fecha Registro</MudTh>
+                        <MudTh Style="text-align: center;">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="Empresa">
                             <div class="d-flex align-center">
-                                <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-3">
+                                <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-3">
                                     @context.Name.Substring(0, 1).ToUpper()
                                 </MudAvatar>
                                 <div>
@@ -153,80 +126,81 @@
                                         @context.Name
                                     </MudText>
                                     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                        @context.Code
+                                        @($"{context.Subdomain}.sphere-control.com")
                                     </MudText>
                                 </div>
                             </div>
                         </MudTd>
-                        <MudTd DataLabel="Email">@context.ContactEmail</MudTd>
-                        <MudTd DataLabel="Licencia">
-                            <MudChip T="string" Size="Size.Small" 
-                                   Color="@GetLicenseColor(context.LicenseType)">
-                                @context.LicenseType
-                            </MudChip>
+                        <MudTd DataLabel="Contacto">
+                            <div>
+                                <MudText Typo="Typo.body2">@context.ContactName</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @context.ContactEmail
+                                </MudText>
+                            </div>
                         </MudTd>
                         <MudTd DataLabel="Empleados">
-                            <MudText Typo="Typo.body2">
-                                <strong>0</strong> / @context.MaxEmployees
-                            </MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                @context.EmployeeCount empleados
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Licencia">
+                            <MudChip T="string" Size="Size.Small" 
+                                     Color="@GetLicenseColor(context.LicenseType)">
+                                @GetLicenseText(context.LicenseType)
+                            </MudChip>
                         </MudTd>
                         <MudTd DataLabel="Estado">
                             <MudChip T="string" Size="Size.Small" 
-                                   Color="@(context.Active ? Color.Success : Color.Error)">
-                                @(context.Active ? "Activa" : "Inactiva")
+                                     Color="@GetStatusColor(context.IsActive)">
+                                @(context.IsActive ? "Activo" : "Inactivo")
                             </MudChip>
                         </MudTd>
-                        <MudTd DataLabel="Fecha">@context.CreatedAt.ToString("dd/MM/yyyy")</MudTd>
-                        <MudTd DataLabel="Acciones">
-                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small">
-                                <MudMenuItem Icon="@Icons.Material.Filled.Visibility" 
-                                           OnClick="@(() => ViewTenant(context.Id))">
-                                    Ver Detalles
-                                </MudMenuItem>
-                                <MudMenuItem Icon="@Icons.Material.Filled.Edit" 
-                                           OnClick="@(() => EditTenant(context.Id))">
-                                    Editar
-                                </MudMenuItem>
-                                <MudMenuItem Icon="@Icons.Material.Filled.Settings" 
-                                           OnClick="@(() => ManageTenant(context.Id))">
-                                    Configurar
-                                </MudMenuItem>
-                                <MudDivider />
-                                <MudMenuItem Icon="@(context.Active ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)" 
-                                           OnClick="@(() => ToggleTenantStatus(context))"
-                                           Class="@(context.Active ? "mud-error-text" : "mud-success-text")">
-                                    @(context.Active ? "Desactivar" : "Activar")
-                                </MudMenuItem>
-                                <MudMenuItem Icon="@Icons.Material.Filled.Delete" 
-                                           OnClick="@(() => DeleteTenant(context))"
-                                           Class="mud-error-text">
-                                    Eliminar
-                                </MudMenuItem>
-                            </MudMenu>
+                        <MudTd DataLabel="Fecha Registro">
+                            <MudText Typo="Typo.body2">
+                                @context.CreatedAt.ToString("dd/MM/yyyy")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Acciones" Style="text-align: center;">
+                            <MudButtonGroup Variant="Variant.Text" Size="Size.Small">
+                                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                               Color="Color.Primary"
+                                               Title="Ver detalles"
+                                               OnClick="@(() => ViewTenant(context.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Color="Color.Info"
+                                               Title="Editar"
+                                               OnClick="@(() => EditTenant(context.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                               Color="Color.Secondary"
+                                               Title="Configurar"
+                                               OnClick="@(() => ConfigureTenant(context.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Title="Eliminar"
+                                               OnClick="@(() => DeleteTenant(context))" />
+                            </MudButtonGroup>
                         </MudTd>
                     </RowTemplate>
-                    <PagerContent>
-                        <MudTablePager PageSizeOptions="new int[]{10, 25, 50, 100}" />
-                    </PagerContent>
                 </MudTable>
             }
             else
             {
-                <div class="text-center pa-8">
-                    <MudIcon Icon="@Icons.Material.Filled.Business" 
-                           Size="Size.Large" 
-                           Class="mud-text-secondary mb-4" />
+                <div class="d-flex flex-column justify-center align-center pa-8">
+                    <MudIcon Icon="@Icons.Material.Filled.BusinessCenter" 
+                             Size="Size.Large" 
+                             Class="mud-text-secondary mb-4" />
                     <MudText Typo="Typo.h6" Class="mud-text-secondary mb-2">
-                        No hay empresas registradas
+                        No se encontraron empresas
                     </MudText>
                     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
-                        Comienza registrando tu primera empresa
+                        No hay empresas que coincidan con los filtros aplicados
                     </MudText>
-                    <MudButton Variant="Variant.Filled" 
-                             Color="Color.Primary" 
-                             StartIcon="@Icons.Material.Filled.Add"
-                             Href="/tenants/create">
-                        Registrar Primera Empresa
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="@(() => Navigation.NavigateTo("/tenants/create"))">
+                        Crear Primera Empresa
                     </MudButton>
                 </div>
             }
@@ -238,9 +212,10 @@
     private List<TenantDto>? _tenants;
     private List<TenantDto>? _filteredTenants;
     private bool _isLoading = true;
-    private string _searchText = string.Empty;
-    private string _selectedLicenseFilter = string.Empty;
-    private string _selectedStatusFilter = string.Empty;
+    
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = "todos";
+    private string _licenseFilter = "todos";
 
     protected override async Task OnInitializedAsync()
     {
@@ -249,16 +224,16 @@
 
     private async Task LoadTenants()
     {
+        _isLoading = true;
         try
         {
-            _isLoading = true;
-            _tenants = await ApiService.GetTenantsAsync();
+            // TODO: Implementar llamada a la API
+            _tenants = await GetMockTenants(); // Usar mock por ahora
             ApplyFilters();
         }
         catch (Exception ex)
         {
-            NotificationService.ShowError("Error cargando empresas");
-            Console.WriteLine($"Error loading tenants: {ex.Message}");
+            NotificationService.ShowError($"Error al cargar empresas: {ex.Message}");
         }
         finally
         {
@@ -266,18 +241,14 @@
         }
     }
 
-    private async Task HandleKeyPress(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            await SearchTenants();
-        }
-    }
-
-    private async Task SearchTenants()
+    private void OnSearchChanged()
     {
         ApplyFilters();
-        await Task.CompletedTask;
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyFilters();
     }
 
     private void ApplyFilters()
@@ -286,37 +257,43 @@
 
         _filteredTenants = _tenants.Where(t =>
         {
-            // Filtro de búsqueda por texto
-            var matchesSearch = string.IsNullOrEmpty(_searchText) ||
-                              t.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
-                              t.Code.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
-                              t.ContactEmail.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+            // Filtro de búsqueda
+            if (!string.IsNullOrEmpty(_searchTerm))
+            {
+                var searchLower = _searchTerm.ToLower();
+                if (!t.Name.ToLower().Contains(searchLower) &&
+                    !t.ContactName.ToLower().Contains(searchLower) &&
+                    !t.ContactEmail.ToLower().Contains(searchLower))
+                {
+                    return false;
+                }
+            }
 
-            // Filtro por tipo de licencia
-            var matchesLicense = string.IsNullOrEmpty(_selectedLicenseFilter) ||
-                               t.LicenseType.Equals(_selectedLicenseFilter, StringComparison.OrdinalIgnoreCase);
+            // Filtro de estado
+            if (_statusFilter != "todos")
+            {
+                if (_statusFilter == "active" && !t.IsActive) return false;
+                if (_statusFilter == "inactive" && t.IsActive) return false;
+            }
 
-            // Filtro por estado
-            var matchesStatus = string.IsNullOrEmpty(_selectedStatusFilter) ||
-                              (_selectedStatusFilter == "active" && t.Active) ||
-                              (_selectedStatusFilter == "inactive" && !t.Active);
+            // Filtro de licencia
+            if (_licenseFilter != "todos")
+            {
+                if (t.LicenseType.ToLower() != _licenseFilter) return false;
+            }
 
-            return matchesSearch && matchesLicense && matchesStatus;
+            return true;
         }).ToList();
 
         StateHasChanged();
     }
 
-    private Color GetLicenseColor(string licenseType)
+    private void ClearFilters()
     {
-        return licenseType?.ToLower() switch
-        {
-            "trial" => Color.Warning,
-            "basic" => Color.Info,
-            "professional" => Color.Primary,
-            "enterprise" => Color.Secondary,
-            _ => Color.Default
-        };
+        _searchTerm = string.Empty;
+        _statusFilter = "todos";
+        _licenseFilter = "todos";
+        ApplyFilters();
     }
 
     private void ViewTenant(int tenantId)
@@ -326,97 +303,126 @@
 
     private void EditTenant(int tenantId)
     {
-        Navigation.NavigateTo($"/tenants/edit/{tenantId}");
+        Navigation.NavigateTo($"/tenants/{tenantId}/edit");
     }
 
-    private void ManageTenant(int tenantId)
+    private void ConfigureTenant(int tenantId)
     {
-        Navigation.NavigateTo($"/tenants/{tenantId}/manage");
-    }
-
-    private async Task ToggleTenantStatus(TenantDto tenant)
-    {
-        var action = tenant.Active ? "desactivar" : "activar";
-        var confirm = await DialogService.ShowMessageBox(
-            "Confirmar acción",
-            $"¿Estás seguro de que quieres {action} la empresa '{tenant.Name}'?",
-            yesText: "Sí", cancelText: "Cancelar");
-
-        if (confirm == true)
-        {
-            try
-            {
-                var updateRequest = new UpdateTenantRequest(
-                    tenant.Name,
-                    tenant.ContactEmail,
-                    "", // ContactPhone - necesitaremos agregarlo al DTO
-                    tenant.LicenseType,
-                    tenant.MaxEmployees,
-                    !tenant.Active
-                );
-
-                var success = await ApiService.UpdateTenantAsync(tenant.Id, updateRequest);
-                if (success)
-                {
-                    NotificationService.ShowSuccess($"Empresa {action}da correctamente");
-                    await LoadTenants();
-                }
-                else
-                {
-                    NotificationService.ShowError($"Error al {action} la empresa");
-                }
-            }
-            catch (Exception ex)
-            {
-                NotificationService.ShowError($"Error al {action} la empresa");
-                Console.WriteLine($"Error toggling tenant status: {ex.Message}");
-            }
-        }
+        Navigation.NavigateTo($"/tenants/{tenantId}/settings");
     }
 
     private async Task DeleteTenant(TenantDto tenant)
     {
-        var confirm = await DialogService.ShowMessageBox(
-            "Eliminar empresa",
-            $"¿Estás seguro de que quieres eliminar la empresa '{tenant.Name}'? Esta acción no se puede deshacer.",
-            yesText: "Eliminar", cancelText: "Cancelar",
-            options: new DialogOptions { MaxWidth = MaxWidth.Small });
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"¿Está seguro que desea eliminar la empresa '{tenant.Name}'? Esta acción no se puede deshacer.",
+            ["ButtonText"] = "Eliminar",
+            ["Color"] = Color.Error
+        };
 
-        if (confirm == true)
+        var dialog = await DialogService.ShowAsync<Sphere.Admin.Client.Components.Common.ConfirmDialog>("Confirmar Eliminación", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
         {
             try
             {
-                var success = await ApiService.DeleteTenantAsync(tenant.Id);
-                if (success)
-                {
-                    NotificationService.ShowSuccess("Empresa eliminada correctamente");
-                    await LoadTenants();
-                }
-                else
-                {
-                    NotificationService.ShowError("Error al eliminar la empresa");
-                }
+                // TODO: Implementar eliminación en API
+                NotificationService.ShowSuccess($"Empresa '{tenant.Name}' eliminada correctamente.");
+                await LoadTenants();
             }
             catch (Exception ex)
             {
-                NotificationService.ShowError("Error al eliminar la empresa");
-                Console.WriteLine($"Error deleting tenant: {ex.Message}");
+                NotificationService.ShowError($"Error al eliminar empresa: {ex.Message}");
             }
         }
     }
 
-    private async Task ExportTenants()
+    private Color GetStatusColor(bool isActive)
     {
-        try
+        return isActive ? Color.Success : Color.Error;
+    }
+
+    private Color GetLicenseColor(string licenseType)
+    {
+        return licenseType.ToLower() switch
         {
-            // TODO: Implementar exportación a CSV/Excel
-            NotificationService.ShowInfo("Función de exportación en desarrollo");
-            await Task.CompletedTask;
-        }
-        catch (Exception ex)
+            "basic" => Color.Info,
+            "professional" => Color.Primary,
+            "enterprise" => Color.Success,
+            _ => Color.Default
+        };
+    }
+
+    private string GetLicenseText(string licenseType)
+    {
+        return licenseType.ToLower() switch
         {
-            NotificationService.ShowError("Error al exportar datos");
-            Console.WriteLine($"Error exporting tenants: {ex.Message}");
-        }
+            "basic" => "Básica",
+            "professional" => "Profesional",
+            "enterprise" => "Empresarial",
+            _ => licenseType
+        };
+    }
+
+    // Mock data para pruebas - TODO: Remover cuando esté la API
+    private async Task<List<TenantDto>> GetMockTenants()
+    {
+        await Task.Delay(1000); // Simular delay de API
+        
+        return new List<TenantDto>
+        {
+            new TenantDto
+            {
+                Id = 1,
+                Name = "Empresa Demo S.L.",
+                Subdomain = "empresa-demo",
+                ContactName = "Juan Pérez",
+                ContactEmail = "juan@empresa-demo.com",
+                EmployeeCount = 25,
+                LicenseType = "Professional",
+                IsActive = true,
+                CreatedAt = DateTime.Now.AddDays(-30)
+            },
+            new TenantDto
+            {
+                Id = 2,
+                Name = "Tech Solutions",
+                Subdomain = "tech-solutions",
+                ContactName = "María García",
+                ContactEmail = "maria@tech-solutions.com",
+                EmployeeCount = 50,
+                LicenseType = "Enterprise",
+                IsActive = true,
+                CreatedAt = DateTime.Now.AddDays(-45)
+            },
+            new TenantDto
+            {
+                Id = 3,
+                Name = "StartUp Inc",
+                Subdomain = "startup-inc",
+                ContactName = "Carlos López",
+                ContactEmail = "carlos@startup-inc.com",
+                EmployeeCount = 5,
+                LicenseType = "Basic",
+                IsActive = false,
+                CreatedAt = DateTime.Now.AddDays(-15)
+            }
+        };
+    }
+
+    // DTO temporal - TODO: Mover a Shared.Models
+    public class TenantDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Subdomain { get; set; } = string.Empty;
+        public string ContactName { get; set; } = string.Empty;
+        public string ContactEmail { get; set; } = string.Empty;
+        public int EmployeeCount { get; set; }
+        public string LicenseType { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 }

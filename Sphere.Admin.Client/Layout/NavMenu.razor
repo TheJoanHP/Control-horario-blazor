@@ -1,4 +1,5 @@
 ﻿@inject NavigationManager Navigation
+@inject AuthService AuthService
 
 <MudNavMenu>
     <div class="d-flex flex-column align-center py-4">
@@ -23,7 +24,7 @@
     </MudNavLink>
 
     <!-- Tenants/Empresas -->
-    <MudNavGroup Text="Empresas" 
+    <MudNavGroup Title="Empresas" 
                  Icon="@Icons.Material.Filled.Business"
                  Expanded="@IsExpanded("tenants")">
         <MudNavLink Href="/tenants" 
@@ -37,7 +38,7 @@
     </MudNavGroup>
 
     <!-- Licencias -->
-    <MudNavGroup Text="Licencias" 
+    <MudNavGroup Title="Licencias" 
                  Icon="@Icons.Material.Filled.VerifiedUser"
                  Expanded="@IsExpanded("licenses")">
         <MudNavLink Href="/licenses" 
@@ -51,7 +52,7 @@
     </MudNavGroup>
 
     <!-- Facturación -->
-    <MudNavGroup Text="Facturación" 
+    <MudNavGroup Title="Facturación" 
                  Icon="@Icons.Material.Filled.Payment"
                  Expanded="@IsExpanded("billing")">
         <MudNavLink Href="/billing" 
@@ -65,51 +66,71 @@
     </MudNavGroup>
 
     <!-- Analytics -->
-    <MudNavGroup Text="Estadísticas" 
+    <MudNavGroup Title="Estadísticas" 
                  Icon="@Icons.Material.Filled.Analytics"
                  Expanded="@IsExpanded("analytics")">
         <MudNavLink Href="/analytics" 
-                    Icon="@Icons.Material.Filled.BarChart">
+                    Icon="@Icons.Material.Filled.TrendingUp">
             Estadísticas Globales
         </MudNavLink>
         <MudNavLink Href="/analytics/usage" 
-                    Icon="@Icons.Material.Filled.TrendingUp">
+                    Icon="@Icons.Material.Filled.BarChart">
             Reportes de Uso
         </MudNavLink>
     </MudNavGroup>
 
-    <MudDivider Class="my-3" />
-
     <!-- Sistema -->
-    <MudNavGroup Text="Sistema" 
-                 Icon="@Icons.Material.Filled.Settings"
+    <MudNavGroup Title="Sistema" 
+                 Icon="@Icons.Material.Filled.AdminPanelSettings"
                  Expanded="@IsExpanded("system")">
-        <MudNavLink Href="/system/config" 
-                    Icon="@Icons.Material.Filled.Tune">
+        <MudNavLink Href="/system/settings" 
+                    Icon="@Icons.Material.Filled.Settings">
             Configuración
         </MudNavLink>
         <MudNavLink Href="/system/logs" 
-                    Icon="@Icons.Material.Filled.BugReport">
+                    Icon="@Icons.Material.Filled.Assignment">
             Logs del Sistema
+        </MudNavLink>
+        <MudNavLink Href="/system/backups" 
+                    Icon="@Icons.Material.Filled.Backup">
+            Respaldos
         </MudNavLink>
     </MudNavGroup>
 
-    <!-- Ayuda -->
-    <MudNavLink Href="/help" 
-                Icon="@Icons.Material.Filled.Help">
-        Ayuda
+    <MudDivider Class="my-4" />
+
+    <!-- Usuario -->
+    <MudNavGroup Title="Mi Cuenta" 
+                 Icon="@Icons.Material.Filled.AccountCircle"
+                 Expanded="@IsExpanded("account")">
+        <MudNavLink Href="/profile" 
+                    Icon="@Icons.Material.Filled.Person">
+            Mi Perfil
+        </MudNavLink>
+        <MudNavLink Href="/profile/security" 
+                    Icon="@Icons.Material.Filled.Security">
+            Seguridad
+        </MudNavLink>
+    </MudNavGroup>
+
+    <!-- Logout -->
+    <MudNavLink OnClick="HandleLogout"
+                Icon="@Icons.Material.Filled.Logout"
+                Class="mud-error-text">
+        Cerrar Sesión
     </MudNavLink>
 </MudNavMenu>
 
 @code {
-    private string GetCurrentPath()
-    {
-        return Navigation.ToBaseRelativePath(Navigation.Uri);
-    }
-
     private bool IsExpanded(string section)
     {
-        var currentPath = GetCurrentPath();
-        return currentPath.StartsWith(section, StringComparison.OrdinalIgnoreCase);
+        var currentPath = Navigation.Uri;
+        return currentPath.Contains($"/{section}");
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
     }
 }

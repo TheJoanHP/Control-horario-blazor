@@ -1,0 +1,669 @@
+@page "/billing/invoices"
+@inject ApiService ApiService
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+
+<PageTitle>Gestión de Facturas - Sphere Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="py-4">
+    
+    <!-- Breadcrumb -->
+    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+    
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                Gestión de Facturas
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Administre todas las facturas y cobros del sistema
+            </MudText>
+        </div>
+        
+        <MudButtonGroup Variant="Variant.Filled">
+            <MudButton Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="CreateManualInvoice">
+                Crear Factura
+            </MudButton>
+            <MudButton Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.FileDownload"
+                       OnClick="ExportInvoices">
+                Exportar
+            </MudButton>
+        </MudButtonGroup>
+    </div>
+
+    <!-- Filtros -->
+    <MudCard Class="mb-4">
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" md="3">
+                    <MudTextField @bind-Value="_searchTerm"
+                                  Label="Buscar factura o empresa"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  OnKeyUp="OnSearchChanged"
+                                  Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudSelect @bind-Value="_statusFilter"
+                               Label="Estado"
+                               Variant="Variant.Outlined"
+                               T="string">
+                        <MudSelectItem Value="@("todos")">Todos</MudSelectItem>
+                        <MudSelectItem Value="@("paid")">Pagadas</MudSelectItem>
+                        <MudSelectItem Value="@("pending")">Pendientes</MudSelectItem>
+                        <MudSelectItem Value="@("overdue")">Vencidas</MudSelectItem>
+                        <MudSelectItem Value="@("cancelled")">Canceladas</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudSelect @bind-Value="_planFilter"
+                               Label="Plan"
+                               Variant="Variant.Outlined"
+                               T="string">
+                        <MudSelectItem Value="@("todos")">Todos los planes</MudSelectItem>
+                        <MudSelectItem Value="@("basic")">Básico</MudSelectItem>
+                        <MudSelectItem Value="@("professional")">Profesional</MudSelectItem>
+                        <MudSelectItem Value="@("enterprise")">Empresarial</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudDatePicker @bind-Date="_dateFromFilter"
+                                   Label="Desde"
+                                   Variant="Variant.Outlined"
+                                   DateFormat="dd/MM/yyyy" />
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudDatePicker @bind-Date="_dateToFilter"
+                                   Label="Hasta"
+                                   Variant="Variant.Outlined"
+                                   DateFormat="dd/MM/yyyy" />
+                </MudItem>
+                <MudItem xs="12" md="1">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Secondary"
+                               FullWidth="true"
+                               OnClick="ClearFilters">
+                        Limpiar
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- Resumen -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="3">
+            <MudPaper Class="pa-4 text-center">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mud-primary-text">
+                    @_summary.TotalInvoices
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Total Facturas
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudPaper Class="pa-4 text-center">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mud-success-text">
+                    @_summary.TotalAmount.ToString("C")
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Importe Total
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudPaper Class="pa-4 text-center">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mud-info-text">
+                    @_summary.PendingAmount.ToString("C")
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Pendiente Cobro
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudPaper Class="pa-4 text-center">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mud-error-text">
+                    @_summary.OverdueAmount.ToString("C")
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Importe Vencido
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Tabla de facturas -->
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <div class="d-flex justify-space-between align-center">
+                    <MudText Typo="Typo.h6">
+                        Facturas (@(_filteredInvoices?.Count ?? 0))
+                    </MudText>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Refresh"
+                               OnClick="LoadInvoices">
+                        Actualizar
+                    </MudButton>
+                </div>
+            </CardHeaderContent>
+        </MudCardHeader>
+        
+        <MudCardContent Class="pa-0">
+            @if (_isLoading)
+            {
+                <div class="d-flex justify-center align-center pa-8">
+                    <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+                </div>
+            }
+            else if (_filteredInvoices?.Any() == true)
+            {
+                <MudTable Items="@_filteredInvoices"
+                          Hover="true"
+                          FixedHeader="true"
+                          Height="600px"
+                          Dense="true">
+                    <HeaderContent>
+                        <MudTh>Factura</MudTh>
+                        <MudTh>Empresa</MudTh>
+                        <MudTh>Plan</MudTh>
+                        <MudTh>Importe</MudTh>
+                        <MudTh>Fecha Emisión</MudTh>
+                        <MudTh>Vencimiento</MudTh>
+                        <MudTh>Estado</MudTh>
+                        <MudTh Style="text-align: center;">Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Factura">
+                            <div>
+                                <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                    #@context.InvoiceNumber
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    ID: @context.Id
+                                </MudText>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="Empresa">
+                            <div class="d-flex align-center">
+                                <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-3">
+                                    @context.CompanyName.Substring(0, 1).ToUpper()
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                        @context.CompanyName
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @context.ContactEmail
+                                    </MudText>
+                                </div>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="Plan">
+                            <MudChip T="string" Size="Size.Small" 
+                                     Color="@GetPlanColor(context.PlanType)">
+                                @GetPlanText(context.PlanType)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Importe">
+                            <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                @context.Amount.ToString("C")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Fecha Emisión">
+                            <MudText Typo="Typo.body2">
+                                @context.IssueDate.ToString("dd/MM/yyyy")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Vencimiento">
+                            <MudText Typo="Typo.body2" 
+                                     Class="@(context.DueDate < DateTime.Now && context.Status != "Paid" ? "mud-error-text" : "")">
+                                @context.DueDate.ToString("dd/MM/yyyy")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Estado">
+                            <MudChip T="string" Size="Size.Small" 
+                                     Color="@GetStatusColor(context.Status, context.DueDate)">
+                                @GetInvoiceStatusText(context.Status)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Acciones" Style="text-align: center;">
+                            <MudButtonGroup Variant="Variant.Text" Size="Size.Small">
+                                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                               Color="Color.Primary"
+                                               Title="Ver factura"
+                                               OnClick="@(() => ViewInvoice(context.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.FileDownload"
+                                               Color="Color.Info"
+                                               Title="Descargar PDF"
+                                               OnClick="@(() => DownloadInvoice(context.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Email"
+                                               Color="Color.Secondary"
+                                               Title="Enviar por email"
+                                               OnClick="@(() => SendInvoiceEmail(context))" />
+                                @if (context.Status == "Pending")
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle"
+                                                   Color="Color.Success"
+                                                   Title="Marcar como pagada"
+                                                   OnClick="@(() => MarkAsPaid(context))" />
+                                }
+                                @if (context.Status != "Cancelled")
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Cancel"
+                                                   Color="Color.Error"
+                                                   Title="Cancelar factura"
+                                                   OnClick="@(() => CancelInvoice(context))" />
+                                }
+                            </MudButtonGroup>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <div class="d-flex flex-column justify-center align-center pa-8">
+                    <MudIcon Icon="@Icons.Material.Filled.Receipt" 
+                             Size="Size.Large" 
+                             Class="mud-text-secondary mb-4" />
+                    <MudText Typo="Typo.h6" Class="mud-text-secondary mb-2">
+                        No se encontraron facturas
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+                        No hay facturas que coincidan con los filtros aplicados
+                    </MudText>
+                </div>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private List<InvoiceDto>? _invoices;
+    private List<InvoiceDto>? _filteredInvoices;
+    private InvoiceSummary _summary = new();
+    private bool _isLoading = true;
+    
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = "todos";
+    private string _planFilter = "todos";
+    private DateTime? _dateFromFilter;
+    private DateTime? _dateToFilter;
+
+    private List<BreadcrumbItem> _breadcrumbs = new()
+    {
+        new BreadcrumbItem("Dashboard", href: "/", icon: Icons.Material.Filled.Home),
+        new BreadcrumbItem("Facturación", href: "/billing", icon: Icons.Material.Filled.Payment),
+        new BreadcrumbItem("Facturas", href: null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInvoices();
+    }
+
+    private async Task LoadInvoices()
+    {
+        _isLoading = true;
+        try
+        {
+            // TODO: Implementar llamada a la API
+            _invoices = await GetMockInvoices();
+            CalculateSummary();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al cargar facturas: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSearchChanged()
+    {
+        ApplyFilters();
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (_invoices == null) return;
+
+        _filteredInvoices = _invoices.Where(i =>
+        {
+            // Filtro de búsqueda
+            if (!string.IsNullOrEmpty(_searchTerm))
+            {
+                var searchLower = _searchTerm.ToLower();
+                if (!i.InvoiceNumber.ToLower().Contains(searchLower) &&
+                    !i.CompanyName.ToLower().Contains(searchLower) &&
+                    !i.ContactEmail.ToLower().Contains(searchLower))
+                {
+                    return false;
+                }
+            }
+
+            // Filtro de estado
+            if (_statusFilter != "todos" && i.Status.ToLower() != _statusFilter)
+                return false;
+
+            // Filtro de plan
+            if (_planFilter != "todos" && i.PlanType.ToLower() != _planFilter)
+                return false;
+
+            // Filtro de fechas
+            if (_dateFromFilter.HasValue && i.IssueDate < _dateFromFilter.Value)
+                return false;
+
+            if (_dateToFilter.HasValue && i.IssueDate > _dateToFilter.Value)
+                return false;
+
+            return true;
+        }).ToList();
+
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        _statusFilter = "todos";
+        _planFilter = "todos";
+        _dateFromFilter = null;
+        _dateToFilter = null;
+        ApplyFilters();
+    }
+
+    private void CalculateSummary()
+    {
+        if (_invoices == null) return;
+
+        _summary = new InvoiceSummary
+        {
+            TotalInvoices = _invoices.Count,
+            TotalAmount = _invoices.Sum(i => i.Amount),
+            PendingAmount = _invoices.Where(i => i.Status == "Pending").Sum(i => i.Amount),
+            OverdueAmount = _invoices.Where(i => i.Status == "Pending" && i.DueDate < DateTime.Now).Sum(i => i.Amount)
+        };
+    }
+
+    private void ViewInvoice(int invoiceId)
+    {
+        Navigation.NavigateTo($"/billing/invoices/{invoiceId}");
+    }
+
+    private async Task DownloadInvoice(int invoiceId)
+    {
+        try
+        {
+            NotificationService.ShowLoading("Generando PDF...");
+            
+            // TODO: Implementar descarga de PDF
+            await Task.Delay(1500);
+            
+            NotificationService.ShowSuccess("Factura descargada correctamente.");
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al descargar factura: {ex.Message}");
+        }
+    }
+
+    private async Task SendInvoiceEmail(InvoiceDto invoice)
+    {
+        try
+        {
+            NotificationService.ShowLoading("Enviando factura por email...");
+            
+            // TODO: Implementar envío de email
+            await Task.Delay(1000);
+            
+            NotificationService.ShowSuccess($"Factura enviada a {invoice.ContactEmail}");
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al enviar factura: {ex.Message}");
+        }
+    }
+
+    private async Task MarkAsPaid(InvoiceDto invoice)
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"¿Confirma que la factura #{invoice.InvoiceNumber} ha sido pagada?",
+            ["ButtonText"] = "Marcar como Pagada",
+            ["Color"] = Color.Success
+        };
+
+        var dialog = await DialogService.ShowAsync<Sphere.Admin.Client.Components.Common.ConfirmDialog>("Confirmar Pago", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                // TODO: Implementar actualización en API
+                invoice.Status = "Paid";
+                invoice.PaidDate = DateTime.Now;
+                
+                NotificationService.ShowSuccess("Factura marcada como pagada.");
+                CalculateSummary();
+                ApplyFilters();
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowError($"Error al actualizar factura: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task CancelInvoice(InvoiceDto invoice)
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"¿Está seguro que desea cancelar la factura #{invoice.InvoiceNumber}? Esta acción no se puede deshacer.",
+            ["ButtonText"] = "Cancelar Factura",
+            ["Color"] = Color.Error
+        };
+
+        var dialog = await DialogService.ShowAsync<Sphere.Admin.Client.Components.Common.ConfirmDialog>("Cancelar Factura", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                // TODO: Implementar cancelación en API
+                invoice.Status = "Cancelled";
+                
+                NotificationService.ShowSuccess("Factura cancelada correctamente.");
+                CalculateSummary();
+                ApplyFilters();
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowError($"Error al cancelar factura: {ex.Message}");
+            }
+        }
+    }
+
+    private void CreateManualInvoice()
+    {
+        NotificationService.ShowInfo("Funcionalidad en desarrollo: Crear factura manual");
+        // TODO: Implementar creación manual de facturas
+    }
+
+    private async Task ExportInvoices()
+    {
+        try
+        {
+            NotificationService.ShowLoading("Exportando facturas...");
+            
+            // TODO: Implementar exportación
+            await Task.Delay(2000);
+            
+            NotificationService.ShowSuccess("Facturas exportadas correctamente.");
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al exportar facturas: {ex.Message}");
+        }
+    }
+
+    private Color GetPlanColor(string planType)
+    {
+        return planType.ToLower() switch
+        {
+            "basic" => Color.Info,
+            "professional" => Color.Warning,
+            "enterprise" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetPlanText(string planType)
+    {
+        return planType.ToLower() switch
+        {
+            "basic" => "Básico",
+            "professional" => "Profesional",
+            "enterprise" => "Empresarial",
+            _ => planType
+        };
+    }
+
+    private Color GetStatusColor(string status, DateTime dueDate)
+    {
+        return status.ToLower() switch
+        {
+            "paid" => Color.Success,
+            "pending" when dueDate < DateTime.Now => Color.Error,
+            "pending" => Color.Info,
+            "cancelled" => Color.Default,
+            "overdue" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetInvoiceStatusText(string status)
+    {
+        return status.ToLower() switch
+        {
+            "paid" => "Pagada",
+            "pending" => "Pendiente",
+            "overdue" => "Vencida",
+            "cancelled" => "Cancelada",
+            _ => status
+        };
+    }
+
+    // Mock data - TODO: Reemplazar con API real
+    private async Task<List<InvoiceDto>> GetMockInvoices()
+    {
+        await Task.Delay(800);
+        
+        return new List<InvoiceDto>
+        {
+            new()
+            {
+                Id = 1,
+                InvoiceNumber = "INV-2025-001",
+                CompanyName = "Tech Solutions",
+                ContactEmail = "admin@tech-solutions.com",
+                PlanType = "Enterprise",
+                Amount = 299.99m,
+                IssueDate = DateTime.Now.AddDays(-5),
+                DueDate = DateTime.Now.AddDays(25),
+                Status = "Paid",
+                PaidDate = DateTime.Now.AddDays(-2)
+            },
+            new()
+            {
+                Id = 2,
+                InvoiceNumber = "INV-2025-002",
+                CompanyName = "Digital Corp",
+                ContactEmail = "billing@digital-corp.com",
+                PlanType = "Professional",
+                Amount = 99.99m,
+                IssueDate = DateTime.Now.AddDays(-3),
+                DueDate = DateTime.Now.AddDays(27),
+                Status = "Pending"
+            },
+            new()
+            {
+                Id = 3,
+                InvoiceNumber = "INV-2025-003",
+                CompanyName = "Innovation Hub",
+                ContactEmail = "finance@innovation-hub.com",
+                PlanType = "Professional",
+                Amount = 99.99m,
+                IssueDate = DateTime.Now.AddDays(-1),
+                DueDate = DateTime.Now.AddDays(29),
+                Status = "Pending"
+            },
+            new()
+            {
+                Id = 4,
+                InvoiceNumber = "INV-2024-456",
+                CompanyName = "StartUp Labs",
+                ContactEmail = "admin@startup-labs.com",
+                PlanType = "Basic",
+                Amount = 29.99m,
+                IssueDate = DateTime.Now.AddDays(-35),
+                DueDate = DateTime.Now.AddDays(-5),
+                Status = "Pending"
+            },
+            new()
+            {
+                Id = 5,
+                InvoiceNumber = "INV-2024-455",
+                CompanyName = "Creative Agency",
+                ContactEmail = "accounts@creative-agency.com",
+                PlanType = "Professional",
+                Amount = 99.99m,
+                IssueDate = DateTime.Now.AddDays(-40),
+                DueDate = DateTime.Now.AddDays(-10),
+                Status = "Cancelled"
+            }
+        };
+    }
+
+    // DTOs
+    public class InvoiceDto
+    {
+        public int Id { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string CompanyName { get; set; } = string.Empty;
+        public string ContactEmail { get; set; } = string.Empty;
+        public string PlanType { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public DateTime IssueDate { get; set; }
+        public DateTime DueDate { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public DateTime? PaidDate { get; set; }
+    }
+
+    public class InvoiceSummary
+    {
+        public int TotalInvoices { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal PendingAmount { get; set; }
+        public decimal OverdueAmount { get; set; }
+    }
+}
