@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "Sphere.Admin.Client",
   "resources": {
-    "hash": "sha256-yaQ9peswT2GijidMj0CxzsvlYmM6yxCO599GhD+8AOA=",
+    "hash": "sha256-cWFz2mV2xMMnK+3rMOfV2Z3+TR/vAf2a7/w7eG/wZlw=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Microsoft.AspNetCore.Authorization.bvu82j4ad3.wasm": "Microsoft.AspNetCore.Authorization.wasm",
@@ -218,10 +218,10 @@
       "icudt_CJK.tjcz0u77k5.dat": "icudt_CJK.dat",
       "icudt_EFIGS.tptq2av103.dat": "icudt_EFIGS.dat",
       "icudt_no_CJK.lfu7j35m59.dat": "icudt_no_CJK.dat",
-      "Shared.Models.spkxlfhaku.wasm": "Shared.Models.wasm",
-      "Shared.Models.hfc7lt5lig.pdb": "Shared.Models.pdb",
-      "Sphere.Admin.Client.8dm734xtm8.wasm": "Sphere.Admin.Client.wasm",
-      "Sphere.Admin.Client.5z0g2gqq6m.pdb": "Sphere.Admin.Client.pdb"
+      "Shared.Models.v6trljry5c.wasm": "Shared.Models.wasm",
+      "Shared.Models.r8dno7s5e1.pdb": "Shared.Models.pdb",
+      "Sphere.Admin.Client.0s6bgf98ah.wasm": "Sphere.Admin.Client.wasm",
+      "Sphere.Admin.Client.nuazd2r4ha.pdb": "Sphere.Admin.Client.pdb"
     },
     "jsModuleNative": {
       "dotnet.native.st0ovrfdhi.js": "sha256-MBW/zayfv+YU6mhH7y4b8NNU4D1EYd7nf9gYrFshnnY="
@@ -448,12 +448,12 @@
       "WindowsBase.pg3o6xzigg.wasm": "sha256-dz62CHynC+zqTkbMOf3vm7YAhiRA8/pIoAwuqHfBL5M=",
       "mscorlib.jl2pswegra.wasm": "sha256-mSoCIDTdCQKTipW8VmFCypW/4AopZauaYRa8LoZdHvY=",
       "netstandard.uriri6ambh.wasm": "sha256-yuH/cvPd6r8N9nfPWihyckFD7hPFP+VQtQQxEqi7HIQ=",
-      "Shared.Models.spkxlfhaku.wasm": "sha256-IEiceurs0vZq5HChwzpTBnA/n6xGcZqLCRK6R+/wwis=",
-      "Sphere.Admin.Client.8dm734xtm8.wasm": "sha256-BNDO7YYNMvDU4qFeRoPT5l8NmbrBjIJINud2adKtnYU="
+      "Shared.Models.v6trljry5c.wasm": "sha256-eaI3GI0pNI6cgw7+74XZTUJbV7ZFHtTSOvsYaJ+S4nE=",
+      "Sphere.Admin.Client.0s6bgf98ah.wasm": "sha256-EDOJSXgA6IIJX/2aWRUd+m6nsgItbFOPAfklot6r9Ew="
     },
     "pdb": {
-      "Shared.Models.hfc7lt5lig.pdb": "sha256-U2wDhiyzqd7IWcuk04Jfw6Prqo50FjgWiSN4MNHdZaA=",
-      "Sphere.Admin.Client.5z0g2gqq6m.pdb": "sha256-D/UO6Pz5cD3TSVKJ6TQnSFW8E6yV0Tx2+ogzgivbDQI="
+      "Shared.Models.r8dno7s5e1.pdb": "sha256-NcmuAxhJ7iC43vu4QKOYBz4EkxOik5zc4/0JlMSZeFE=",
+      "Sphere.Admin.Client.nuazd2r4ha.pdb": "sha256-UblbwuvOQoORDXDiCajZMKD5FiQdP88hmhpHSg/twT4="
     }
   },
   "cacheBootResources": true,

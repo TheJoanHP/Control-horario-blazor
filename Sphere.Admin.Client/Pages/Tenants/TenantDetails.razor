@@ -1,0 +1,623 @@
+@page "/tenants/{TenantId:int}"
+@inject ApiService ApiService
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+
+<PageTitle>@(_tenant?.Name ?? "Empresa") - Sphere Admin</PageTitle>
+
+@if (_isLoading)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 50vh;">
+        <div class="text-center">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.h6" Class="mt-4">Cargando información de la empresa...</MudText>
+        </div>
+    </MudContainer>
+}
+else if (_tenant == null)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="text-center py-8">
+        <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Size="Size.Large" Color="Color.Error" />
+        <MudText Typo="Typo.h5" Class="mt-4">Empresa no encontrada</MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary mb-4">
+            La empresa solicitada no existe o no tienes permisos para verla.
+        </MudText>
+        <MudButton Variant="Variant.Filled" 
+                 Color="Color.Primary" 
+                 StartIcon="@Icons.Material.Filled.ArrowBack"
+                 Href="/tenants">
+            Volver a Empresas
+        </MudButton>
+    </MudContainer>
+}
+else
+{
+    <!-- Breadcrumb -->
+    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+
+    <!-- Header de la empresa -->
+    <MudContainer MaxWidth="MaxWidth.False" Class="mb-6">
+        <div class="d-flex justify-space-between align-center flex-wrap">
+            <div class="d-flex align-center gap-4">
+                <MudAvatar Color="Color.Primary" Size="Size.Large">
+                    @_tenant.Name.Substring(0, 1).ToUpper()
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h3" Class="mud-text-primary font-weight-bold">
+                        @_tenant.Name
+                    </MudText>
+                    <div class="d-flex align-center gap-2 mt-2">
+                        <MudChip T="string" Size="Size.Small" 
+                               Color="@(_tenant.IsActive ? Color.Success : Color.Error)">
+                            @(_tenant.IsActive ? "Activa" : "Inactiva")
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" 
+                               Color="@GetLicenseColor(_tenant.LicenseType)">
+                            @GetLicenseText(_tenant.LicenseType)
+                        </MudChip>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            ID: @_tenant.Id
+                        </MudText>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <MudButton Variant="Variant.Outlined" 
+                         Color="Color.Primary" 
+                         StartIcon="@Icons.Material.Filled.Edit"
+                         Href="@($"/tenants/{TenantId}/edit")">
+                    Editar
+                </MudButton>
+                <MudButton Variant="Variant.Filled" 
+                         Color="@(_tenant.IsActive ? Color.Warning : Color.Success)"
+                         StartIcon="@(_tenant.IsActive ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)"
+                         OnClick="ToggleTenantStatus">
+                    @(_tenant.IsActive ? "Suspender" : "Activar")
+                </MudButton>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Color="Color.Default">
+                    <MudMenuItem Icon="@Icons.Material.Filled.Settings"
+                                 OnClick="@(() => Navigation.NavigateTo($"/tenants/{TenantId}/settings"))">
+                        Configuración
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Group"
+                                 OnClick="@(() => Navigation.NavigateTo($"/tenants/{TenantId}/employees"))">
+                        Ver Empleados
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Assessment"
+                                 OnClick="@(() => Navigation.NavigateTo($"/tenants/{TenantId}/reports"))">
+                        Reportes
+                    </MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Delete"
+                                 IconColor="Color.Error"
+                                 OnClick="DeleteTenant">
+                        Eliminar Empresa
+                    </MudMenuItem>
+                </MudMenu>
+            </div>
+        </div>
+    </MudContainer>
+
+    <MudGrid>
+        <!-- Información general -->
+        <MudItem xs="12" md="8">
+            <!-- Información básica -->
+            <MudCard Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-3" />
+                            <MudText Typo="Typo.h6">Información General</MudText>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-1">
+                                Nombre de la Empresa
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                @_tenant.Name
+                            </MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-1">
+                                Subdominio
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                @($"{_tenant.Subdomain}.sphere-control.com")
+                            </MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-1">
+                                Email de Contacto
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                @_tenant.ContactEmail
+                            </MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-1">
+                                Fecha de Registro
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                @_tenant.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                            </MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Estadísticas de uso -->
+            <MudCard Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="mr-3" />
+                            <MudText Typo="Typo.h6">Estadísticas de Uso</MudText>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_stats != null)
+                    {
+                        <MudGrid>
+                            <MudItem xs="6" md="3">
+                                <div class="text-center pa-3">
+                                    <MudText Typo="Typo.h4" Class="font-weight-bold mud-primary-text">
+                                        @_stats.TotalEmployees
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                        Empleados
+                                    </MudText>
+                                </div>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <div class="text-center pa-3">
+                                    <MudText Typo="Typo.h4" Class="font-weight-bold mud-success-text">
+                                        @_stats.ActiveEmployees
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                        Activos
+                                    </MudText>
+                                </div>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <div class="text-center pa-3">
+                                    <MudText Typo="Typo.h4" Class="font-weight-bold mud-info-text">
+                                        @_stats.TotalTimeRecords.ToString("N0")
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                        Registros
+                                    </MudText>
+                                </div>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <div class="text-center pa-3">
+                                    <MudText Typo="Typo.h4" Class="font-weight-bold mud-warning-text">
+                                        @_stats.AverageHoursPerDay.ToString("F1")h
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                        Promedio/día
+                                    </MudText>
+                                </div>
+                            </MudItem>
+                        </MudGrid>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <MudProgressCircular Size="Size.Medium" Indeterminate="true" />
+                        </div>
+                    }
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Actividad reciente -->
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex justify-space-between align-center">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.History" Class="mr-3" />
+                                <MudText Typo="Typo.h6">Actividad Reciente</MudText>
+                            </div>
+                            <MudButton Variant="Variant.Text" 
+                                       Color="Color.Primary"
+                                       OnClick="@(() => Navigation.NavigateTo($"/tenants/{TenantId}/reports"))">
+                                Ver Todos los Reportes
+                            </MudButton>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_recentActivity?.Any() == true)
+                    {
+                        <MudList T="string">
+                            @foreach (var activity in _recentActivity.Take(5))
+                            {
+                                <MudListItem T="string">
+                                    <div class="d-flex align-center">
+                                        <MudAvatar Color="@GetActivityColor(activity.Type)" Size="Size.Small" Class="mr-3">
+                                            <MudIcon Icon="@GetActivityIcon(activity.Type)" Size="Size.Small" />
+                                        </MudAvatar>
+                                        <div class="flex-grow-1">
+                                            <MudText Typo="Typo.body2">@activity.Description</MudText>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                @activity.Timestamp.ToString("dd/MM/yyyy HH:mm")
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                </MudListItem>
+                                <MudDivider />
+                            }
+                        </MudList>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <MudIcon Icon="@Icons.Material.Filled.Inbox" Size="Size.Large" Class="mud-text-secondary mb-2" />
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                No hay actividad reciente
+                            </MudText>
+                        </div>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Panel lateral -->
+        <MudItem xs="12" md="4">
+            <!-- Información de licencia -->
+            <MudCard Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Class="mr-3" />
+                            <MudText Typo="Typo.h6">Licencia</MudText>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <div class="text-center mb-4">
+                        <MudChip T="string" Size="Size.Large" 
+                                 Color="@GetLicenseColor(_tenant.LicenseType)"
+                                 Variant="Variant.Filled">
+                            @GetLicenseText(_tenant.LicenseType)
+                        </MudChip>
+                    </div>
+                    
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            Empleados:
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="font-weight-bold">
+                            @(_stats?.TotalEmployees ?? 0) / @(_tenant.MaxEmployees == 0 ? "∞" : _tenant.MaxEmployees.ToString())
+                        </MudText>
+                    </div>
+                    
+                    @if (_tenant.MaxEmployees > 0)
+                    {
+                        <MudProgressLinear Value="@GetEmployeeUsagePercentage()" 
+                                           Color="@GetEmployeeUsageColor()" 
+                                           Size="Size.Small" 
+                                           Class="mb-3" />
+                    }
+                    
+                    <MudDivider Class="my-3" />
+                    
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Próxima facturación: @DateTime.Now.AddMonths(1).ToString("dd/MM/yyyy")
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Acciones rápidas -->
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Speed" Class="mr-3" />
+                            <MudText Typo="Typo.h6">Acciones Rápidas</MudText>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Group"
+                                   OnClick="@(() => Navigation.NavigateTo($"/tenants/{TenantId}/employees"))">
+                            Ver Empleados
+                        </MudButton>
+                        
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Info"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Assessment"
+                                   OnClick="@(() => Navigation.NavigateTo($"/tenants/{TenantId}/reports"))">
+                            Generar Reporte
+                        </MudButton>
+                        
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Secondary"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Settings"
+                                   OnClick="@(() => Navigation.NavigateTo($"/tenants/{TenantId}/settings"))">
+                            Configuración
+                        </MudButton>
+                        
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Warning"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Backup"
+                                   OnClick="CreateBackup">
+                            Crear Backup
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public int TenantId { get; set; }
+
+    private TenantDetailsDto? _tenant;
+    private TenantStatsDto? _stats;
+    private List<ActivityItem>? _recentActivity;
+    private bool _isLoading = true;
+
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTenantDetails();
+        UpdateBreadcrumbs();
+    }
+
+    private async Task LoadTenantDetails()
+    {
+        _isLoading = true;
+        try
+        {
+            // TODO: Implementar llamadas a la API real
+            await LoadTenant();
+            await LoadStats();
+            await LoadRecentActivity();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al cargar información de la empresa: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadTenant()
+    {
+        // TODO: Reemplazar con API real
+        await Task.Delay(500);
+        
+        _tenant = new TenantDetailsDto
+        {
+            Id = TenantId,
+            Name = "Empresa Demo S.L.",
+            Subdomain = "empresa-demo",
+            ContactEmail = "admin@empresa-demo.com",
+            LicenseType = "Professional",
+            MaxEmployees = 50,
+            IsActive = true,
+            CreatedAt = DateTime.Now.AddMonths(-6)
+        };
+    }
+
+    private async Task LoadStats()
+    {
+        await Task.Delay(300);
+        
+        _stats = new TenantStatsDto
+        {
+            TotalEmployees = 25,
+            ActiveEmployees = 23,
+            TotalTimeRecords = 1250,
+            AverageHoursPerDay = 8.2
+        };
+    }
+
+    private async Task LoadRecentActivity()
+    {
+        await Task.Delay(200);
+        
+        _recentActivity = new List<ActivityItem>
+        {
+            new() { Type = "check_in", Description = "Juan Pérez fichó entrada", Timestamp = DateTime.Now.AddHours(-2) },
+            new() { Type = "vacation_request", Description = "María García solicitó vacaciones", Timestamp = DateTime.Now.AddHours(-4) },
+            new() { Type = "overtime", Description = "Carlos López registró horas extra", Timestamp = DateTime.Now.AddHours(-6) },
+            new() { Type = "check_out", Description = "Ana Martín fichó salida", Timestamp = DateTime.Now.AddHours(-8) }
+        };
+    }
+
+    private void UpdateBreadcrumbs()
+    {
+        _breadcrumbs = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Dashboard", href: "/", icon: Icons.Material.Filled.Home),
+            new BreadcrumbItem("Empresas", href: "/tenants", icon: Icons.Material.Filled.Business),
+            new BreadcrumbItem(_tenant?.Name ?? "Empresa", href: null, disabled: true)
+        };
+    }
+
+    private async Task ToggleTenantStatus()
+    {
+        if (_tenant == null) return;
+
+        var action = _tenant.IsActive ? "suspender" : "activar";
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"¿Está seguro que desea {action} la empresa '{_tenant.Name}'?",
+            ["ButtonText"] = action.ToUpper(),
+            ["Color"] = _tenant.IsActive ? Color.Warning : Color.Success
+        };
+
+        var dialog = await DialogService.ShowAsync<Sphere.Admin.Client.Components.Common.ConfirmDialog>($"Confirmar {action}", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                // TODO: Implementar llamada a la API
+                _tenant.IsActive = !_tenant.IsActive;
+                NotificationService.ShowSuccess($"Empresa {action}da correctamente.");
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowError($"Error al {action} empresa: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task DeleteTenant()
+    {
+        if (_tenant == null) return;
+
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"¿Está seguro que desea eliminar la empresa '{_tenant.Name}'? Esta acción no se puede deshacer y eliminará todos los datos asociados.",
+            ["ButtonText"] = "ELIMINAR",
+            ["Color"] = Color.Error
+        };
+
+        var dialog = await DialogService.ShowAsync<Sphere.Admin.Client.Components.Common.ConfirmDialog>("Confirmar Eliminación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                // TODO: Implementar eliminación en API
+                NotificationService.ShowSuccess($"Empresa '{_tenant.Name}' eliminada correctamente.");
+                Navigation.NavigateTo("/tenants");
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowError($"Error al eliminar empresa: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task CreateBackup()
+    {
+        try
+        {
+            NotificationService.ShowLoading("Creando backup de la empresa...");
+            
+            // TODO: Implementar backup
+            await Task.Delay(2000);
+            
+            NotificationService.ShowSuccess("Backup creado correctamente.");
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al crear backup: {ex.Message}");
+        }
+    }
+
+    private Color GetLicenseColor(string licenseType)
+    {
+        return licenseType.ToLower() switch
+        {
+            "basic" => Color.Info,
+            "professional" => Color.Warning,
+            "enterprise" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetLicenseText(string licenseType)
+    {
+        return licenseType.ToLower() switch
+        {
+            "basic" => "Básico",
+            "professional" => "Profesional",
+            "enterprise" => "Empresarial",
+            _ => licenseType
+        };
+    }
+
+    private double GetEmployeeUsagePercentage()
+    {
+        if (_tenant?.MaxEmployees == 0 || _stats == null) return 0;
+        return Math.Min((double)_stats.TotalEmployees / _tenant.MaxEmployees * 100, 100);
+    }
+
+    private Color GetEmployeeUsageColor()
+    {
+        var percentage = GetEmployeeUsagePercentage();
+        return percentage switch
+        {
+            <= 70 => Color.Success,
+            <= 90 => Color.Warning,
+            _ => Color.Error
+        };
+    }
+
+    private Color GetActivityColor(string activityType)
+    {
+        return activityType.ToLower() switch
+        {
+            "check_in" => Color.Success,
+            "check_out" => Color.Info,
+            "vacation_request" => Color.Warning,
+            "overtime" => Color.Primary,
+            _ => Color.Default
+        };
+    }
+
+    private string GetActivityIcon(string activityType)
+    {
+        return activityType.ToLower() switch
+        {
+            "check_in" => Icons.Material.Filled.Login,
+            "check_out" => Icons.Material.Filled.Logout,
+            "vacation_request" => Icons.Material.Filled.BeachAccess,
+            "overtime" => Icons.Material.Filled.Schedule,
+            _ => Icons.Material.Filled.Info
+        };
+    }
+
+    // DTOs temporales
+    public class TenantDetailsDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Subdomain { get; set; } = string.Empty;
+        public string ContactEmail { get; set; } = string.Empty;
+        public string LicenseType { get; set; } = string.Empty;
+        public int MaxEmployees { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class TenantStatsDto
+    {
+        public int TotalEmployees { get; set; }
+        public int ActiveEmployees { get; set; }
+        public int TotalTimeRecords { get; set; }
+        public double AverageHoursPerDay { get; set; }
+    }
+
+    public class ActivityItem
+    {
+        public string Type { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+    }
+}

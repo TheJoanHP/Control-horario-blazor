@@ -1,0 +1,552 @@
+@page "/tenants/{TenantId:int}/settings"
+@inject ApiService ApiService
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+
+<PageTitle>Configuración - @(_tenant?.Name ?? "Empresa") - Sphere Admin</PageTitle>
+
+@if (_isLoading)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="d-flex justify-center align-center" Style="min-height: 400px;">
+        <div class="text-center">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.h6" Class="mt-4">Cargando configuración...</MudText>
+        </div>
+    </MudContainer>
+}
+else if (_tenant == null)
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="text-center py-8">
+        <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Size="Size.Large" Color="Color.Error" />
+        <MudText Typo="Typo.h5" Class="mt-4">Empresa no encontrada</MudText>
+        <MudButton Variant="Variant.Filled" 
+                 Color="Color.Primary" 
+                 StartIcon="@Icons.Material.Filled.ArrowBack"
+                 Href="/tenants">
+            Volver a Empresas
+        </MudButton>
+    </MudContainer>
+}
+else
+{
+    <!-- Header -->
+    <MudContainer MaxWidth="MaxWidth.False" Class="mb-6">
+        <div class="d-flex align-center">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" 
+                         Color="Color.Primary" 
+                         Href="@($"/tenants/{TenantId}")"
+                         Class="mr-3" />
+            <MudAvatar Size="Size.Large" Color="Color.Primary" Class="mr-4">
+                @_tenant.Name.Substring(0, 1).ToUpper()
+            </MudAvatar>
+            <div>
+                <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                    Configuración de @_tenant.Name
+                </MudText>
+                <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">
+                    Configuración específica de la empresa
+                </MudText>
+            </div>
+        </div>
+    </MudContainer>
+
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudGrid>
+            <!-- Configuración de horarios -->
+            <MudItem xs="12" md="6">
+                <MudCard Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-3" />
+                                <MudText Typo="Typo.h6">Horarios de Trabajo</MudText>
+                            </div>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_workStartTimeString"
+                                              Label="Hora de Entrada"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Time" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_workEndTimeString"
+                                              Label="Hora de Salida"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Time" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.BreakDurationMinutes"
+                                                 Label="Duración del Descanso (min)"
+                                                 Variant="Variant.Outlined"
+                                                 Min="0"
+                                                 Max="120" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.GracePeriodMinutes"
+                                                 Label="Período de Gracia (min)"
+                                                 Variant="Variant.Outlined"
+                                                 Min="0"
+                                                 Max="60" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Configuración de notificaciones -->
+            <MudItem xs="12" md="6">
+                <MudCard Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-3" />
+                                <MudText Typo="Typo.h6">Notificaciones</MudText>
+                            </div>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudStack Spacing="3">
+                            <MudSwitch T="bool"
+                                       @bind-Value="_settings.EmailNotifications"
+                                       Label="Notificaciones por Email"
+                                       Color="Color.Primary" />
+                            
+                            <MudSwitch T="bool"
+                                       @bind-Value="_settings.LateArrivalNotifications"
+                                       Label="Alertas por Llegadas Tardías"
+                                       Color="Color.Warning" />
+                            
+                            <MudSwitch T="bool"
+                                       @bind-Value="_settings.OvertimeNotifications"
+                                       Label="Alertas por Horas Extra"
+                                       Color="Color.Info" />
+                            
+                            <MudSwitch T="bool"
+                                       @bind-Value="_settings.VacationRequestNotifications"
+                                       Label="Notificaciones de Vacaciones"
+                                       Color="Color.Success" />
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Configuración de seguridad -->
+            <MudItem xs="12" md="6">
+                <MudCard Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Security" Class="mr-3" />
+                                <MudText Typo="Typo.h6">Seguridad</MudText>
+                            </div>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudStack Spacing="3">
+                            <MudSwitch T="bool"
+                                       @bind-Value="_settings.RequireGeolocation"
+                                       Label="Requerir Geolocalización"
+                                       Color="Color.Primary" />
+                            
+                            <MudSwitch T="bool"
+                                       @bind-Value="_settings.RequirePhotoOnClockIn"
+                                       Label="Foto Obligatoria al Fichar"
+                                       Color="Color.Secondary" />
+                            
+                            <MudSwitch T="bool"
+                                       @bind-Value="_settings.TwoFactorAuthentication"
+                                       Label="Autenticación de Dos Factores"
+                                       Color="Color.Error" />
+                            
+                            <MudNumericField @bind-Value="_settings.SessionTimeoutMinutes"
+                                             Label="Tiempo de Sesión (min)"
+                                             Variant="Variant.Outlined"
+                                             Min="15"
+                                             Max="480" />
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Configuración de vacaciones -->
+            <MudItem xs="12" md="6">
+                <MudCard Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.BeachAccess" Class="mr-3" />
+                                <MudText Typo="Typo.h6">Vacaciones</MudText>
+                            </div>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.AnnualVacationDays"
+                                                 Label="Días de Vacaciones Anuales"
+                                                 Variant="Variant.Outlined"
+                                                 Min="0"
+                                                 Max="60" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.MaxConsecutiveVacationDays"
+                                                 Label="Máx. Días Consecutivos"
+                                                 Variant="Variant.Outlined"
+                                                 Min="1"
+                                                 Max="30" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.VacationAdvanceNoticeDays"
+                                                 Label="Días de Anticipación"
+                                                 Variant="Variant.Outlined"
+                                                 Min="1"
+                                                 Max="90" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudSwitch T="bool"
+                                           @bind-Value="_settings.RequireVacationApproval"
+                                           Label="Requiere Aprobación"
+                                           Color="Color.Warning" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Configuración de reportes -->
+            <MudItem xs="12" md="6">
+                <MudCard Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Assessment" Class="mr-3" />
+                                <MudText Typo="Typo.h6">Reportes</MudText>
+                            </div>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudStack Spacing="3">
+                            <MudSelect @bind-Value="_settings.AutoReportFrequency"
+                                       Label="Frecuencia de Reportes Automáticos"
+                                       Variant="Variant.Outlined"
+                                       T="string">
+                                <MudSelectItem Value="@("None")">Deshabilitado</MudSelectItem>
+                                <MudSelectItem Value="@("Daily")">Diario</MudSelectItem>
+                                <MudSelectItem Value="@("Weekly")">Semanal</MudSelectItem>
+                                <MudSelectItem Value="@("Monthly")">Mensual</MudSelectItem>
+                            </MudSelect>
+                            
+                            <MudTextField @bind-Value="_settings.ReportEmailRecipients"
+                                          Label="Destinatarios de Reportes"
+                                          Variant="Variant.Outlined"
+                                          Lines="2" />
+                            
+                            <MudSwitch T="bool"
+                                       @bind-Value="_settings.IncludePhotosInReports"
+                                       Label="Incluir Fotos en Reportes"
+                                       Color="Color.Info" />
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Configuración de integración -->
+            <MudItem xs="12" md="6">
+                <MudCard Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Link" Class="mr-3" />
+                                <MudText Typo="Typo.h6">Integraciones</MudText>
+                            </div>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_settings.SlackWebhookUrl"
+                                              Label="Webhook de Slack"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_settings.ApiKey"
+                                              Label="API Key"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Password" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudSwitch T="bool"
+                                           @bind-Value="_settings.EnableExternalApi"
+                                           Label="Habilitar API Externa"
+                                           Color="Color.Primary" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Acciones -->
+        <MudCard Class="mt-4">
+            <MudCardContent>
+                <div class="d-flex justify-space-between align-center">
+                    <div>
+                        <MudText Typo="Typo.h6">Guardar Configuración</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            Los cambios se aplicarán inmediatamente a todos los empleados
+                        </MudText>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Default"
+                                   StartIcon="@Icons.Material.Filled.Refresh"
+                                   OnClick="ResetSettings"
+                                   Disabled="@_isSaving">
+                            Restaurar
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="SaveSettings"
+                                   Disabled="@_isSaving">
+                            @if (_isSaving)
+                            {
+                                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                                <span>Guardando...</span>
+                            }
+                            else
+                            {
+                                <span>Guardar Configuración</span>
+                            }
+                        </MudButton>
+                    </div>
+                </div>
+            </MudCardContent>
+        </MudCard>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public int TenantId { get; set; }
+
+    private TenantDto? _tenant;
+    private TenantSettingsDto _settings = new();
+    private TenantSettingsDto _originalSettings = new();
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+
+    // Propiedades para manejar las horas como string
+    private string _workStartTimeString = "09:00";
+    private string _workEndTimeString = "17:00";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTenantAndSettings();
+    }
+
+    private async Task LoadTenantAndSettings()
+    {
+        _isLoading = true;
+        try
+        {
+            await LoadTenant();
+            await LoadSettings();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al cargar configuración: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadTenant()
+    {
+        // TODO: Implementar llamada a la API real
+        await Task.Delay(300);
+        
+        _tenant = new TenantDto
+        {
+            Id = TenantId,
+            Name = "Empresa Demo S.L.",
+            Subdomain = "empresa-demo",
+            ContactEmail = "admin@empresa-demo.com",
+            LicenseType = "Professional",
+            IsActive = true,
+            CreatedAt = DateTime.Now.AddMonths(-6)
+        };
+    }
+
+    private async Task LoadSettings()
+    {
+        // TODO: Implementar llamada a la API real
+        await Task.Delay(500);
+        
+        _settings = new TenantSettingsDto
+        {
+            // Horarios
+            WorkStartTime = TimeSpan.FromHours(9),
+            WorkEndTime = TimeSpan.FromHours(17),
+            BreakDurationMinutes = 30,
+            GracePeriodMinutes = 15,
+            
+            // Notificaciones
+            EmailNotifications = true,
+            LateArrivalNotifications = true,
+            OvertimeNotifications = false,
+            VacationRequestNotifications = true,
+            
+            // Seguridad
+            RequireGeolocation = false,
+            RequirePhotoOnClockIn = false,
+            TwoFactorAuthentication = false,
+            SessionTimeoutMinutes = 120,
+            
+            // Vacaciones
+            AnnualVacationDays = 22,
+            MaxConsecutiveVacationDays = 15,
+            VacationAdvanceNoticeDays = 7,
+            RequireVacationApproval = true,
+            
+            // Reportes
+            AutoReportFrequency = "Weekly",
+            ReportEmailRecipients = "admin@empresa-demo.com",
+            IncludePhotosInReports = false,
+            
+            // Integraciones
+            SlackWebhookUrl = "",
+            ApiKey = "",
+            EnableExternalApi = false
+        };
+        
+        // Inicializar strings de tiempo
+        _workStartTimeString = _settings.WorkStartTime.ToString(@"hh\:mm");
+        _workEndTimeString = _settings.WorkEndTime.ToString(@"hh\:mm");
+        
+        // Clonar para comparar cambios
+        _originalSettings = CloneSettings(_settings);
+    }
+
+    private async Task SaveSettings()
+    {
+        _isSaving = true;
+        try
+        {
+            // Convertir strings de tiempo a TimeSpan
+            if (TimeSpan.TryParse(_workStartTimeString, out var startTime))
+            {
+                _settings.WorkStartTime = startTime;
+            }
+            
+            if (TimeSpan.TryParse(_workEndTimeString, out var endTime))
+            {
+                _settings.WorkEndTime = endTime;
+            }
+            
+            // TODO: Implementar llamada a la API real
+            await Task.Delay(1500);
+            
+            NotificationService.ShowSuccess("Configuración guardada correctamente");
+            
+            // Actualizar configuración original
+            _originalSettings = CloneSettings(_settings);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError($"Error al guardar configuración: {ex.Message}");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void ResetSettings()
+    {
+        _settings = CloneSettings(_originalSettings);
+        NotificationService.ShowInfo("Configuración restaurada a los valores guardados");
+    }
+
+    private TenantSettingsDto CloneSettings(TenantSettingsDto settings)
+    {
+        return new TenantSettingsDto
+        {
+            WorkStartTime = settings.WorkStartTime,
+            WorkEndTime = settings.WorkEndTime,
+            BreakDurationMinutes = settings.BreakDurationMinutes,
+            GracePeriodMinutes = settings.GracePeriodMinutes,
+            EmailNotifications = settings.EmailNotifications,
+            LateArrivalNotifications = settings.LateArrivalNotifications,
+            OvertimeNotifications = settings.OvertimeNotifications,
+            VacationRequestNotifications = settings.VacationRequestNotifications,
+            RequireGeolocation = settings.RequireGeolocation,
+            RequirePhotoOnClockIn = settings.RequirePhotoOnClockIn,
+            TwoFactorAuthentication = settings.TwoFactorAuthentication,
+            SessionTimeoutMinutes = settings.SessionTimeoutMinutes,
+            AnnualVacationDays = settings.AnnualVacationDays,
+            MaxConsecutiveVacationDays = settings.MaxConsecutiveVacationDays,
+            VacationAdvanceNoticeDays = settings.VacationAdvanceNoticeDays,
+            RequireVacationApproval = settings.RequireVacationApproval,
+            AutoReportFrequency = settings.AutoReportFrequency,
+            ReportEmailRecipients = settings.ReportEmailRecipients,
+            IncludePhotosInReports = settings.IncludePhotosInReports,
+            SlackWebhookUrl = settings.SlackWebhookUrl,
+            ApiKey = settings.ApiKey,
+            EnableExternalApi = settings.EnableExternalApi
+        };
+    }
+
+    // Reutilizar DTO existente
+    public class TenantDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Subdomain { get; set; } = string.Empty;
+        public string ContactEmail { get; set; } = string.Empty;
+        public string LicenseType { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class TenantSettingsDto
+    {
+        // Horarios
+        public TimeSpan WorkStartTime { get; set; }
+        public TimeSpan WorkEndTime { get; set; }
+        public int BreakDurationMinutes { get; set; }
+        public int GracePeriodMinutes { get; set; }
+        
+        // Notificaciones
+        public bool EmailNotifications { get; set; }
+        public bool LateArrivalNotifications { get; set; }
+        public bool OvertimeNotifications { get; set; }
+        public bool VacationRequestNotifications { get; set; }
+        
+        // Seguridad
+        public bool RequireGeolocation { get; set; }
+        public bool RequirePhotoOnClockIn { get; set; }
+        public bool TwoFactorAuthentication { get; set; }
+        public int SessionTimeoutMinutes { get; set; }
+        
+        // Vacaciones
+        public int AnnualVacationDays { get; set; }
+        public int MaxConsecutiveVacationDays { get; set; }
+        public int VacationAdvanceNoticeDays { get; set; }
+        public bool RequireVacationApproval { get; set; }
+        
+        // Reportes
+        public string AutoReportFrequency { get; set; } = string.Empty;
+        public string ReportEmailRecipients { get; set; } = string.Empty;
+        public bool IncludePhotosInReports { get; set; }
+        
+        // Integraciones
+        public string SlackWebhookUrl { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+        public bool EnableExternalApi { get; set; }
+    }
+}

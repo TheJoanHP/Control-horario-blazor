@@ -1,5 +1,5 @@
 self.assetsManifest = {
-  "version": "6nivj9S+",
+  "version": "/FxtmPvE",
   "assets": [
     {
       "hash": "sha256-YKJlO7zICu/0RvpMuakayf0RzP9pRQ/i2moEnRUD2JQ=",
@@ -186,20 +186,20 @@ self.assetsManifest = {
       "url": "_framework/MudBlazor.eiyoirc8xd.wasm"
     },
     {
-      "hash": "sha256-U2wDhiyzqd7IWcuk04Jfw6Prqo50FjgWiSN4MNHdZaA=",
-      "url": "_framework/Shared.Models.hfc7lt5lig.pdb"
+      "hash": "sha256-NcmuAxhJ7iC43vu4QKOYBz4EkxOik5zc4/0JlMSZeFE=",
+      "url": "_framework/Shared.Models.r8dno7s5e1.pdb"
     },
     {
-      "hash": "sha256-IEiceurs0vZq5HChwzpTBnA/n6xGcZqLCRK6R+/wwis=",
-      "url": "_framework/Shared.Models.spkxlfhaku.wasm"
+      "hash": "sha256-eaI3GI0pNI6cgw7+74XZTUJbV7ZFHtTSOvsYaJ+S4nE=",
+      "url": "_framework/Shared.Models.v6trljry5c.wasm"
     },
     {
-      "hash": "sha256-D/UO6Pz5cD3TSVKJ6TQnSFW8E6yV0Tx2+ogzgivbDQI=",
-      "url": "_framework/Sphere.Admin.Client.5z0g2gqq6m.pdb"
+      "hash": "sha256-EDOJSXgA6IIJX/2aWRUd+m6nsgItbFOPAfklot6r9Ew=",
+      "url": "_framework/Sphere.Admin.Client.0s6bgf98ah.wasm"
     },
     {
-      "hash": "sha256-BNDO7YYNMvDU4qFeRoPT5l8NmbrBjIJINud2adKtnYU=",
-      "url": "_framework/Sphere.Admin.Client.8dm734xtm8.wasm"
+      "hash": "sha256-UblbwuvOQoORDXDiCajZMKD5FiQdP88hmhpHSg/twT4=",
+      "url": "_framework/Sphere.Admin.Client.nuazd2r4ha.pdb"
     },
     {
       "hash": "sha256-pVYXVmD3yiBwzyz9nJsDKcDn+qq4r72Hf4g0ddi6dec=",
@@ -854,7 +854,7 @@ self.assetsManifest = {
       "url": "_framework/WindowsBase.pg3o6xzigg.wasm"
     },
     {
-      "hash": "sha256-U0MEN58POZ/7xr14uUvWJWcHwlJV2SSmcvQrTO6pbbQ=",
+      "hash": "sha256-uqNxTQg7JJX+y09Co+xN5ZDS99tv+RkBn9azj0KUBHs=",
       "url": "_framework/blazor.boot.json"
     },
     {
@@ -906,7 +906,7 @@ self.assetsManifest = {
       "url": "_framework/netstandard.uriri6ambh.wasm"
     },
     {
-      "hash": "sha256-NDY9P2nuB0rCTHX93jSvcHOAWPGWdi8Xsdvakah7tkg=",
+      "hash": "sha256-wmrWIVviIca3uUPovmVIHLpelOtymrdClTaxcmCj4Og=",
       "url": "appsettings.json"
     },
     {
