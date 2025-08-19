@@ -1,0 +1,691 @@
+@page "/analytics/usage"
+@using Sphere.Admin.Client.Services
+@using Shared.Models.DTOs.Analytics
+@inject SphereApiService ApiService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<PageTitle>Reportes de Uso | Sphere Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                📊 Reportes de Uso
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Análisis detallado del uso del sistema por empresa y empleado
+            </MudText>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="LoadData"
+                       Loading="_loading">
+                Actualizar
+            </MudButton>
+            
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.FileDownload"
+                       OnClick="ExportData">
+                Exportar Datos
+            </MudButton>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <MudCard Class="mb-6">
+        <MudCardHeader>
+            <MudText Typo="Typo.h6">🔍 Filtros y Configuración</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDateRangePicker @bind-DateRange="_dateRange"
+                                        Label="Rango de Fechas"
+                                        Variant="Variant.Outlined"
+                                        FullWidth="true" />
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect @bind-Value="_selectedTenant"
+                               Label="Empresa"
+                               Variant="Variant.Outlined"
+                               Clearable="true"
+                               FullWidth="true">
+                        <MudSelectItem Value="@string.Empty">Todas las empresas</MudSelectItem>
+                        @if (_tenants != null)
+                        {
+                            @foreach (var tenant in _tenants)
+                            {
+                                <MudSelectItem Value="@tenant.Id.ToString()">@tenant.Name</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect @bind-Value="_reportType"
+                               Label="Tipo de Reporte"
+                               Variant="Variant.Outlined"
+                               FullWidth="true">
+                        <MudSelectItem Value="UsageReportType.General">General</MudSelectItem>
+                        <MudSelectItem Value="UsageReportType.TimeTracking">Control de Tiempo</MudSelectItem>
+                        <MudSelectItem Value="UsageReportType.UserActivity">Actividad de Usuarios</MudSelectItem>
+                        <MudSelectItem Value="UsageReportType.SystemPerformance">Rendimiento</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.Search"
+                               OnClick="ApplyFilters">
+                        Aplicar Filtros
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-center align-center" style="height: 400px;">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else
+    {
+        <!-- Métricas principales -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Class="pa-4">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Business" 
+                                 Color="Color.Primary" 
+                                 Size="Size.Large" 
+                                 Class="mr-3" />
+                        <div>
+                            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                                @_usageStats.ActiveTenants
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Empresas Activas
+                            </MudText>
+                        </div>
+                    </div>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Class="pa-4">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.People" 
+                                 Color="Color.Success" 
+                                 Size="Size.Large" 
+                                 Class="mr-3" />
+                        <div>
+                            <MudText Typo="Typo.h4" Class="mud-text-success font-weight-bold">
+                                @_usageStats.TotalUsers
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Usuarios Totales
+                            </MudText>
+                        </div>
+                    </div>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Class="pa-4">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.AccessTime" 
+                                 Color="Color.Warning" 
+                                 Size="Size.Large" 
+                                 Class="mr-3" />
+                        <div>
+                            <MudText Typo="Typo.h4" Class="mud-text-warning font-weight-bold">
+                                @_usageStats.TotalHoursTracked.ToString("N0")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Horas Registradas
+                            </MudText>
+                        </div>
+                    </div>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Class="pa-4">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" 
+                                 Color="Color.Info" 
+                                 Size="Size.Large" 
+                                 Class="mr-3" />
+                        <div>
+                            <MudText Typo="Typo.h4" Class="mud-text-info font-weight-bold">
+                                @_usageStats.TotalCheckIns.ToString("N0")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Total Fichajes
+                            </MudText>
+                        </div>
+                    </div>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Gráficos principales -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" md="8">
+                <MudCard>
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">📈 Uso del Sistema por Día</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <div id="daily-usage-chart" style="height: 350px;"></div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" md="4">
+                <MudCard>
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">🏢 Uso por Empresa</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <div id="tenant-usage-chart" style="height: 350px;"></div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Tabla detallada por empresa -->
+        <MudCard Class="mb-6">
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">📊 Detalle por Empresa</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudTable Items="_tenantUsageDetails"
+                          Hover="true"
+                          Striped="true"
+                          Loading="_loading"
+                          LoadingProgressColor="Color.Info">
+                    <HeaderContent>
+                        <MudTh>
+                            <MudTableSortLabel SortBy="new Func<TenantUsageDetail, object>(x => x.TenantName)">
+                                Empresa
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh>
+                            <MudTableSortLabel SortBy="new Func<TenantUsageDetail, object>(x => x.ActiveUsers)">
+                                Usuarios Activos
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh>
+                            <MudTableSortLabel SortBy="new Func<TenantUsageDetail, object>(x => x.TotalCheckIns)">
+                                Fichajes
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh>
+                            <MudTableSortLabel SortBy="new Func<TenantUsageDetail, object>(x => x.HoursTracked)">
+                                Horas Registradas
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh>
+                            <MudTableSortLabel SortBy="new Func<TenantUsageDetail, object>(x => x.LastActivity)">
+                                Última Actividad
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh>Estado</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    
+                    <RowTemplate>
+                        <MudTd DataLabel="Empresa">
+                            <div class="d-flex align-center">
+                                <MudAvatar Size="Size.Small" Class="mr-2">
+                                    @context.TenantName.Substring(0, 1).ToUpper()
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                        @context.TenantName
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @context.LicenseType
+                                    </MudText>
+                                </div>
+                            </div>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Usuarios Activos">
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="@GetUsageColor(context.ActiveUsers, context.MaxUsers)"
+                                     Variant="Variant.Filled">
+                                @context.ActiveUsers/@context.MaxUsers
+                            </MudChip>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Fichajes">
+                            <MudText Typo="Typo.body2">
+                                @context.TotalCheckIns.ToString("N0")
+                            </MudText>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Horas Registradas">
+                            <MudText Typo="Typo.body2">
+                                @context.HoursTracked.ToString("N1")h
+                            </MudText>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Última Actividad">
+                            <MudText Typo="Typo.body2">
+                                @GetRelativeTime(context.LastActivity)
+                            </MudText>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Estado">
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="@GetActivityColor(context.LastActivity)"
+                                     Variant="Variant.Filled">
+                                @GetActivityStatus(context.LastActivity)
+                            </MudChip>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Acciones">
+                            <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                               Size="Size.Small"
+                                               Color="Color.Primary"
+                                               OnClick="@(() => ViewTenantDetails(context.TenantId))"
+                                               Title="Ver detalles" />
+                                               
+                                <MudIconButton Icon="@Icons.Material.Filled.Assessment"
+                                               Size="Size.Small"
+                                               Color="Color.Success"
+                                               OnClick="@(() => ViewTenantReports(context.TenantId))"
+                                               Title="Ver reportes" />
+                            </MudButtonGroup>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudCardContent>
+        </MudCard>
+
+        <!-- Top usuarios más activos -->
+        <MudCard>
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">👥 Usuarios Más Activos</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudTable Items="_topActiveUsers"
+                          Hover="true"
+                          Dense="true">
+                    <HeaderContent>
+                        <MudTh>Usuario</MudTh>
+                        <MudTh>Empresa</MudTh>
+                        <MudTh>Fichajes</MudTh>
+                        <MudTh>Horas</MudTh>
+                        <MudTh>Última Actividad</MudTh>
+                    </HeaderContent>
+                    
+                    <RowTemplate>
+                        <MudTd DataLabel="Usuario">
+                            <div class="d-flex align-center">
+                                <MudAvatar Size="Size.Small" Class="mr-2">
+                                    @context.UserName.Substring(0, 1).ToUpper()
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.body2">@context.UserName</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @context.Department
+                                    </MudText>
+                                </div>
+                            </div>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Empresa">
+                            @context.TenantName
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Fichajes">
+                            @context.CheckIns
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Horas">
+                            @context.HoursWorked.ToString("N1")h
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Última Actividad">
+                            @GetRelativeTime(context.LastActivity)
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudCardContent>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    // Variables privadas
+    private bool _loading = true;
+    private DateRange? _dateRange = new DateRange(DateTime.Today.AddDays(-30), DateTime.Today);
+    private string _selectedTenant = string.Empty;
+    private UsageReportType _reportType = UsageReportType.General;
+    
+    // Datos
+    private List<TenantDto>? _tenants;
+    private UsageStatsDto _usageStats = new();
+    private List<TenantUsageDetail> _tenantUsageDetails = new();
+    private List<TopUserActivity> _topActiveUsers = new();
+    private List<DailyUsageData> _dailyUsageData = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_loading)
+        {
+            await RenderCharts();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            // Cargar tenants para el filtro
+            _tenants = await ApiService.GetAsync<List<TenantDto>>("tenants");
+            
+            // Cargar estadísticas de uso
+            await LoadUsageStats();
+            
+            // Cargar detalles por tenant
+            await LoadTenantUsageDetails();
+            
+            // Cargar usuarios más activos
+            await LoadTopActiveUsers();
+            
+            // Cargar datos para gráficos
+            await LoadDailyUsageData();
+        }
+        catch (Exception ex)
+        {
+            // Manejar error
+            Console.WriteLine($"Error cargando datos: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadUsageStats()
+    {
+        var parameters = new Dictionary<string, object?>
+        {
+            ["startDate"] = _dateRange?.Start,
+            ["endDate"] = _dateRange?.End,
+            ["tenantId"] = string.IsNullOrEmpty(_selectedTenant) ? null : _selectedTenant,
+            ["reportType"] = _reportType
+        };
+
+        _usageStats = await ApiService.GetAsync<UsageStatsDto>("analytics/usage/stats", parameters);
+    }
+
+    private async Task LoadTenantUsageDetails()
+    {
+        var parameters = new Dictionary<string, object?>
+        {
+            ["startDate"] = _dateRange?.Start,
+            ["endDate"] = _dateRange?.End,
+            ["reportType"] = _reportType
+        };
+
+        _tenantUsageDetails = await ApiService.GetAsync<List<TenantUsageDetail>>("analytics/usage/tenants", parameters);
+    }
+
+    private async Task LoadTopActiveUsers()
+    {
+        var parameters = new Dictionary<string, object?>
+        {
+            ["startDate"] = _dateRange?.Start,
+            ["endDate"] = _dateRange?.End,
+            ["tenantId"] = string.IsNullOrEmpty(_selectedTenant) ? null : _selectedTenant,
+            ["limit"] = 10
+        };
+
+        _topActiveUsers = await ApiService.GetAsync<List<TopUserActivity>>("analytics/usage/top-users", parameters);
+    }
+
+    private async Task LoadDailyUsageData()
+    {
+        var parameters = new Dictionary<string, object?>
+        {
+            ["startDate"] = _dateRange?.Start,
+            ["endDate"] = _dateRange?.End,
+            ["tenantId"] = string.IsNullOrEmpty(_selectedTenant) ? null : _selectedTenant
+        };
+
+        _dailyUsageData = await ApiService.GetAsync<List<DailyUsageData>>("analytics/usage/daily", parameters);
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadData();
+        await RenderCharts();
+    }
+
+    private async Task ExportData()
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object?>
+            {
+                ["startDate"] = _dateRange?.Start,
+                ["endDate"] = _dateRange?.End,
+                ["tenantId"] = string.IsNullOrEmpty(_selectedTenant) ? null : _selectedTenant,
+                ["reportType"] = _reportType,
+                ["format"] = "excel"
+            };
+
+            var fileBytes = await ApiService.GetBytesAsync("analytics/usage/export", parameters);
+            
+            await JSRuntime.InvokeVoidAsync("downloadFile", 
+                $"usage-report-{DateTime.Now:yyyy-MM-dd}.xlsx", 
+                fileBytes);
+        }
+        catch (Exception ex)
+        {
+            // Manejar error de exportación
+            Console.WriteLine($"Error exportando datos: {ex.Message}");
+        }
+    }
+
+    private async Task RenderCharts()
+    {
+        try
+        {
+            // Gráfico de uso diario
+            var dailyChartData = new
+            {
+                labels = _dailyUsageData.Select(x => x.Date.ToString("dd/MM")).ToArray(),
+                datasets = new[]
+                {
+                    new
+                    {
+                        label = "Fichajes",
+                        data = _dailyUsageData.Select(x => x.CheckIns).ToArray(),
+                        borderColor = "rgb(75, 192, 192)",
+                        backgroundColor = "rgba(75, 192, 192, 0.2)",
+                        tension = 0.1
+                    },
+                    new
+                    {
+                        label = "Usuarios Activos",
+                        data = _dailyUsageData.Select(x => x.ActiveUsers).ToArray(),
+                        borderColor = "rgb(255, 99, 132)",
+                        backgroundColor = "rgba(255, 99, 132, 0.2)",
+                        tension = 0.1
+                    }
+                }
+            };
+
+            await JSRuntime.InvokeVoidAsync("renderLineChart", "daily-usage-chart", dailyChartData);
+
+            // Gráfico por tenant
+            var tenantChartData = new
+            {
+                labels = _tenantUsageDetails.Take(10).Select(x => x.TenantName).ToArray(),
+                datasets = new[]
+                {
+                    new
+                    {
+                        label = "Horas Registradas",
+                        data = _tenantUsageDetails.Take(10).Select(x => x.HoursTracked).ToArray(),
+                        backgroundColor = new[]
+                        {
+                            "rgba(255, 99, 132, 0.8)",
+                            "rgba(54, 162, 235, 0.8)",
+                            "rgba(255, 205, 86, 0.8)",
+                            "rgba(75, 192, 192, 0.8)",
+                            "rgba(153, 102, 255, 0.8)",
+                            "rgba(255, 159, 64, 0.8)",
+                            "rgba(199, 199, 199, 0.8)",
+                            "rgba(83, 102, 255, 0.8)",
+                            "rgba(255, 99, 255, 0.8)",
+                            "rgba(99, 255, 132, 0.8)"
+                        }
+                    }
+                }
+            };
+
+            await JSRuntime.InvokeVoidAsync("renderPieChart", "tenant-usage-chart", tenantChartData);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error renderizando gráficos: {ex.Message}");
+        }
+    }
+
+    private void ViewTenantDetails(Guid tenantId)
+    {
+        Navigation.NavigateTo($"/tenants/{tenantId}");
+    }
+
+    private void ViewTenantReports(Guid tenantId)
+    {
+        Navigation.NavigateTo($"/tenants/{tenantId}/reports");
+    }
+
+    private Color GetUsageColor(int active, int max)
+    {
+        var percentage = (double)active / max * 100;
+        return percentage switch
+        {
+            >= 90 => Color.Error,
+            >= 75 => Color.Warning,
+            >= 50 => Color.Info,
+            _ => Color.Success
+        };
+    }
+
+    private Color GetActivityColor(DateTime lastActivity)
+    {
+        var daysSince = (DateTime.UtcNow - lastActivity).TotalDays;
+        return daysSince switch
+        {
+            <= 1 => Color.Success,
+            <= 7 => Color.Info,
+            <= 30 => Color.Warning,
+            _ => Color.Error
+        };
+    }
+
+    private string GetActivityStatus(DateTime lastActivity)
+    {
+        var daysSince = (DateTime.UtcNow - lastActivity).TotalDays;
+        return daysSince switch
+        {
+            <= 1 => "Activo",
+            <= 7 => "Reciente",
+            <= 30 => "Inactivo",
+            _ => "Abandonado"
+        };
+    }
+
+    private string GetRelativeTime(DateTime dateTime)
+    {
+        var timeSpan = DateTime.UtcNow - dateTime;
+        
+        if (timeSpan.TotalDays >= 1)
+            return $"Hace {(int)timeSpan.TotalDays} día(s)";
+        
+        if (timeSpan.TotalHours >= 1)
+            return $"Hace {(int)timeSpan.TotalHours} hora(s)";
+        
+        if (timeSpan.TotalMinutes >= 1)
+            return $"Hace {(int)timeSpan.TotalMinutes} minuto(s)";
+        
+        return "Ahora mismo";
+    }
+
+    // DTOs para los datos
+    public class UsageStatsDto
+    {
+        public int ActiveTenants { get; set; }
+        public int TotalUsers { get; set; }
+        public double TotalHoursTracked { get; set; }
+        public int TotalCheckIns { get; set; }
+    }
+
+    public class TenantUsageDetail
+    {
+        public Guid TenantId { get; set; }
+        public string TenantName { get; set; } = string.Empty;
+        public string LicenseType { get; set; } = string.Empty;
+        public int ActiveUsers { get; set; }
+        public int MaxUsers { get; set; }
+        public int TotalCheckIns { get; set; }
+        public double HoursTracked { get; set; }
+        public DateTime LastActivity { get; set; }
+    }
+
+    public class TopUserActivity
+    {
+        public string UserName { get; set; } = string.Empty;
+        public string TenantName { get; set; } = string.Empty;
+        public string Department { get; set; } = string.Empty;
+        public int CheckIns { get; set; }
+        public double HoursWorked { get; set; }
+        public DateTime LastActivity { get; set; }
+    }
+
+    public class DailyUsageData
+    {
+        public DateTime Date { get; set; }
+        public int CheckIns { get; set; }
+        public int ActiveUsers { get; set; }
+        public double HoursTracked { get; set; }
+    }
+
+    public enum UsageReportType
+    {
+        General,
+        TimeTracking,
+        UserActivity,
+        SystemPerformance
+    }
+}

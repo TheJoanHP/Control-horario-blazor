@@ -1,0 +1,576 @@
+@page "/profile"
+@using Sphere.Admin.Client.Services
+@using Shared.Models.DTOs.Auth
+@inject SphereApiService ApiService
+@inject ISnackbar Snackbar
+@inject AuthService AuthService
+
+<PageTitle>Mi Perfil | Sphere Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                👤 Mi Perfil
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Gestiona tu información personal y configuración de cuenta
+            </MudText>
+        </div>
+        
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Save"
+                   OnClick="SaveProfile"
+                   Loading="_saving"
+                   Disabled="_loading">
+            Guardar Cambios
+        </MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-center align-center" style="height: 400px;">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else
+    {
+        <MudGrid>
+            <!-- Información del perfil -->
+            <MudItem xs="12" md="8">
+                <MudCard>
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">ℹ️ Información Personal</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_userProfile.FirstName"
+                                              Label="Nombre"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Required="true"
+                                              For="@(() => _userProfile.FirstName)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_userProfile.LastName"
+                                              Label="Apellidos"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Required="true"
+                                              For="@(() => _userProfile.LastName)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_userProfile.Email"
+                                              Label="Email"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              InputType="InputType.Email"
+                                              Required="true"
+                                              ReadOnly="true"
+                                              HelperText="El email no se puede cambiar"
+                                              For="@(() => _userProfile.Email)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_userProfile.Phone"
+                                              Label="Teléfono"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              For="@(() => _userProfile.Phone)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_userProfile.JobTitle"
+                                              Label="Cargo"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              For="@(() => _userProfile.JobTitle)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_userProfile.TimeZone"
+                                           Label="Zona Horaria"
+                                           Variant="Variant.Outlined"
+                                           FullWidth="true"
+                                           For="@(() => _userProfile.TimeZone)">
+                                    @foreach (var tz in _timeZones)
+                                    {
+                                        <MudSelectItem Value="@tz.Key">@tz.Value</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_userProfile.Language"
+                                           Label="Idioma Preferido"
+                                           Variant="Variant.Outlined"
+                                           FullWidth="true"
+                                           For="@(() => _userProfile.Language)">
+                                    <MudSelectItem Value="es">Español</MudSelectItem>
+                                    <MudSelectItem Value="en">English</MudSelectItem>
+                                    <MudSelectItem Value="fr">Français</MudSelectItem>
+                                    <MudSelectItem Value="pt">Português</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_userProfile.DateFormat"
+                                           Label="Formato de Fecha"
+                                           Variant="Variant.Outlined"
+                                           FullWidth="true"
+                                           For="@(() => _userProfile.DateFormat)">
+                                    <MudSelectItem Value="dd/MM/yyyy">DD/MM/YYYY</MudSelectItem>
+                                    <MudSelectItem Value="MM/dd/yyyy">MM/DD/YYYY</MudSelectItem>
+                                    <MudSelectItem Value="yyyy-MM-dd">YYYY-MM-DD</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_userProfile.Bio"
+                                              Label="Biografía"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Lines="3"
+                                              Placeholder="Cuéntanos un poco sobre ti..."
+                                              For="@(() => _userProfile.Bio)" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Preferencias de notificaciones -->
+                <MudCard Class="mt-6">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">🔔 Preferencias de Notificaciones</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudSwitch @bind-Value="_userProfile.EmailNotifications"
+                                           Label="Notificaciones por Email"
+                                           Color="Color.Primary"
+                                           For="@(() => _userProfile.EmailNotifications)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSwitch @bind-Value="_userProfile.SystemAlerts"
+                                           Label="Alertas del Sistema"
+                                           Color="Color.Warning"
+                                           For="@(() => _userProfile.SystemAlerts)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSwitch @bind-Value="_userProfile.SecurityNotifications"
+                                           Label="Notificaciones de Seguridad"
+                                           Color="Color.Error"
+                                           For="@(() => _userProfile.SecurityNotifications)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSwitch @bind-Value="_userProfile.WeeklyReports"
+                                           Label="Reportes Semanales"
+                                           Color="Color.Info"
+                                           For="@(() => _userProfile.WeeklyReports)" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Preferencias de interfaz -->
+                <MudCard Class="mt-6">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">🎨 Preferencias de Interfaz</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_userProfile.Theme"
+                                           Label="Tema"
+                                           Variant="Variant.Outlined"
+                                           FullWidth="true"
+                                           For="@(() => _userProfile.Theme)">
+                                    <MudSelectItem Value="Light">Claro</MudSelectItem>
+                                    <MudSelectItem Value="Dark">Oscuro</MudSelectItem>
+                                    <MudSelectItem Value="Auto">Automático</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_userProfile.ItemsPerPage"
+                                           Label="Elementos por Página"
+                                           Variant="Variant.Outlined"
+                                           FullWidth="true"
+                                           For="@(() => _userProfile.ItemsPerPage)">
+                                    <MudSelectItem Value="10">10</MudSelectItem>
+                                    <MudSelectItem Value="25">25</MudSelectItem>
+                                    <MudSelectItem Value="50">50</MudSelectItem>
+                                    <MudSelectItem Value="100">100</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSwitch @bind-Value="_userProfile.CompactMode"
+                                           Label="Modo Compacto"
+                                           Color="Color.Secondary"
+                                           For="@(() => _userProfile.CompactMode)" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSwitch @bind-Value="_userProfile.ShowAnimations"
+                                           Label="Mostrar Animaciones"
+                                           Color="Color.Tertiary"
+                                           For="@(() => _userProfile.ShowAnimations)" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Panel lateral -->
+            <MudItem xs="12" md="4">
+                <!-- Avatar y información básica -->
+                <MudCard>
+                    <MudCardContent Class="d-flex flex-column align-center">
+                        <MudAvatar Size="Size.Large" Class="mb-4" Style="width: 120px; height: 120px;">
+                            @if (!string.IsNullOrEmpty(_userProfile.AvatarUrl))
+                            {
+                                <MudImage Src="@_userProfile.AvatarUrl" />
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.h3">
+                                    @GetInitials()
+                                </MudText>
+                            }
+                        </MudAvatar>
+                        
+                        <MudText Typo="Typo.h5" Class="font-weight-bold text-center mb-2">
+                            @_userProfile.FirstName @_userProfile.LastName
+                        </MudText>
+                        
+                        <MudText Typo="Typo.body1" Class="mud-text-secondary text-center mb-2">
+                            @_userProfile.JobTitle
+                        </MudText>
+                        
+                        <MudChip T="string" 
+                                 Color="Color.Primary" 
+                                 Size="Size.Small"
+                                 Variant="Variant.Filled">
+                            Super Administrador
+                        </MudChip>
+                        
+                        <MudDivider Class="my-4 full-width" />
+                        
+                        <MudFileUpload T="IBrowserFile" 
+                                       Accept=".jpg,.jpeg,.png"
+                                       OnFilesChanged="OnAvatarFileChanged"
+                                       MaximumFileCount="1">
+                            <ButtonTemplate>
+                                <MudButton HtmlTag="label"
+                                           Variant="Variant.Outlined"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.CloudUpload"
+                                           for="@context.Id">
+                                    Cambiar Avatar
+                                </MudButton>
+                            </ButtonTemplate>
+                        </MudFileUpload>
+                        
+                        @if (_uploadingAvatar)
+                        {
+                            <MudProgressLinear Color="Color.Primary" 
+                                               Indeterminate="true" 
+                                               Class="mt-2" />
+                        }
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Información de la cuenta -->
+                <MudCard Class="mt-6">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">📋 Información de la Cuenta</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <div class="d-flex flex-column gap-3">
+                            <div>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Fecha de Registro
+                                </MudText>
+                                <MudText Typo="Typo.body2">
+                                    @_userProfile.CreatedAt.ToString("dd/MM/yyyy")
+                                </MudText>
+                            </div>
+                            
+                            <div>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Último Acceso
+                                </MudText>
+                                <MudText Typo="Typo.body2">
+                                    @_userProfile.LastLoginAt?.ToString("dd/MM/yyyy HH:mm") ?? "Nunca"
+                                </MudText>
+                            </div>
+                            
+                            <div>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Estado de la Cuenta
+                                </MudText>
+                                <MudChip T="string" 
+                                         Color="@(_userProfile.IsActive ? Color.Success : Color.Error)" 
+                                         Size="Size.Small"
+                                         Variant="Variant.Filled">
+                                    @(_userProfile.IsActive ? "Activa" : "Inactiva")
+                                </MudChip>
+                            </div>
+                            
+                            <div>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Sesiones Activas
+                                </MudText>
+                                <MudText Typo="Typo.body2">
+                                    @_userProfile.ActiveSessions
+                                </MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Acciones rápidas -->
+                <MudCard Class="mt-6">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">⚡ Acciones Rápidas</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <div class="d-flex flex-column gap-2">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Security"
+                                       OnClick="@(() => Navigation.NavigateTo("/profile/security"))">
+                                Configurar Seguridad
+                            </MudButton>
+                            
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Info"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Download"
+                                       OnClick="ExportPersonalData">
+                                Exportar Mis Datos
+                            </MudButton>
+                            
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Warning"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Lock"
+                                       OnClick="@(() => Navigation.NavigateTo("/profile/security"))">
+                                Cambiar Contraseña
+                            </MudButton>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    // Variables privadas
+    private bool _loading = true;
+    private bool _saving = false;
+    private bool _uploadingAvatar = false;
+    private UserProfileDto _userProfile = new();
+    private Dictionary<string, string> _timeZones = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTimeZones();
+        await LoadUserProfile();
+    }
+
+    private async Task LoadTimeZones()
+    {
+        _timeZones = new Dictionary<string, string>
+        {
+            ["UTC"] = "UTC - Tiempo Universal Coordinado",
+            ["America/New_York"] = "EST - Hora del Este (Nueva York)",
+            ["America/Los_Angeles"] = "PST - Hora del Pacífico (Los Ángeles)",
+            ["America/Chicago"] = "CST - Hora Central (Chicago)",
+            ["America/Mexico_City"] = "CST - Hora de México",
+            ["America/Bogota"] = "COT - Hora de Colombia",
+            ["America/Lima"] = "PET - Hora del Perú",
+            ["America/Santiago"] = "CLT - Hora de Chile",
+            ["America/Argentina/Buenos_Aires"] = "ART - Hora de Argentina",
+            ["America/Sao_Paulo"] = "BRT - Hora de Brasil",
+            ["Europe/Madrid"] = "CET - Hora de España",
+            ["Europe/London"] = "GMT - Hora de Londres",
+            ["Europe/Paris"] = "CET - Hora de París",
+            ["Europe/Berlin"] = "CET - Hora de Berlín"
+        };
+    }
+
+    private async Task LoadUserProfile()
+    {
+        _loading = true;
+        try
+        {
+            _userProfile = await ApiService.GetAsync<UserProfileDto>("profile");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error cargando perfil: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        _saving = true;
+        try
+        {
+            await ApiService.PutAsync("profile", _userProfile);
+            Snackbar.Add("Perfil actualizado exitosamente", Severity.Success);
+            
+            // Actualizar información del usuario en el AuthService
+            await AuthService.RefreshUserInfoAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error guardando perfil: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task OnAvatarFileChanged(InputFileChangeEventArgs e)
+    {
+        if (e.File == null) return;
+
+        _uploadingAvatar = true;
+        try
+        {
+            // Validar tamaño del archivo (máximo 2MB)
+            if (e.File.Size > 2 * 1024 * 1024)
+            {
+                Snackbar.Add("El archivo es demasiado grande. Máximo 2MB.", Severity.Error);
+                return;
+            }
+
+            // Validar tipo de archivo
+            var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png" };
+            if (!allowedTypes.Contains(e.File.ContentType))
+            {
+                Snackbar.Add("Tipo de archivo no válido. Solo se permiten JPG y PNG.", Severity.Error);
+                return;
+            }
+
+            // Convertir a base64
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var base64 = Convert.ToBase64String(memoryStream.ToArray());
+            var dataUrl = $"data:{e.File.ContentType};base64,{base64}";
+
+            // Subir avatar
+            var uploadRequest = new UploadAvatarRequest
+            {
+                FileName = e.File.Name,
+                ContentType = e.File.ContentType,
+                Base64Data = base64
+            };
+
+            var response = await ApiService.PostAsync<UploadAvatarResponse>("profile/avatar", uploadRequest);
+            
+            _userProfile.AvatarUrl = response.AvatarUrl;
+            Snackbar.Add("Avatar actualizado exitosamente", Severity.Success);
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error subiendo avatar: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploadingAvatar = false;
+        }
+    }
+
+    private async Task ExportPersonalData()
+    {
+        try
+        {
+            var fileBytes = await ApiService.GetBytesAsync("profile/export");
+            await JSRuntime.InvokeVoidAsync("downloadFile", 
+                $"mis-datos-{DateTime.Now:yyyy-MM-dd}.json", 
+                fileBytes);
+            
+            Snackbar.Add("Datos exportados exitosamente", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exportando datos: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetInitials()
+    {
+        var firstName = !string.IsNullOrEmpty(_userProfile.FirstName) ? _userProfile.FirstName[0] : 'S';
+        var lastName = !string.IsNullOrEmpty(_userProfile.LastName) ? _userProfile.LastName[0] : 'A';
+        return $"{firstName}{lastName}".ToUpper();
+    }
+
+    // DTOs
+    public class UserProfileDto
+    {
+        public Guid Id { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string JobTitle { get; set; } = string.Empty;
+        public string Bio { get; set; } = string.Empty;
+        public string AvatarUrl { get; set; } = string.Empty;
+        public string TimeZone { get; set; } = "UTC";
+        public string Language { get; set; } = "es";
+        public string DateFormat { get; set; } = "dd/MM/yyyy";
+        public string Theme { get; set; } = "Light";
+        public int ItemsPerPage { get; set; } = 25;
+        
+        // Notificaciones
+        public bool EmailNotifications { get; set; } = true;
+        public bool SystemAlerts { get; set; } = true;
+        public bool SecurityNotifications { get; set; } = true;
+        public bool WeeklyReports { get; set; } = true;
+        
+        // UI
+        public bool CompactMode { get; set; } = false;
+        public bool ShowAnimations { get; set; } = true;
+        
+        // Información de la cuenta
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; }
+        public DateTime? LastLoginAt { get; set; }
+        public int ActiveSessions { get; set; }
+    }
+
+    public class UploadAvatarRequest
+    {
+        public string FileName { get; set; } = string.Empty;
+        public string ContentType { get; set; } = string.Empty;
+        public string Base64Data { get; set; } = string.Empty;
+    }
+
+    public class UploadAvatarResponse
+    {
+        public string AvatarUrl { get; set; } = string.Empty;
+    }
+}

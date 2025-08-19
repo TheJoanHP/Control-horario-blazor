@@ -1,0 +1,765 @@
+@page "/system/settings"
+@using Sphere.Admin.Client.Services
+@using Shared.Models.DTOs.System
+@inject SphereApiService ApiService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Configuración del Sistema | Sphere Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                ⚙️ Configuración del Sistema
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Configuración general y parámetros del sistema Sphere
+            </MudText>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="LoadSettings"
+                       Loading="_loading">
+                Recargar
+            </MudButton>
+            
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="SaveAllSettings"
+                       Loading="_saving"
+                       Disabled="_loading">
+                Guardar Todo
+            </MudButton>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-center align-center" style="height: 400px;">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else
+    {
+        <MudTabs Elevation="4" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+            <!-- Configuración General -->
+            <MudTabPanel Text="General" Icon="@Icons.Material.Filled.Settings">
+                <MudCard>
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">🏢 Configuración General</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.General.SystemName"
+                                              Label="Nombre del Sistema"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.General.CompanyName"
+                                              Label="Nombre de la Empresa"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.General.SupportEmail"
+                                              Label="Email de Soporte"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              InputType="InputType.Email"
+                                              Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.General.SupportPhone"
+                                              Label="Teléfono de Soporte"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_settings.General.DefaultTimeZone"
+                                           Label="Zona Horaria Por Defecto"
+                                           Variant="Variant.Outlined"
+                                           FullWidth="true">
+                                    @foreach (var tz in _timeZones)
+                                    {
+                                        <MudSelectItem Value="@tz.Key">@tz.Value</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_settings.General.DefaultLanguage"
+                                           Label="Idioma Por Defecto"
+                                           Variant="Variant.Outlined"
+                                           FullWidth="true">
+                                    <MudSelectItem Value="es">Español</MudSelectItem>
+                                    <MudSelectItem Value="en">English</MudSelectItem>
+                                    <MudSelectItem Value="fr">Français</MudSelectItem>
+                                    <MudSelectItem Value="pt">Português</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_settings.General.MaintenanceMessage"
+                                              Label="Mensaje de Mantenimiento"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Lines="3"
+                                              Placeholder="Mensaje que se mostrará cuando el sistema esté en mantenimiento" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.General.MaintenanceMode"
+                                           Label="Modo Mantenimiento"
+                                           Color="Color.Warning" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.General.AllowRegistration"
+                                           Label="Permitir Registro"
+                                           Color="Color.Primary" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.General.EnableNotifications"
+                                           Label="Habilitar Notificaciones"
+                                           Color="Color.Success" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+
+            <!-- Configuración de Email -->
+            <MudTabPanel Text="Email" Icon="@Icons.Material.Filled.Email">
+                <MudCard>
+                    <MudCardHeader>
+                        <div class="d-flex justify-space-between align-center">
+                            <MudText Typo="Typo.h6">📧 Configuración SMTP</MudText>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Info"
+                                       StartIcon="@Icons.Material.Filled.Send"
+                                       OnClick="TestEmailConfiguration"
+                                       Size="Size.Small">
+                                Probar Configuración
+                            </MudButton>
+                        </div>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.Email.SmtpServer"
+                                              Label="Servidor SMTP"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Required="true"
+                                              Placeholder="smtp.gmail.com" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Email.SmtpPort"
+                                                 Label="Puerto SMTP"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Required="true"
+                                                 Min="1"
+                                                 Max="65535" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.Email.SmtpUsername"
+                                              Label="Usuario SMTP"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.Email.SmtpPassword"
+                                              Label="Contraseña SMTP"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              InputType="InputType.Password"
+                                              Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.Email.FromEmail"
+                                              Label="Email Remitente"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              InputType="InputType.Email"
+                                              Required="true"
+                                              Placeholder="noreply@tuempresa.com" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.Email.FromName"
+                                              Label="Nombre Remitente"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Required="true"
+                                              Placeholder="Sphere Control System" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Email.EnableSsl"
+                                           Label="Habilitar SSL"
+                                           Color="Color.Success" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Email.EnableStartTls"
+                                           Label="Habilitar StartTLS"
+                                           Color="Color.Info" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Email.EnableEmailNotifications"
+                                           Label="Habilitar Notificaciones Email"
+                                           Color="Color.Primary" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+
+            <!-- Configuración de Seguridad -->
+            <MudTabPanel Text="Seguridad" Icon="@Icons.Material.Filled.Security">
+                <MudCard>
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">🔒 Configuración de Seguridad</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Security.TokenExpirationMinutes"
+                                                 Label="Expiración Token (Minutos)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="15"
+                                                 Max="1440"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Security.RefreshTokenExpirationDays"
+                                                 Label="Expiración Refresh Token (Días)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="1"
+                                                 Max="90"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Security.MaxLoginAttempts"
+                                                 Label="Máximo Intentos de Login"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="3"
+                                                 Max="10"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Security.LockoutDurationMinutes"
+                                                 Label="Duración Bloqueo (Minutos)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="5"
+                                                 Max="1440"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Security.PasswordMinLength"
+                                                 Label="Longitud Mínima Contraseña"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="6"
+                                                 Max="50"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Security.SessionTimeoutMinutes"
+                                                 Label="Timeout de Sesión (Minutos)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="10"
+                                                 Max="480"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Security.RequirePasswordComplexity"
+                                           Label="Requerir Complejidad en Contraseña"
+                                           Color="Color.Warning" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Security.EnableTwoFactorAuth"
+                                           Label="Habilitar 2FA"
+                                           Color="Color.Success" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Security.ForcePasswordChange"
+                                           Label="Forzar Cambio de Contraseña"
+                                           Color="Color.Error" />
+                            </MudItem>
+                            
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_settings.Security.AllowedDomains"
+                                              Label="Dominios Permitidos (separados por comas)"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Placeholder="empresa1.com, empresa2.com"
+                                              HelperText="Deje vacío para permitir todos los dominios" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+
+            <!-- Límites del Sistema -->
+            <MudTabPanel Text="Límites" Icon="@Icons.Material.Filled.Speed">
+                <MudCard>
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">⚡ Límites del Sistema</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Limits.MaxTenantsAllowed"
+                                                 Label="Máximo de Empresas"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="1"
+                                                 Max="10000"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Limits.MaxEmployeesPerTenant"
+                                                 Label="Máximo Empleados por Empresa"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="1"
+                                                 Max="10000"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Limits.MaxApiRequestsPerMinute"
+                                                 Label="Máximo Requests API por Minuto"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="10"
+                                                 Max="10000"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Limits.MaxFileUploadSizeMB"
+                                                 Label="Tamaño Máximo Archivo (MB)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="1"
+                                                 Max="500"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Limits.DataRetentionDays"
+                                                 Label="Retención de Datos (Días)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="30"
+                                                 Max="3650"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Limits.BackupRetentionDays"
+                                                 Label="Retención de Backups (Días)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="7"
+                                                 Max="365"
+                                                 Required="true" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+
+            <!-- Configuración de Backups -->
+            <MudTabPanel Text="Backups" Icon="@Icons.Material.Filled.Backup">
+                <MudCard>
+                    <MudCardHeader>
+                        <div class="d-flex justify-space-between align-center">
+                            <MudText Typo="Typo.h6">💾 Configuración de Respaldos</MudText>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Info"
+                                       StartIcon="@Icons.Material.Filled.PlayArrow"
+                                       OnClick="TriggerManualBackup"
+                                       Size="Size.Small">
+                                Ejecutar Backup Manual
+                            </MudButton>
+                        </div>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_settings.Backup.BackupFrequency"
+                                           Label="Frecuencia de Backup"
+                                           Variant="Variant.Outlined"
+                                           FullWidth="true">
+                                    <MudSelectItem Value="Daily">Diario</MudSelectItem>
+                                    <MudSelectItem Value="Weekly">Semanal</MudSelectItem>
+                                    <MudSelectItem Value="Monthly">Mensual</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTimePicker @bind-Time="_settings.Backup.BackupTime"
+                                               Label="Hora de Backup"
+                                               Variant="Variant.Outlined"
+                                               FullWidth="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_settings.Backup.BackupLocation"
+                                              Label="Ubicación de Backups"
+                                              Variant="Variant.Outlined"
+                                              FullWidth="true"
+                                              Required="true"
+                                              Placeholder="/var/backups/sphere" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Backup.MaxBackupFiles"
+                                                 Label="Máximo Archivos de Backup"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="1"
+                                                 Max="100"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Backup.EnableAutoBackup"
+                                           Label="Habilitar Backup Automático"
+                                           Color="Color.Success" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Backup.CompressBackups"
+                                           Label="Comprimir Backups"
+                                           Color="Color.Info" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Backup.EncryptBackups"
+                                           Label="Encriptar Backups"
+                                           Color="Color.Warning" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+
+            <!-- Configuración de Performance -->
+            <MudTabPanel Text="Performance" Icon="@Icons.Material.Filled.Speed">
+                <MudCard>
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">🚀 Configuración de Rendimiento</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Performance.CacheExpirationMinutes"
+                                                 Label="Expiración Cache (Minutos)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="1"
+                                                 Max="1440"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Performance.DatabaseConnectionPoolSize"
+                                                 Label="Tamaño Pool de Conexiones DB"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="5"
+                                                 Max="100"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Performance.QueryTimeoutSeconds"
+                                                 Label="Timeout de Consultas (Segundos)"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="10"
+                                                 Max="300"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_settings.Performance.MaxConcurrentUsers"
+                                                 Label="Máximo Usuarios Concurrentes"
+                                                 Variant="Variant.Outlined"
+                                                 FullWidth="true"
+                                                 Min="10"
+                                                 Max="10000"
+                                                 Required="true" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Performance.EnableCaching"
+                                           Label="Habilitar Cache"
+                                           Color="Color.Success" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Performance.EnableQueryOptimization"
+                                           Label="Optimización de Consultas"
+                                           Color="Color.Info" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="4">
+                                <MudSwitch @bind-Value="_settings.Performance.EnablePerformanceMonitoring"
+                                           Label="Monitoreo de Performance"
+                                           Color="Color.Warning" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    private bool _loading = true;
+    private bool _saving = false;
+    private SystemSettingsDto _settings = new();
+    private Dictionary<string, string> _timeZones = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTimeZones();
+        await LoadSettings();
+    }
+
+    private async Task LoadTimeZones()
+    {
+        _timeZones = new Dictionary<string, string>
+        {
+            ["UTC"] = "UTC - Tiempo Universal Coordinado",
+            ["America/New_York"] = "EST - Hora del Este (Nueva York)",
+            ["America/Los_Angeles"] = "PST - Hora del Pacífico (Los Ángeles)",
+            ["America/Chicago"] = "CST - Hora Central (Chicago)",
+            ["America/Mexico_City"] = "CST - Hora de México",
+            ["America/Bogota"] = "COT - Hora de Colombia",
+            ["America/Lima"] = "PET - Hora del Perú",
+            ["America/Santiago"] = "CLT - Hora de Chile",
+            ["America/Argentina/Buenos_Aires"] = "ART - Hora de Argentina",
+            ["America/Sao_Paulo"] = "BRT - Hora de Brasil",
+            ["Europe/Madrid"] = "CET - Hora de España",
+            ["Europe/London"] = "GMT - Hora de Londres",
+            ["Europe/Paris"] = "CET - Hora de París",
+            ["Europe/Berlin"] = "CET - Hora de Berlín"
+        };
+    }
+
+    private async Task LoadSettings()
+    {
+        _loading = true;
+        try
+        {
+            _settings = await ApiService.GetAsync<SystemSettingsDto>("system/settings");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error cargando configuración: {ex.Message}", Severity.Error);
+            _settings = new SystemSettingsDto(); // Valores por defecto
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAllSettings()
+    {
+        _saving = true;
+        try
+        {
+            await ApiService.PutAsync("system/settings", _settings);
+            Snackbar.Add("Configuración guardada exitosamente", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error guardando configuración: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task TestEmailConfiguration()
+    {
+        try
+        {
+            var testResult = await ApiService.PostAsync<EmailTestResult>("system/test-email", _settings.Email);
+            
+            if (testResult.Success)
+            {
+                Snackbar.Add("✅ Configuración de email válida", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add($"❌ Error en configuración de email: {testResult.ErrorMessage}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error probando configuración de email: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task TriggerManualBackup()
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = "¿Está seguro de que desea ejecutar un backup manual? Esta operación puede tomar varios minutos.",
+            ["ButtonText"] = "Ejecutar Backup",
+            ["Color"] = Color.Warning
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Backup Manual", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                await ApiService.PostAsync("system/backup/manual", null);
+                Snackbar.Add("Backup manual iniciado exitosamente", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error iniciando backup manual: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    // DTOs para la configuración
+    public class SystemSettingsDto
+    {
+        public GeneralSettings General { get; set; } = new();
+        public EmailSettings Email { get; set; } = new();
+        public SecuritySettings Security { get; set; } = new();
+        public LimitsSettings Limits { get; set; } = new();
+        public BackupSettings Backup { get; set; } = new();
+        public PerformanceSettings Performance { get; set; } = new();
+    }
+
+    public class GeneralSettings
+    {
+        public string SystemName { get; set; } = "Sphere Control System";
+        public string CompanyName { get; set; } = "Mi Empresa";
+        public string SupportEmail { get; set; } = "support@miempresa.com";
+        public string SupportPhone { get; set; } = "";
+        public string DefaultTimeZone { get; set; } = "UTC";
+        public string DefaultLanguage { get; set; } = "es";
+        public string MaintenanceMessage { get; set; } = "";
+        public bool MaintenanceMode { get; set; } = false;
+        public bool AllowRegistration { get; set; } = true;
+        public bool EnableNotifications { get; set; } = true;
+    }
+
+    public class EmailSettings
+    {
+        public string SmtpServer { get; set; } = "";
+        public int SmtpPort { get; set; } = 587;
+        public string SmtpUsername { get; set; } = "";
+        public string SmtpPassword { get; set; } = "";
+        public string FromEmail { get; set; } = "";
+        public string FromName { get; set; } = "";
+        public bool EnableSsl { get; set; } = true;
+        public bool EnableStartTls { get; set; } = true;
+        public bool EnableEmailNotifications { get; set; } = true;
+    }
+
+    public class SecuritySettings
+    {
+        public int TokenExpirationMinutes { get; set; } = 60;
+        public int RefreshTokenExpirationDays { get; set; } = 7;
+        public int MaxLoginAttempts { get; set; } = 5;
+        public int LockoutDurationMinutes { get; set; } = 15;
+        public int PasswordMinLength { get; set; } = 8;
+        public int SessionTimeoutMinutes { get; set; } = 120;
+        public bool RequirePasswordComplexity { get; set; } = true;
+        public bool EnableTwoFactorAuth { get; set; } = false;
+        public bool ForcePasswordChange { get; set; } = false;
+        public string AllowedDomains { get; set; } = "";
+    }
+
+    public class LimitsSettings
+    {
+        public int MaxTenantsAllowed { get; set; } = 1000;
+        public int MaxEmployeesPerTenant { get; set; } = 1000;
+        public int MaxApiRequestsPerMinute { get; set; } = 1000;
+        public int MaxFileUploadSizeMB { get; set; } = 50;
+        public int DataRetentionDays { get; set; } = 365;
+        public int BackupRetentionDays { get; set; } = 30;
+    }
+
+    public class BackupSettings
+    {
+        public string BackupFrequency { get; set; } = "Daily";
+        public TimeSpan? BackupTime { get; set; } = new TimeSpan(2, 0, 0); // 2:00 AM
+        public string BackupLocation { get; set; } = "/var/backups/sphere";
+        public int MaxBackupFiles { get; set; } = 30;
+        public bool EnableAutoBackup { get; set; } = true;
+        public bool CompressBackups { get; set; } = true;
+        public bool EncryptBackups { get; set; } = false;
+    }
+
+    public class PerformanceSettings
+    {
+        public int CacheExpirationMinutes { get; set; } = 60;
+        public int DatabaseConnectionPoolSize { get; set; } = 20;
+        public int QueryTimeoutSeconds { get; set; } = 30;
+        public int MaxConcurrentUsers { get; set; } = 1000;
+        public bool EnableCaching { get; set; } = true;
+        public bool EnableQueryOptimization { get; set; } = true;
+        public bool EnablePerformanceMonitoring { get; set; } = true;
+    }
+
+    public class EmailTestResult
+    {
+        public bool Success { get; set; }
+        public string ErrorMessage { get; set; } = "";
+    }
+}

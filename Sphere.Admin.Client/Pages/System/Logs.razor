@@ -1,0 +1,769 @@
+@page "/system/logs"
+@using Sphere.Admin.Client.Services
+@implements IDisposable
+@inject SphereApiService ApiService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Logs del Sistema | Sphere Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
+                📝 Logs del Sistema
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                Monitoreo y auditoría de eventos del sistema
+            </MudText>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="LoadLogs"
+                       Loading="_loading">
+                Actualizar
+            </MudButton>
+            
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.Clear"
+                       OnClick="ClearFilters">
+                Limpiar Filtros
+            </MudButton>
+            
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.FileDownload"
+                       OnClick="ExportLogs">
+                Exportar Logs
+            </MudButton>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <MudCard Class="mb-6">
+        <MudCardHeader>
+            <MudText Typo="Typo.h6">🔍 Filtros de Búsqueda</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDateRangePicker @bind-DateRange="_dateRange"
+                                        Label="Rango de Fechas"
+                                        Variant="Variant.Outlined"
+                                        FullWidth="true" />
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="2">
+                    <MudSelect @bind-Value="_selectedLogLevel"
+                               Label="Nivel de Log"
+                               Variant="Variant.Outlined"
+                               Clearable="true"
+                               FullWidth="true">
+                        <MudSelectItem Value="@string.Empty">Todos</MudSelectItem>
+                        <MudSelectItem Value="\"Information\"">Information</MudSelectItem>
+                        <MudSelectItem Value="\"Warning\"">Warning</MudSelectItem>
+                        <MudSelectItem Value="\"Error\"">Error</MudSelectItem>
+                        <MudSelectItem Value="\"Critical\"">Critical</MudSelectItem>
+                        <MudSelectItem Value="\"Debug\"">Debug</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="2">
+                    <MudSelect @bind-Value="_selectedCategory"
+                               Label="Categoría"
+                               Variant="Variant.Outlined"
+                               Clearable="true"
+                               FullWidth="true">
+                        <MudSelectItem Value="@string.Empty">Todas</MudSelectItem>
+                        <MudSelectItem Value="\"Authentication\"">Autenticación</MudSelectItem>
+                        <MudSelectItem Value="\"Authorization\"">Autorización</MudSelectItem>
+                        <MudSelectItem Value="\"Database\"">Base de Datos</MudSelectItem>
+                        <MudSelectItem Value="\"API\"">API</MudSelectItem>
+                        <MudSelectItem Value="\"System\"">Sistema</MudSelectItem>
+                        <MudSelectItem Value="\"Performance\"">Rendimiento</MudSelectItem>
+                        <MudSelectItem Value="\"Security\"">Seguridad</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField @bind-Value="_searchText"
+                                  Label="Buscar en mensaje"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Placeholder="Texto a buscar..."
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" />
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="2">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.Search"
+                               OnClick="ApplyFilters">
+                        Buscar
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- Estadísticas de Logs -->
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="6" md="2">
+            <MudCard Class="pa-4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" 
+                             Color="Color.Info" 
+                             Size="Size.Large" 
+                             Class="mr-3" />
+                    <div>
+                        <MudText Typo="Typo.h6" Class="mud-text-info font-weight-bold">
+                            @_logStats.InformationCount
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Information
+                        </MudText>
+                    </div>
+                </div>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="2">
+            <MudCard Class="pa-4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" 
+                             Color="Color.Warning" 
+                             Size="Size.Large" 
+                             Class="mr-3" />
+                    <div>
+                        <MudText Typo="Typo.h6" Class="mud-text-warning font-weight-bold">
+                            @_logStats.WarningCount
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Warnings
+                        </MudText>
+                    </div>
+                </div>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="2">
+            <MudCard Class="pa-4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Error" 
+                             Color="Color.Error" 
+                             Size="Size.Large" 
+                             Class="mr-3" />
+                    <div>
+                        <MudText Typo="Typo.h6" Class="mud-text-error font-weight-bold">
+                            @_logStats.ErrorCount
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Errors
+                        </MudText>
+                    </div>
+                </div>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="2">
+            <MudCard Class="pa-4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.CrisisAlert" 
+                             Color="Color.Error" 
+                             Size="Size.Large" 
+                             Class="mr-3" />
+                    <div>
+                        <MudText Typo="Typo.h6" Class="mud-text-error font-weight-bold">
+                            @_logStats.CriticalCount
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Critical
+                        </MudText>
+                    </div>
+                </div>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="2">
+            <MudCard Class="pa-4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.BugReport" 
+                             Color="Color.Default" 
+                             Size="Size.Large" 
+                             Class="mr-3" />
+                    <div>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            @_logStats.DebugCount
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Debug
+                        </MudText>
+                    </div>
+                </div>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="2">
+            <MudCard Class="pa-4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.List" 
+                             Color="Color.Primary" 
+                             Size="Size.Large" 
+                             Class="mr-3" />
+                    <div>
+                        <MudText Typo="Typo.h6" Class="mud-text-primary font-weight-bold">
+                            @_logStats.TotalCount
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Total
+                        </MudText>
+                    </div>
+                </div>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Toggle para Auto-refresh -->
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div class="d-flex align-center gap-4">
+            <MudSwitch @bind-Value="_autoRefresh"
+                       Label="Auto-actualizar"
+                       Color="Color.Primary" />
+            
+            @if (_autoRefresh)
+            {
+                <MudItem xs="12" sm="6" md="2">
+                    <MudSelect @bind-Value="_refreshInterval"
+                               Label="Intervalo"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Style="width: 150px;">
+                        <MudSelectItem Value="5">5 segundos</MudSelectItem>
+                        <MudSelectItem Value="10">10 segundos</MudSelectItem>
+                        <MudSelectItem Value="30">30 segundos</MudSelectItem>
+                        <MudSelectItem Value="60">1 minuto</MudSelectItem>
+                    </MudSelect>
+                }
+        </div>
+        
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Mostrando @_logs.Count de @_totalLogs registros
+        </MudText>
+    </div>
+
+    <!-- Tabla de Logs -->
+    <MudCard>
+        <MudCardContent Class="pa-0">
+            @if (_loading)
+            {
+                <div class="d-flex justify-center align-center pa-8">
+                    <MudProgressCircular Size="Size.Large" Indeterminate="true" />
+                </div>
+            }
+            else
+            {
+                <MudTable Items="_logs"
+                          Hover="true"
+                          Dense="true"
+                          FixedHeader="true"
+                          Height="600px"
+                          Loading="_loading"
+                          LoadingProgressColor="Color.Info"
+                          RowClass="@((LogEntryDto log, int index) => GetRowClass(log, index))">
+                    <HeaderContent>
+                        <MudTh>
+                            <MudTableSortLabel SortBy="new Func<LogEntryDto, object>(x => x.Timestamp)">
+                                Fecha/Hora
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh>
+                            <MudTableSortLabel SortBy="new Func<LogEntryDto, object>(x => x.Level)">
+                                Nivel
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh>Categoría</MudTh>
+                        <MudTh>Mensaje</MudTh>
+                        <MudTh>Usuario</MudTh>
+                        <MudTh>IP</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    
+                    <RowTemplate>
+                        <MudTd DataLabel="Fecha/Hora">
+                            <div>
+                                <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                    @context.Timestamp.ToString("dd/MM/yyyy")
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @context.Timestamp.ToString("HH:mm:ss")
+                                </MudText>
+                            </div>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Nivel">
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="@GetLogLevelColor(context.Level)"
+                                     Variant="Variant.Filled">
+                                @GetLogLevelIcon(context.Level)
+                                @context.Level
+                            </MudChip>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Categoría">
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="Color.Default"
+                                     Variant="Variant.Outlined">
+                                @context.Category
+                            </MudChip>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Mensaje">
+                            <MudText Typo="Typo.body2" 
+                                     Style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                @context.Message
+                            </MudText>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Usuario">
+                            @if (!string.IsNullOrEmpty(context.UserId))
+                            {
+                                <div class="d-flex align-center">
+                                    <MudAvatar Size="Size.Small" Class="mr-2">
+                                        @context.UserName.Substring(0, 1).ToUpper()
+                                    </MudAvatar>
+                                    <div>
+                                        <MudText Typo="Typo.body2">@context.UserName</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @context.TenantName
+                                        </MudText>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Sistema</MudText>
+                            }
+                        </MudTd>
+                        
+                        <MudTd DataLabel="IP">
+                            <MudText Typo="Typo.body2" Class="font-family-monospace">
+                                @context.IpAddress
+                            </MudText>
+                        </MudTd>
+                        
+                        <MudTd DataLabel="Acciones">
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           OnClick="@(() => ViewLogDetails(context))"
+                                           Title="Ver detalles" />
+                        </MudTd>
+                    </RowTemplate>
+                    
+                    <PagerContent>
+                        <MudTablePager PageSizeOptions="new int[] { 25, 50, 100, 250 }" />
+                    </PagerContent>
+                </MudTable>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+<!-- Dialog para detalles del log -->
+<MudDialog @bind-IsVisible="_showLogDetailsDialog" Options="_dialogOptions">
+    <TitleContent>
+        <div class="d-flex align-center">
+            <MudIcon Icon="@GetLogLevelIcon(_selectedLog?.Level ?? "")" 
+                     Color="@GetLogLevelColor(_selectedLog?.Level ?? "")"
+                     Class="mr-2" />
+            <MudText Typo="Typo.h6">Detalles del Log</MudText>
+        </div>
+    </TitleContent>
+    
+    <DialogContent>
+        @if (_selectedLog != null)
+        {
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Fecha y Hora"
+                                  Value="@_selectedLog.Timestamp.ToString("dd/MM/yyyy HH:mm:ss")"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  FullWidth="true" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Nivel"
+                                  Value="@_selectedLog.Level"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  FullWidth="true" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Categoría"
+                                  Value="@_selectedLog.Category"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  FullWidth="true" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Usuario"
+                                  Value="@_selectedLog.UserName"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  FullWidth="true" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="IP Address"
+                                  Value="@_selectedLog.IpAddress"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  FullWidth="true" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="User Agent"
+                                  Value="@_selectedLog.UserAgent"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  FullWidth="true" />
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudTextField Label="Mensaje"
+                                  Value="@_selectedLog.Message"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  FullWidth="true"
+                                  Lines="3" />
+                </MudItem>
+                
+                @if (!string.IsNullOrEmpty(_selectedLog.StackTrace))
+                {
+                    <MudItem xs="12">
+                        <MudTextField Label="Stack Trace"
+                                      Value="@_selectedLog.StackTrace"
+                                      Variant="Variant.Outlined"
+                                      ReadOnly="true"
+                                      FullWidth="true"
+                                      Lines="8"
+                                      Class="font-family-monospace" />
+                    </MudItem>
+                }
+                
+                @if (!string.IsNullOrEmpty(_selectedLog.AdditionalData))
+                {
+                    <MudItem xs="12">
+                        <MudTextField Label="Datos Adicionales"
+                                      Value="@_selectedLog.AdditionalData"
+                                      Variant="Variant.Outlined"
+                                      ReadOnly="true"
+                                      FullWidth="true"
+                                      Lines="5"
+                                      Class="font-family-monospace" />
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </DialogContent>
+    
+    <DialogActions>
+        <MudButton OnClick="CloseLogDetailsDialog">Cerrar</MudButton>
+        <MudButton Color="Color.Primary" 
+                   Variant="Variant.Filled"
+                   OnClick="CopyLogToClipboard">
+            Copiar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    // Variables privadas
+    private bool _loading = true;
+    private bool _autoRefresh = false;
+    private int _refreshInterval = 10;
+    private Timer? _refreshTimer;
+    
+    // Filtros
+    private DateRange? _dateRange = new DateRange(DateTime.Today.AddDays(-7), DateTime.Today);
+    private string _selectedLogLevel = string.Empty;
+    private string _selectedCategory = string.Empty;
+    private string _searchText = string.Empty;
+    
+    // Datos
+    private List<LogEntryDto> _logs = new();
+    private LogStatsDto _logStats = new();
+    private int _totalLogs = 0;
+    
+    // Dialog
+    private bool _showLogDetailsDialog = false;
+    private LogEntryDto? _selectedLog;
+    private DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLogs();
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    private async Task LoadLogs()
+    {
+        _loading = true;
+        try
+        {
+            var parameters = new Dictionary<string, object?>
+            {
+                ["startDate"] = _dateRange?.Start,
+                ["endDate"] = _dateRange?.End,
+                ["level"] = string.IsNullOrEmpty(_selectedLogLevel) ? null : _selectedLogLevel,
+                ["category"] = string.IsNullOrEmpty(_selectedCategory) ? null : _selectedCategory,
+                ["searchText"] = string.IsNullOrEmpty(_searchText) ? null : _searchText,
+                ["pageSize"] = 100
+            };
+
+            var response = await ApiService.GetAsync<LogsResponse>("system/logs", parameters);
+            _logs = response.Logs;
+            _totalLogs = response.TotalCount;
+            
+            // Cargar estadísticas
+            await LoadLogStats();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error cargando logs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadLogStats()
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object?>
+            {
+                ["startDate"] = _dateRange?.Start,
+                ["endDate"] = _dateRange?.End
+            };
+
+            _logStats = await ApiService.GetAsync<LogStatsDto>("system/logs/stats", parameters);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cargando estadísticas de logs: {ex.Message}");
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadLogs();
+    }
+
+    private void ClearFilters()
+    {
+        _dateRange = new DateRange(DateTime.Today.AddDays(-7), DateTime.Today);
+        _selectedLogLevel = string.Empty;
+        _selectedCategory = string.Empty;
+        _searchText = string.Empty;
+        InvokeAsync(LoadLogs);
+    }
+
+    private async Task ExportLogs()
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object?>
+            {
+                ["startDate"] = _dateRange?.Start,
+                ["endDate"] = _dateRange?.End,
+                ["level"] = string.IsNullOrEmpty(_selectedLogLevel) ? null : _selectedLogLevel,
+                ["category"] = string.IsNullOrEmpty(_selectedCategory) ? null : _selectedCategory,
+                ["searchText"] = string.IsNullOrEmpty(_searchText) ? null : _searchText,
+                ["format"] = "excel"
+            };
+
+            var fileBytes = await ApiService.GetBytesAsync("system/logs/export", parameters);
+            
+            await JSRuntime.InvokeVoidAsync("downloadFile", 
+                $"system-logs-{DateTime.Now:yyyy-MM-dd}.xlsx", 
+                fileBytes);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exportando logs: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ViewLogDetails(LogEntryDto log)
+    {
+        _selectedLog = log;
+        _showLogDetailsDialog = true;
+    }
+
+    private void CloseLogDetailsDialog()
+    {
+        _showLogDetailsDialog = false;
+        _selectedLog = null;
+    }
+
+    private async Task CopyLogToClipboard()
+    {
+        if (_selectedLog != null)
+        {
+            var logText = @$"Fecha: {_selectedLog.Timestamp:dd/MM/yyyy HH:mm:ss}
+Nivel: {_selectedLog.Level}
+Categoría: {_selectedLog.Category}
+Usuario: {_selectedLog.UserName}
+IP: {_selectedLog.IpAddress}
+Mensaje: {_selectedLog.Message}
+{(!string.IsNullOrEmpty(_selectedLog.StackTrace) ? $"Stack Trace: {_selectedLog.StackTrace}" : "")}
+{(!string.IsNullOrEmpty(_selectedLog.AdditionalData) ? $"Datos Adicionales: {_selectedLog.AdditionalData}" : "")}";
+            
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", logText);
+            Snackbar.Add("Log copiado al portapapeles", Severity.Success);
+        }
+    }
+
+    private Color GetLogLevelColor(string level)
+    {
+        return level switch
+        {
+            "Information" => Color.Info,
+            "Warning" => Color.Warning,
+            "Error" => Color.Error,
+            "Critical" => Color.Error,
+            "Debug" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private string GetLogLevelIcon(string level)
+    {
+        return level switch
+        {
+            "Information" => Icons.Material.Filled.Info,
+            "Warning" => Icons.Material.Filled.Warning,
+            "Error" => Icons.Material.Filled.Error,
+            "Critical" => Icons.Material.Filled.CrisisAlert,
+            "Debug" => Icons.Material.Filled.BugReport,
+            _ => Icons.Material.Filled.Circle
+        };
+    }
+
+    private string GetRowClass(LogEntryDto log, int index)
+    {
+        return log.Level switch
+        {
+            "Error" or "Critical" => "mud-error-lighten-5",
+            "Warning" => "mud-warning-lighten-5",
+            _ => ""
+        };
+    }
+
+    // Auto-refresh functionality
+    private async Task ToggleAutoRefresh()
+    {
+        if (_autoRefresh)
+        {
+            StartAutoRefresh();
+        }
+        else
+        {
+            StopAutoRefresh();
+        }
+    }
+
+    private void StartAutoRefresh()
+    {
+        _refreshTimer = new Timer(async _ => await InvokeAsync(LoadLogs), 
+                                 null, 
+                                 TimeSpan.FromSeconds(_refreshInterval), 
+                                 TimeSpan.FromSeconds(_refreshInterval));
+    }
+
+    private void StopAutoRefresh()
+    {
+        _refreshTimer?.Dispose();
+        _refreshTimer = null;
+    }
+
+    // Watchers para auto-refresh
+    private bool _previousAutoRefresh;
+    private int _previousRefreshInterval;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Detectar cambios en auto-refresh
+        if (_autoRefresh != _previousAutoRefresh)
+        {
+            if (_autoRefresh)
+                StartAutoRefresh();
+            else
+                StopAutoRefresh();
+                
+            _previousAutoRefresh = _autoRefresh;
+        }
+
+        // Detectar cambios en intervalo
+        if (_refreshInterval != _previousRefreshInterval && _autoRefresh)
+        {
+            StopAutoRefresh();
+            StartAutoRefresh();
+            _previousRefreshInterval = _refreshInterval;
+        }
+
+        await base.OnParametersSetAsync();
+    }
+
+    // DTOs
+    public class LogsResponse
+    {
+        public List<LogEntryDto> Logs { get; set; } = new();
+        public int TotalCount { get; set; }
+    }
+
+    public class LogEntryDto
+    {
+        public Guid Id { get; set; }
+        public DateTime Timestamp { get; set; }
+        public string Level { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string? UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public string TenantName { get; set; } = string.Empty;
+        public string IpAddress { get; set; } = string.Empty;
+        public string UserAgent { get; set; } = string.Empty;
+        public string? StackTrace { get; set; }
+        public string? AdditionalData { get; set; }
+    }
+
+    public class LogStatsDto
+    {
+        public int TotalCount { get; set; }
+        public int InformationCount { get; set; }
+        public int WarningCount { get; set; }
+        public int ErrorCount { get; set; }
+        public int CriticalCount { get; set; }
+        public int DebugCount { get; set; }
+    }
+}
