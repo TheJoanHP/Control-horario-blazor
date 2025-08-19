@@ -874,11 +874,4 @@
         public bool Success { get; set; }
         public List<string> BackupCodes { get; set; } = new();
     }
-}@page "/profile/security"
-@using Sphere.Admin.Client.Services
-@using Shared.Models.DTOs.Auth
-@inject SphereApiService ApiService
-@inject ISnackbar Snackbar
-@inject IDialogService DialogService
-@inject AuthService AuthService
-@inject NavigationManager Navigation
+}
