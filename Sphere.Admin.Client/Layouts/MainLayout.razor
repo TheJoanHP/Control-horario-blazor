@@ -1,0 +1,176 @@
+﻿@* Ruta: Sphere.Admin.Client/Layouts/MainLayout.razor *@
+@inherits LayoutComponentBase
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<MudThemeProvider Theme="_theme" IsDarkMode="_isDarkMode" />
+<MudSnackbarProvider />
+<MudDialogProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Fixed="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                       Color="Color.Inherit" 
+                       Edge="Edge.Start" 
+                       OnClick="@((e) => DrawerToggle())" />
+        
+        <MudText Typo="Typo.h5" Class="mx-4">
+            Sphere Admin
+        </MudText>
+        
+        <MudSpacer />
+        
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" 
+                       Color="Color.Inherit" />
+        
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
+                       Color="Color.Inherit"
+                       OnClick="@((e) => ToggleDarkMode())" />
+        
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" 
+                 Color="Color.Inherit"
+                 Direction="Direction.Bottom"
+                 OffsetY="true">
+            <MudMenuItem Icon="@Icons.Material.Filled.Person" 
+                         OnClick="@(() => Navigation.NavigateTo("/profile"))">
+                Mi Perfil
+            </MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Settings" 
+                         OnClick="@(() => Navigation.NavigateTo("/profile/security"))">
+                Configuración
+            </MudMenuItem>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" 
+                         OnClick="@LogoutAsync">
+                Cerrar Sesión
+            </MudMenuItem>
+        </MudMenu>
+    </MudAppBar>
+    
+    <MudDrawer @bind-Open="_drawerOpen" 
+               Fixed="true" 
+               Elevation="2"
+               Variant="@DrawerVariant.Mini"
+               MiniWidth="68px">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6" Class="px-0">
+                @(_drawerOpen ? "Panel de Control" : "")
+            </MudText>
+        </MudDrawerHeader>
+        
+        <MudNavMenu>
+            <MudNavLink Href="/" 
+                        Match="NavLinkMatch.All"
+                        Icon="@Icons.Material.Filled.Dashboard">
+                Dashboard
+            </MudNavLink>
+            
+            <MudNavLink Href="/tenants" 
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Business">
+                Empresas
+            </MudNavLink>
+            
+            <MudNavLink Href="/licenses" 
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.CardMembership">
+                Licencias
+            </MudNavLink>
+            
+            <MudNavLink Href="/billing" 
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Receipt">
+                Facturación
+            </MudNavLink>
+            
+            <MudNavLink Href="/analytics" 
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Analytics">
+                Analíticas
+            </MudNavLink>
+            
+            <MudDivider Class="my-3" />
+            
+            <MudNavLink Href="/system/settings" 
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Settings">
+                Sistema
+            </MudNavLink>
+            
+            <MudNavLink Href="/system/backups" 
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Backup">
+                Backups
+            </MudNavLink>
+            
+            <MudNavLink Href="/system/logs" 
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.EventNote">
+                Logs
+            </MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+    
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private MudTheme _theme = new MudTheme()
+    {
+        Palette = new PaletteLight()
+        {
+            Primary = Colors.Blue.Default,
+            Secondary = Colors.Green.Accent4,
+            Background = Colors.Grey.Lighten5,
+            Surface = Colors.Shades.White,
+            DrawerBackground = "#FFF",
+            DrawerText = "rgba(0,0,0, 0.7)",
+            AppbarBackground = Colors.Blue.Default,
+            AppbarText = Colors.Shades.White,
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = Colors.Blue.Lighten1,
+            Secondary = Colors.Green.Accent3,
+            Background = "#1a1a27",
+            Surface = "#2b2b3c",
+            DrawerBackground = "#2b2b3c",
+            DrawerText = "rgba(255,255,255, 0.7)",
+            AppbarBackground = "#2b2b3c",
+            AppbarText = Colors.Shades.White,
+        }
+    };
+    
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+        if (!isAuthenticated)
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    void ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+
+    async Task LogoutAsync()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+}

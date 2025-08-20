@@ -1,152 +1,179 @@
+@* Ruta: Sphere.Admin.Client/Pages/Auth/Login.razor *@
 @page "/login"
 @layout EmptyLayout
+@using Sphere.Admin.Client.Services
+@using Shared.Models.DTOs.Auth
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 @inject NotificationService NotificationService
 
-<PageTitle>Sphere Admin - Iniciar Sesión</PageTitle>
+<PageTitle>Login - Sphere Admin</PageTitle>
 
-<MudContainer Class="d-flex justify-center align-center" Style="min-height: 100vh;">
-    <MudCard Class="pa-8" Style="width: 100%; max-width: 400px;" Elevation="8">
-        <!-- Logo y título -->
-        <MudCardHeader Class="text-center pb-4">
-            <CardHeaderContent>
-                <div class="d-flex flex-column align-center">
-                    <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mb-4">
-                        <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Size="Size.Large" />
-                    </MudAvatar>
-                    <MudText Typo="Typo.h4" Class="mud-text-primary font-weight-bold">
-                        SPHERE
-                    </MudText>
-                    <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">
-                        Panel de Administración
-                    </MudText>
-                </div>
-            </CardHeaderContent>
-        </MudCardHeader>
-
-        <!-- Formulario de login -->
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center" Style="height: 100vh;">
+    <MudCard Elevation="8" Class="pa-4" Style="width: 100%;">
         <MudCardContent>
-            <EditForm Model="@_loginModel" OnValidSubmit="@HandleLogin">
-                <DataAnnotationsValidator />
-                
-                <MudTextField @bind-Value="_loginModel.Email"
-                            For="@(() => _loginModel.Email)"
-                            Label="Email"
-                            Variant="Variant.Outlined"
-                            Adornment="Adornment.Start"
-                            AdornmentIcon="@Icons.Material.Filled.Email"
-                            Class="mb-4"
-                            FullWidth="true"
-                            Disabled="@_isLoading" />
+            <div class="text-center mb-6">
+                <MudIcon Icon="@Icons.Material.Filled.Shield" 
+                         Style="font-size: 64px;" 
+                         Color="Color.Primary" />
+                <MudText Typo="Typo.h4" Class="mt-3">
+                    Sphere Admin
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Panel de Control Principal
+                </MudText>
+            </div>
 
-                <MudTextField @bind-Value="_loginModel.Password"
-                            For="@(() => _loginModel.Password)"
-                            Label="Contraseña"
-                            Variant="Variant.Outlined"
-                            InputType="@(_showPassword ? InputType.Text : InputType.Password)"
-                            Adornment="Adornment.End"
-                            AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
-                            OnAdornmentClick="@TogglePasswordVisibility"
-                            Class="mb-6"
-                            FullWidth="true"
-                            Disabled="@_isLoading" />
+            <MudForm @ref="_form" @bind-IsValid="@_isValid">
+                <MudTextField T="string" 
+                              @bind-Value="_model.Email" 
+                              Label="Correo Electrónico"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="El email es requerido"
+                              Validation="@(new EmailAddressAttribute() { ErrorMessage = "Email inválido" })"
+                              InputType="InputType.Email"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Email"
+                              Class="mb-4" />
 
-                <!-- Mostrar errores de validación -->
-                <ValidationSummary />
+                <MudTextField T="string" 
+                              @bind-Value="_model.Password" 
+                              Label="Contraseña"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="La contraseña es requerida"
+                              InputType="@_passwordInputType"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Lock"
+                              EndAdornment="Adornment.End"
+                              OnAdornmentClick="TogglePasswordVisibility"
+                              AdornmentAriaLabel="Mostrar contraseña"
+                              Class="mb-2" />
 
-                <!-- Botón de login -->
-                <MudButton ButtonType="ButtonType.Submit"
-                         Variant="Variant.Filled"
-                         Color="Color.Primary"
-                         FullWidth="true"
-                         Size="Size.Large"
-                         StartIcon="@Icons.Material.Filled.Login"
-                         Disabled="@_isLoading"
-                         Class="mb-4">
-                    @if (_isLoading)
+                <div class="d-flex justify-space-between align-center mb-4">
+                    <MudCheckBox @bind-Value="_rememberMe" 
+                                 Color="Color.Primary"
+                                 Label="Recordarme" />
+                    
+                    <MudLink Href="/forgot-password" 
+                             Color="Color.Primary"
+                             Typo="Typo.body2">
+                        ¿Olvidaste tu contraseña?
+                    </MudLink>
+                </div>
+
+                <MudButton Variant="Variant.Filled" 
+                           Color="Color.Primary" 
+                           FullWidth="true"
+                           Size="Size.Large"
+                           Disabled="@(!_isValid || _loading)"
+                           OnClick="HandleLogin">
+                    @if (_loading)
                     {
-                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                        <span class="ml-2">Iniciando sesión...</span>
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Iniciando sesión...</span>
                     }
                     else
                     {
+                        <MudIcon Icon="@Icons.Material.Filled.Login" Class="mr-2" />
                         <span>Iniciar Sesión</span>
                     }
                 </MudButton>
+            </MudForm>
 
-                @if (!string.IsNullOrEmpty(_errorMessage))
-                {
-                    <MudAlert Severity="Severity.Error" Class="mt-4">
-                        @_errorMessage
-                    </MudAlert>
-                }
-            </EditForm>
+            @if (_showError)
+            {
+                <MudAlert Severity="Severity.Error" 
+                          Class="mt-4"
+                          ShowCloseIcon="true"
+                          CloseIconClicked="@(() => _showError = false)">
+                    @_errorMessage
+                </MudAlert>
+            }
         </MudCardContent>
-
-        <!-- Footer -->
-        <MudCardActions Class="justify-center">
-            <MudText Typo="Typo.caption" Class="mud-text-secondary text-center">
-                © @DateTime.Now.Year Sphere Control System
+        
+        <MudCardActions Class="pb-4 px-4">
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center" Class="mx-auto">
+                © 2025 Sphere Control System. Todos los derechos reservados.
             </MudText>
         </MudCardActions>
     </MudCard>
 </MudContainer>
 
 @code {
-    private readonly LoginModel _loginModel = new();
-    private bool _isLoading = false;
-    private bool _showPassword = false;
+    private MudForm _form = default!;
+    private LoginModel _model = new();
+    private bool _isValid;
+    private bool _loading;
+    private bool _showError;
     private string _errorMessage = string.Empty;
+    private bool _rememberMe;
+    private InputType _passwordInputType = InputType.Password;
+    private string _passwordIcon = Icons.Material.Filled.VisibilityOff;
 
     protected override async Task OnInitializedAsync()
     {
         // Si ya está autenticado, redirigir al dashboard
-        if (await AuthService.IsAuthenticatedAsync())
+        var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+        if (isAuthenticated)
         {
-            Navigation.NavigateTo("/", replace: true);
+            Navigation.NavigateTo("/");
         }
     }
 
     private async Task HandleLogin()
     {
+        if (!_isValid) return;
+
+        _loading = true;
+        _showError = false;
+
         try
         {
-            _isLoading = true;
-            _errorMessage = string.Empty;
-
-            var success = await AuthService.LoginAsync(_loginModel.Email, _loginModel.Password);
-
+            var success = await AuthService.LoginAsync(_model.Email, _model.Password);
+            
             if (success)
             {
-                NotificationService.ShowSuccess("¡Bienvenido a Sphere Admin!");
-                Navigation.NavigateTo("/", replace: true);
+                NotificationService.ShowSuccess("¡Bienvenido de vuelta!");
+                Navigation.NavigateTo("/");
             }
             else
             {
-                _errorMessage = "Email o contraseña incorrectos. Por favor, inténtalo de nuevo.";
+                _errorMessage = "Credenciales incorrectas. Por favor, verifica tu email y contraseña.";
+                _showError = true;
             }
         }
         catch (Exception ex)
         {
-            _errorMessage = "Error de conexión. Por favor, inténtalo más tarde.";
+            _errorMessage = "Error al iniciar sesión. Por favor, intenta nuevamente.";
+            _showError = true;
             Console.WriteLine($"Error en login: {ex.Message}");
         }
         finally
         {
-            _isLoading = false;
+            _loading = false;
         }
     }
 
     private void TogglePasswordVisibility()
     {
-        _showPassword = !_showPassword;
+        if (_passwordInputType == InputType.Password)
+        {
+            _passwordInputType = InputType.Text;
+            _passwordIcon = Icons.Material.Filled.Visibility;
+        }
+        else
+        {
+            _passwordInputType = InputType.Password;
+            _passwordIcon = Icons.Material.Filled.VisibilityOff;
+        }
     }
 
     public class LoginModel
     {
         [Required(ErrorMessage = "El email es requerido")]
-        [EmailAddress(ErrorMessage = "Formato de email inválido")]
+        [EmailAddress(ErrorMessage = "Email inválido")]
         public string Email { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "La contraseña es requerida")]

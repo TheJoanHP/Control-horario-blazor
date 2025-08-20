@@ -1,112 +1,120 @@
+@* Ruta: Sphere.Admin.Client/Components/Common/ConfirmDialog.razor *@
 @using MudBlazor
 
 <MudDialog>
     <DialogContent>
         <div class="d-flex align-center mb-4">
             <MudIcon Icon="@GetIcon()" 
-                     Color="@Color" 
+                     Color="@GetColor()" 
                      Size="Size.Large" 
-                     Class="mr-4" />
+                     Class="mr-3" />
             <div>
-                <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">
-                    @Title
-                </MudText>
-                <MudText Typo="Typo.body1" Style="white-space: pre-line;">
-                    @ContentText
-                </MudText>
+                <MudText Typo="Typo.h6">@Title</MudText>
+                @if (!string.IsNullOrEmpty(Subtitle))
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@Subtitle</MudText>
+                }
             </div>
         </div>
         
-        @if (!string.IsNullOrEmpty(WarningText))
+        @if (!string.IsNullOrEmpty(Message))
+        {
+            <MudText Class="mb-4">@Message</MudText>
+        }
+        
+        @if (ShowWarning)
         {
             <MudAlert Severity="Severity.Warning" Class="mb-4">
-                @WarningText
+                @WarningMessage
             </MudAlert>
         }
         
-        @if (RequireConfirmation && !string.IsNullOrEmpty(ConfirmationPhrase))
+        @if (RequireConfirmation)
         {
-            <MudTextField @bind-Value="_confirmationInput"
-                          Label="@($"Para confirmar, escriba: {ConfirmationPhrase}")"
+            <MudTextField @bind-Value="_confirmationText" 
+                          Label="@($"Escribe '{ConfirmationWord}' para confirmar")"
                           Variant="Variant.Outlined"
                           FullWidth="true"
-                          Class="mb-4" />
+                          Margin="Margin.Dense" />
         }
     </DialogContent>
     
     <DialogActions>
-        <MudButton OnClick="Cancel">
-            @CancelText
-        </MudButton>
-        
-        <MudButton Color="@Color" 
-                   Variant="Variant.Filled"
-                   OnClick="Submit"
-                   Disabled="@(!CanConfirm)"
-                   Loading="@IsLoading">
-            @ButtonText
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="@GetColor()" 
+                   Variant="Variant.Filled" 
+                   OnClick="Confirm"
+                   Disabled="@(!CanConfirm())">
+            @ConfirmButtonText
         </MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
-    [CascadingParameter] 
-    private MudDialogInstance? MudDialog { get; set; }
-
-    [Parameter] 
-    public string ContentText { get; set; } = "¿Está seguro de que desea continuar?";
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
     
-    [Parameter] 
-    public string Title { get; set; } = "Confirmar Acción";
+    [Parameter] public string Title { get; set; } = "Confirmar acción";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string ConfirmButtonText { get; set; } = "Confirmar";
+    [Parameter] public string CancelButtonText { get; set; } = "Cancelar";
+    [Parameter] public DialogType Type { get; set; } = DialogType.Confirm;
+    [Parameter] public bool ShowWarning { get; set; } = false;
+    [Parameter] public string WarningMessage { get; set; } = "Esta acción no se puede deshacer.";
+    [Parameter] public bool RequireConfirmation { get; set; } = false;
+    [Parameter] public string ConfirmationWord { get; set; } = "CONFIRMAR";
     
-    [Parameter] 
-    public string ButtonText { get; set; } = "Confirmar";
+    private string _confirmationText = string.Empty;
     
-    [Parameter] 
-    public string CancelText { get; set; } = "Cancelar";
-    
-    [Parameter] 
-    public Color Color { get; set; } = Color.Primary;
-    
-    [Parameter] 
-    public string? WarningText { get; set; }
-    
-    [Parameter] 
-    public bool RequireConfirmation { get; set; } = false;
-    
-    [Parameter] 
-    public string ConfirmationPhrase { get; set; } = string.Empty;
-    
-    [Parameter] 
-    public bool IsLoading { get; set; } = false;
-
-    private string _confirmationInput = string.Empty;
-
-    private bool CanConfirm => 
-        !RequireConfirmation || 
-        string.Equals(_confirmationInput, ConfirmationPhrase, StringComparison.OrdinalIgnoreCase);
-
-    private void Submit()
+    public enum DialogType
     {
-        if (CanConfirm)
+        Confirm,
+        Warning,
+        Error,
+        Success,
+        Info
+    }
+    
+    private void Cancel() => MudDialog.Cancel();
+    
+    private void Confirm()
+    {
+        if (CanConfirm())
         {
-            MudDialog?.Close(DialogResult.Ok(true));
+            MudDialog.Close(DialogResult.Ok(true));
         }
     }
-
-    private void Cancel()
+    
+    private bool CanConfirm()
     {
-        MudDialog?.Cancel();
+        if (RequireConfirmation)
+        {
+            return _confirmationText.Equals(ConfirmationWord, StringComparison.OrdinalIgnoreCase);
+        }
+        return true;
     }
-
+    
     private string GetIcon()
     {
-        return Color switch
+        return Type switch
         {
-            Color.Error => Icons.Material.Filled.Warning,
-            Color.Warning => Icons.Material.Filled.Info,
-            Color.Success => Icons.Material.Filled.CheckCircle,
-            _ => Icons.Material.Filled.HelpOutline
+            DialogType.Warning => Icons.Material.Filled.Warning,
+            DialogType.Error => Icons.Material.Filled.Error,
+            DialogType.Success => Icons.Material.Filled.CheckCircle,
+            DialogType.Info => Icons.Material.Filled.Info,
+            _ => Icons.Material.Filled.Help
+        };
+    }
+    
+    private Color GetColor()
+    {
+        return Type switch
+        {
+            DialogType.Warning => Color.Warning,
+            DialogType.Error => Color.Error,
+            DialogType.Success => Color.Success,
+            DialogType.Info => Color.Info,
+            _ => Color.Primary
         };
     }
 }

@@ -1,3 +1,4 @@
+// Ruta: Sphere.Admin.Client/Services/NotificationService.cs
 using MudBlazor;
 
 namespace Sphere.Admin.Client.Services
@@ -15,8 +16,8 @@ namespace Sphere.Admin.Client.Services
         {
             _snackbar.Add(message, Severity.Success, config =>
             {
-                config.Icon = Icons.Material.Filled.CheckCircle;
-                config.VisibleStateDuration = 4000;
+                config.ShowCloseIcon = true;
+                config.VisibleStateDuration = 5000;
             });
         }
 
@@ -24,8 +25,8 @@ namespace Sphere.Admin.Client.Services
         {
             _snackbar.Add(message, Severity.Error, config =>
             {
-                config.Icon = Icons.Material.Filled.Error;
-                config.VisibleStateDuration = 6000;
+                config.ShowCloseIcon = true;
+                config.VisibleStateDuration = 7000;
             });
         }
 
@@ -33,8 +34,8 @@ namespace Sphere.Admin.Client.Services
         {
             _snackbar.Add(message, Severity.Warning, config =>
             {
-                config.Icon = Icons.Material.Filled.Warning;
-                config.VisibleStateDuration = 5000;
+                config.ShowCloseIcon = true;
+                config.VisibleStateDuration = 6000;
             });
         }
 
@@ -42,29 +43,26 @@ namespace Sphere.Admin.Client.Services
         {
             _snackbar.Add(message, Severity.Info, config =>
             {
-                config.Icon = Icons.Material.Filled.Info;
-                config.VisibleStateDuration = 4000;
+                config.ShowCloseIcon = true;
+                config.VisibleStateDuration = 5000;
             });
         }
 
-        public void ShowActionRequired(string message, string actionText = "Acción", Func<Task>? action = null)
+        public void ShowNotification(string message, Severity severity = Severity.Normal, int duration = 5000)
         {
-            _snackbar.Add(message, Severity.Normal, config =>
+            _snackbar.Add(message, severity, config =>
             {
-                config.Icon = Icons.Material.Filled.NotificationImportant;
-                config.Action = actionText;
-                config.ActionColor = Color.Primary;
-                config.OnClick = action != null ? _ => action() : null;
-                config.VisibleStateDuration = 8000;
+                config.ShowCloseIcon = true;
+                config.VisibleStateDuration = duration;
             });
         }
 
-        public void ShowLoading(string message)
+        public void ShowPersistent(string message, Severity severity = Severity.Normal)
         {
-            _snackbar.Add(message, Severity.Info, config =>
+            _snackbar.Add(message, severity, config =>
             {
-                config.Icon = Icons.Material.Filled.Sync;
-                config.VisibleStateDuration = 2000;
+                config.ShowCloseIcon = true;
+                config.RequireInteraction = true;
             });
         }
 

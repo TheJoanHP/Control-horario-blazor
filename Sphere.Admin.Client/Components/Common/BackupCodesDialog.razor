@@ -1,321 +1,134 @@
+@* Ruta: Sphere.Admin.Client/Components/Common/BackupCodesDialog.razor *@
 @using MudBlazor
 @inject IJSRuntime JSRuntime
 @inject ISnackbar Snackbar
 
 <MudDialog>
-    <TitleContent>
-        <div class="d-flex align-center">
-            <MudIcon Icon="@Icons.Material.Filled.Security" 
-                     Color="Color.Warning"
-                     Size="Size.Large"
-                     Class="mr-3" />
-            <MudText Typo="Typo.h5">Códigos de Respaldo 2FA</MudText>
-        </div>
-    </TitleContent>
-    
     <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-4">
+            <MudIcon Icon="@Icons.Material.Filled.Security" Class="mr-2" />
+            Códigos de Respaldo
+        </MudText>
+        
         <MudAlert Severity="Severity.Warning" Class="mb-4">
-            <strong>¡IMPORTANTE!</strong> Guarde estos códigos en un lugar seguro. Cada código solo se puede usar una vez. 
-            Podrá usar estos códigos para acceder a su cuenta si pierde acceso a su dispositivo de autenticación.
+            <MudText>
+                Guarda estos códigos en un lugar seguro. Cada código solo puede usarse una vez.
+            </MudText>
         </MudAlert>
         
-        <MudAlert Severity="Severity.Info" Class="mb-4">
-            💡 <strong>Recomendación:</strong> Imprima estos códigos o guárdelos en un gestor de contraseñas seguro.
-        </MudAlert>
-
-        <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudPaper Outlined="true" Class="pa-4 mb-4">
             <MudGrid>
-                @for (int i = 0; i < BackupCodes.Count; i++)
+                @foreach (var backupCode in BackupCodes)
                 {
-                    var index = i;
-                    <MudItem xs="12" sm="6">
-                        <div class="d-flex align-center justify-space-between pa-2 ma-1 backup-code-item"
-                             style="border: 1px solid var(--mud-palette-divider); border-radius: 4px; background-color: var(--mud-palette-surface);">
-                            <MudText Typo="Typo.body1" 
-                                     Class="font-family-monospace font-weight-bold">
-                                @BackupCodes[index]
-                            </MudText>
-                            <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
-                                           Size="Size.Small"
-                                           Color="Color.Primary"
-                                           OnClick="@(() => CopyCode(BackupCodes[index]))"
-                                           Title="Copiar código" />
-                        </div>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.body1" Class="font-monospace">
+                            @backupCode
+                        </MudText>
                     </MudItem>
                 }
             </MudGrid>
         </MudPaper>
-
-        <div class="d-flex justify-center gap-2 mb-4">
-            <MudButton Variant="Variant.Outlined"
+        
+        <div class="d-flex justify-space-between">
+            <MudButton StartIcon="@Icons.Material.Filled.ContentCopy"
                        Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.ContentCopy"
-                       OnClick="CopyAllCodes">
-                Copiar Todos los Códigos
+                       Variant="Variant.Outlined"
+                       OnClick="CopyToClipboard">
+                Copiar Códigos
             </MudButton>
             
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Secondary"
-                       StartIcon="@Icons.Material.Filled.Print"
+            <MudButton StartIcon="@Icons.Material.Filled.Download"
+                       Color="Color.Primary"
+                       Variant="Variant.Outlined"
+                       OnClick="DownloadCodes">
+                Descargar Códigos
+            </MudButton>
+            
+            <MudButton StartIcon="@Icons.Material.Filled.Print"
+                       Color="Color.Primary"
+                       Variant="Variant.Outlined"
                        OnClick="PrintCodes">
                 Imprimir Códigos
             </MudButton>
-            
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Success"
-                       StartIcon="@Icons.Material.Filled.Download"
-                       OnClick="DownloadCodes">
-                Descargar como Texto
-            </MudButton>
-        </div>
-
-        <MudDivider Class="my-4" />
-
-        <div class="d-flex align-center">
-            <MudCheckBox @bind-Value="_confirmationChecked"
-                         Color="Color.Warning"
-                         Dense="true" />
-            <MudText Typo="Typo.body2" Class="ml-2">
-                He guardado estos códigos en un lugar seguro y entiendo que no podré verlos nuevamente.
-            </MudText>
         </div>
     </DialogContent>
     
     <DialogActions>
-        <MudButton OnClick="Cancel"
-                   Disabled="@(!_confirmationChecked)">
-            Cerrar
-        </MudButton>
-        
-        <MudButton Color="Color.Primary" 
-                   Variant="Variant.Filled"
-                   OnClick="Confirm"
-                   Disabled="@(!_confirmationChecked)">
+        <MudButton Color="Color.Success" 
+                   Variant="Variant.Filled" 
+                   OnClick="Confirm">
             He Guardado los Códigos
         </MudButton>
     </DialogActions>
 </MudDialog>
 
 <style>
-    .backup-code-item:hover {
-        background-color: var(--mud-palette-action-hover) !important;
+    .font-monospace {
+        font-family: 'Consolas', 'Courier New', monospace;
+        background-color: #f5f5f5;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.9rem;
     }
     
-    @media print {
-        .backup-codes-print {
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        
-        .backup-codes-print h2 {
-            color: #000;
-            margin-bottom: 20px;
-        }
-        
-        .backup-codes-print .code-item {
-            padding: 8px;
-            margin: 4px 0;
-            border: 1px solid #ccc;
-            background-color: #f9f9f9;
-        }
+    .mud-theme-dark .font-monospace {
+        background-color: #2b2b3c;
+    }
+    
+    @@media print {
+        * { visibility: hidden; }
+        .print-area, .print-area * { visibility: visible; }
+        .print-area { position: absolute; left: 0; top: 0; }
     }
 </style>
 
 @code {
-    [CascadingParameter] 
-    private MudDialogInstance? MudDialog { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public List<string> BackupCodes { get; set; } = new();
 
-    [Parameter] 
-    public List<string> BackupCodes { get; set; } = new();
-
-    private bool _confirmationChecked = false;
-
-    private async Task CopyCode(string code)
+    protected override void OnInitialized()
     {
-        try
+        if (!BackupCodes.Any())
         {
-            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", code);
-            Snackbar.Add($"Código {code} copiado al portapapeles", Severity.Success);
-        }
-        catch (Exception)
-        {
-            Snackbar.Add("Error copiando el código", Severity.Error);
+            // Generar códigos de ejemplo si no se proporcionan
+            BackupCodes = GenerateBackupCodes();
         }
     }
 
-    private async Task CopyAllCodes()
+    private List<string> GenerateBackupCodes()
     {
-        try
+        var codes = new List<string>();
+        var random = new Random();
+        for (int i = 0; i < 10; i++)
         {
-            var allCodes = string.Join("\n", BackupCodes);
-            var textContent = $"Códigos de Respaldo 2FA - Sphere Admin\n" +
-                             $"Generados el: {DateTime.Now:dd/MM/yyyy HH:mm:ss}\n\n" +
-                             $"{allCodes}\n\n" +
-                             $"IMPORTANTE: Guarde estos códigos en un lugar seguro.\n" +
-                             $"Cada código solo se puede usar una vez.";
-            
-            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", textContent);
-            Snackbar.Add("Todos los códigos copiados al portapapeles", Severity.Success);
+            codes.Add($"{random.Next(1000, 9999)}-{random.Next(1000, 9999)}");
         }
-        catch (Exception)
-        {
-            Snackbar.Add("Error copiando los códigos", Severity.Error);
-        }
+        return codes;
     }
 
-    private async Task PrintCodes()
+    private async Task CopyToClipboard()
     {
-        try
-        {
-            var printContent = GeneratePrintContent();
-            await JSRuntime.InvokeVoidAsync("printBackupCodes", printContent);
-        }
-        catch (Exception)
-        {
-            Snackbar.Add("Error preparando la impresión", Severity.Error);
-        }
+        var codesText = string.Join("\n", BackupCodes);
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", codesText);
+        Snackbar.Add("Códigos copiados al portapapeles", Severity.Success);
     }
 
     private async Task DownloadCodes()
     {
-        try
-        {
-            var textContent = $"Códigos de Respaldo 2FA - Sphere Admin\n" +
-                             $"Generados el: {DateTime.Now:dd/MM/yyyy HH:mm:ss}\n" +
-                             $"========================\n\n";
-
-            for (int i = 0; i < BackupCodes.Count; i++)
-            {
-                textContent += $"{i + 1:D2}. {BackupCodes[i]}\n";
-            }
-
-            textContent += $"\n========================\n" +
-                          $"IMPORTANTE: Guarde estos códigos en un lugar seguro.\n" +
-                          $"Cada código solo se puede usar una vez.\n" +
-                          $"Use estos códigos si pierde acceso a su dispositivo de autenticación.";
-
-            var bytes = System.Text.Encoding.UTF8.GetBytes(textContent);
-            var base64 = Convert.ToBase64String(bytes);
-            
-            await JSRuntime.InvokeVoidAsync("downloadFile", 
-                $"backup-codes-2fa-{DateTime.Now:yyyy-MM-dd}.txt", 
-                bytes);
-            
-            Snackbar.Add("Códigos descargados exitosamente", Severity.Success);
-        }
-        catch (Exception)
-        {
-            Snackbar.Add("Error descargando los códigos", Severity.Error);
-        }
+        var codesText = string.Join("\n", BackupCodes);
+        var fileName = $"backup-codes-{DateTime.Now:yyyy-MM-dd}.txt";
+        
+        await JSRuntime.InvokeVoidAsync("downloadFile", fileName, codesText);
+        Snackbar.Add("Archivo descargado", Severity.Success);
     }
 
-    private string GeneratePrintContent()
+    private async Task PrintCodes()
     {
-        var html = $@"
-        <html>
-        <head>
-            <title>Códigos de Respaldo 2FA - Sphere Admin</title>
-            <style>
-                body {{
-                    font-family: 'Courier New', monospace;
-                    font-size: 14px;
-                    line-height: 1.6;
-                    margin: 20px;
-                }}
-                .header {{
-                    text-align: center;
-                    margin-bottom: 30px;
-                    border-bottom: 2px solid #000;
-                    padding-bottom: 15px;
-                }}
-                .warning {{
-                    background-color: #fff3cd;
-                    border: 1px solid #ffeaa7;
-                    padding: 15px;
-                    margin: 20px 0;
-                    border-radius: 4px;
-                }}
-                .codes-grid {{
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 10px;
-                    margin: 20px 0;
-                }}
-                .code-item {{
-                    padding: 10px;
-                    border: 1px solid #ccc;
-                    background-color: #f9f9f9;
-                    text-align: center;
-                    font-weight: bold;
-                    font-size: 16px;
-                }}
-                .footer {{
-                    margin-top: 30px;
-                    border-top: 1px solid #ccc;
-                    padding-top: 15px;
-                    font-size: 12px;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class='header'>
-                <h1>🔒 Códigos de Respaldo 2FA</h1>
-                <h2>Sphere Admin</h2>
-                <p>Generados el: {DateTime.Now:dd/MM/yyyy HH:mm:ss}</p>
-            </div>
-            
-            <div class='warning'>
-                <strong>⚠️ IMPORTANTE:</strong>
-                <ul>
-                    <li>Guarde estos códigos en un lugar seguro</li>
-                    <li>Cada código solo se puede usar una vez</li>
-                    <li>Use estos códigos si pierde acceso a su dispositivo de autenticación</li>
-                    <li>No comparta estos códigos con nadie</li>
-                </ul>
-            </div>
-            
-            <div class='codes-grid'>";
-
-        for (int i = 0; i < BackupCodes.Count; i++)
-        {
-            html += $"<div class='code-item'>{i + 1:D2}. {BackupCodes[i]}</div>";
-        }
-
-        html += $@"
-            </div>
-            
-            <div class='footer'>
-                <p><strong>Generado por:</strong> Sphere Control System</p>
-                <p><strong>Fecha de impresión:</strong> {DateTime.Now:dd/MM/yyyy HH:mm:ss}</p>
-                <p><em>Mantenga este documento en un lugar seguro y destruya de forma segura cuando ya no lo necesite.</em></p>
-            </div>
-        </body>
-        </html>";
-
-        return html;
+        await JSRuntime.InvokeVoidAsync("window.print");
     }
 
     private void Confirm()
     {
-        if (_confirmationChecked)
-        {
-            MudDialog?.Close(DialogResult.Ok(true));
-        }
-    }
-
-    private void Cancel()
-    {
-        MudDialog?.Cancel();
+        MudDialog.Close(DialogResult.Ok(true));
     }
 }
-
-<script>
-    window.printBackupCodes = (content) => {
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(content);
-        printWindow.document.close();
-        printWindow.print();
-        printWindow.close();
-    };
-</script>

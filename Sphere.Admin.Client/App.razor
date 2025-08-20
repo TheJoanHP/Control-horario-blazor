@@ -1,34 +1,31 @@
-﻿<Router AppAssembly="@typeof(App).Assembly">
+﻿@* Ruta: Sphere.Admin.Client/App.razor *@
+<Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
         <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
     <NotFound>
-        <PageTitle>Página no encontrada</PageTitle>
+        <PageTitle>No encontrado</PageTitle>
         <LayoutView Layout="@typeof(MainLayout)">
-            <div class="d-flex justify-content-center align-items-center" style="min-height: 100vh;">
-                <MudCard Class="pa-8">
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudIcon Icon="Icons.Material.Filled.Error" 
-                                   Color="Color.Error" 
-                                   Style="font-size: 3rem; margin-right: 16px;" />
-                            <MudText Typo="Typo.h4">Página no encontrada</MudText>
-                        </CardHeaderContent>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        <MudText Typo="Typo.body1" Class="mb-4">
-                            La página que estás buscando no existe.
-                        </MudText>
-                        <MudButton Variant="Variant.Filled" 
-                                 Color="Color.Primary" 
-                                 Href="/"
-                                 StartIcon="@Icons.Material.Filled.Home">
-                            Ir al inicio
-                        </MudButton>
-                    </MudCardContent>
-                </MudCard>
-            </div>
+            <MudContainer MaxWidth="MaxWidth.Medium" Class="d-flex justify-center align-center" Style="height: 80vh;">
+                <div class="text-center">
+                    <MudIcon Icon="@Icons.Material.Filled.SearchOff" 
+                             Style="font-size: 100px;" 
+                             Color="Color.Secondary" />
+                    <MudText Typo="Typo.h3" Class="mt-4">
+                        Página no encontrada
+                    </MudText>
+                    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2 mb-4">
+                        Lo sentimos, la página que buscas no existe.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled" 
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Home"
+                               Href="/">
+                        Volver al inicio
+                    </MudButton>
+                </div>
+            </MudContainer>
         </LayoutView>
     </NotFound>
 </Router>

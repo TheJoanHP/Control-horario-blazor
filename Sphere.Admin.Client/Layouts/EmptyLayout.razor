@@ -1,0 +1,25 @@
+@* Ruta: Sphere.Admin.Client/Layouts/EmptyLayout.razor *@
+@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_theme" />
+<MudSnackbarProvider />
+<MudDialogProvider />
+
+<MudLayout>
+    <MudMainContent>
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private MudTheme _theme = new MudTheme()
+    {
+        Palette = new PaletteLight()
+        {
+            Primary = Colors.Blue.Default,
+            Secondary = Colors.Green.Accent4,
+            Background = Colors.Grey.Lighten5,
+            Surface = Colors.Shades.White,
+        }
+    };
+}
