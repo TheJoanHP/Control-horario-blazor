@@ -1,14 +1,22 @@
+
+@* Ruta: Sphere.Admin.Client/Pages/System/Backups.razor *@
 @page "/system/backups"
 @using Sphere.Admin.Client.Services
-@using Shared.Models.DTOs.System
-@inject SphereApiService ApiService
+@inject ApiService ApiService
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
-@inject IJSRuntime JSRuntime
 
-<PageTitle>Gestión de Respaldos | Sphere Admin</PageTitle>
+<PageTitle>Backups del Sistema - Sphere Admin</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+    <MudText Typo="Typo.h4" Class="mb-4">Gestión de Backups</MudText>
+    
+    <MudCard>
+        <MudCardContent>
+            <MudText>Configuración de backups en desarrollo.</MudText>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
     <!-- Header -->
     <div class="d-flex justify-space-between align-center mb-6">
         <div>

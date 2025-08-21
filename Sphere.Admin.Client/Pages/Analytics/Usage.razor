@@ -1,11 +1,10 @@
+@* Ruta: Sphere.Admin.Client/Pages/Analytics/Usage.razor *@
 @page "/analytics/usage"
 @using Sphere.Admin.Client.Services
-@using Shared.Models.DTOs.Analytics
-@inject SphereApiService ApiService
-@inject IJSRuntime JSRuntime
-@inject NavigationManager Navigation
+@inject ApiService ApiService
+@inject ISnackbar Snackbar
 
-<PageTitle>Reportes de Uso | Sphere Admin</PageTitle>
+<PageTitle>Análisis de Uso - Sphere Admin</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
     <!-- Header -->

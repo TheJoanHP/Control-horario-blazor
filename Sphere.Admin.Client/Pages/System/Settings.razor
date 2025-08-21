@@ -1,13 +1,22 @@
+
+@* Ruta: Sphere.Admin.Client/Pages/System/Settings.razor *@
 @page "/system/settings"
 @using Sphere.Admin.Client.Services
-@using Shared.Models.DTOs.System
-@inject SphereApiService ApiService
+@inject ApiService ApiService
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
 
-<PageTitle>Configuración del Sistema | Sphere Admin</PageTitle>
+<PageTitle>Configuración del Sistema - Sphere Admin</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+    <MudText Typo="Typo.h4" Class="mb-4">Configuración del Sistema</MudText>
+    
+    <MudCard>
+        <MudCardContent>
+            <MudText>Configuración del sistema en desarrollo.</MudText>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
     <!-- Header -->
     <div class="d-flex justify-space-between align-center mb-6">
         <div>
