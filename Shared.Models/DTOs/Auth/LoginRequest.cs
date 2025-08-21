@@ -7,6 +7,12 @@ namespace Shared.Models.DTOs.Auth
     /// </summary>
     public class LoginRequest
     {
+        public LoginRequest(string email, string password)
+        {
+            Email = email;
+            Password = password;
+        }
+
         [Required(ErrorMessage = "El email es requerido")]
         [EmailAddress(ErrorMessage = "Formato de email inválido")]
         public string Email { get; set; } = string.Empty;
